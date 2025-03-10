@@ -553,7 +553,7 @@ const Airdrop = () => {
       return (
         <TaskCard delay="0.2s">
           <TaskTitle>
-            <i className="fab fa-twitter"></i>
+          <i class="fa-brands fa-square-x-twitter"></i>
             Follow us on Twitter
           </TaskTitle>
           <p>Follow our official Twitter account to stay updated on the latest Ripplex news and updates.</p>
@@ -566,7 +566,7 @@ const Airdrop = () => {
               twitter
               onClick={handleTwitterFollow}
             >
-              <i className="fab fa-twitter"></i>
+              <i class="fa-brands fa-square-x-twitter"></i>
               Follow @RippleExchange
             </SocialButton>
             
@@ -595,7 +595,7 @@ const Airdrop = () => {
         <TaskCard delay="0.3s">
           <TaskTitle>
             <i className="fab fa-telegram-plane"></i>
-            Join our Telegram Group
+            Join Ripple Exchange Telegram Channel
           </TaskTitle>
           <p>Join our vibrant community on Telegram to chat with other users and get instant support.</p>
           
@@ -607,7 +607,7 @@ const Airdrop = () => {
               onClick={handleTelegramFollow}
             >
               <i className="fab fa-telegram-plane"></i>
-              Join Telegram Group
+              Join Ripple Exchange Telegram Channel
             </SocialButton>
             
             {hasFollowed.telegram && (

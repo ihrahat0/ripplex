@@ -11,8 +11,8 @@ function Sale01(props) {
 
     const [dataBlock] = useState(
         {
-            title: 'Earn up to $25 worth of crypto',
-            desc : 'Discover how specific cryptocurrencies work — and get a bit of each crypto to try out for yourself.',
+            title: 'Earn up to $100 worth of Ripplex',
+            desc : 'Join The Free Airdrop, Just follow Socials and earn $100 worth of Ripplex',
         }
     )
     return (

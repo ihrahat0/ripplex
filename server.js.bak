@@ -140,7 +140,6 @@ const corsOptions = {
 };
 
 
-
 // Middleware
 app.use(cors(corsOptions));
 
@@ -172,13 +171,8 @@ app.get('*', (req, res) => {
 });
 
 
-
-// Fallback for client-side routing - MUST come AFTER API routes
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'build', 'index.html'));
-});
-
-
+// API Routes prefix - note we're NOT adding /api prefix here since our frontend already has it
+const apiRouter = express.Router();
 
 // Mount the API router at the root level because the frontend already includes /api in its requests
 // This is critical - we mount at / not at /api to avoid the double /api/api issue
