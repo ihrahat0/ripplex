@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { db } from '../../firebase';
 import axios from 'axios';
+import { toast } from 'react-hot-toast';
 
 const DashboardContainer = styled.div`
   display: grid;
@@ -149,6 +150,59 @@ const RecentActivity = styled(ActivityCard)`
   }
 `;
 
+const DepositStatsCard = styled(ActivityCard)`
+  .stat-item {
+    padding: 12px 0;
+    margin-bottom: 10px;
+    
+    .label {
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-bottom: 5px;
+    }
+    
+    .value {
+      font-size: 20px;
+      font-weight: 600;
+      color: #e6edf3;
+    }
+  }
+  
+  .recent-deposits {
+    margin-top: 15px;
+    
+    h4 {
+      font-size: 16px;
+      margin-bottom: 10px;
+      font-weight: 500;
+      color: #e6edf3;
+    }
+    
+    .deposit-item {
+      padding: 10px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 6px;
+      margin-bottom: 8px;
+      
+      .deposit-details {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 4px;
+      }
+      
+      .deposit-user {
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.7);
+      }
+      
+      .deposit-time {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.5);
+      }
+    }
+  }
+`;
+
 function Dashboard() {
   const navigate = useNavigate();
   const [stats, setStats] = useState({
@@ -169,6 +223,14 @@ function Dashboard() {
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshStatus, setRefreshStatus] = useState('');
+  const [depositStats, setDepositStats] = useState({
+    totalDeposits: 0,
+    totalDepositAmount: 0,
+    recentDeposits: [],
+    hasMore: false,
+    latestDeposits: []
+  });
 
   useEffect(() => {
     fetchDashboardData();
@@ -239,16 +301,26 @@ function Dashboard() {
   
   const fetchDepositStats = async () => {
     try {
-      const response = await axios.get('/api/admin/deposit-stats');
-      if (response.data && response.data.success && response.data.stats) {
-        const { latestBalances } = response.data.stats;
-        if (latestBalances) {
-          console.log('Latest balances:', latestBalances);
-          setBalances(latestBalances);
-        }
+      // Make the initial request to get the first page and total pages
+      const response = await axios.get('/api/admin/deposit-stats?page=1&pageSize=20');
+      
+      if (response.data && response.data.success) {
+        // Extract deposit information from the response
+        const { deposits, summary } = response.data;
+        
+        // Update the stats state with the summary data
+        setDepositStats({
+          totalDeposits: summary.totalCount || 0,
+          totalDepositAmount: summary.totalAmount || 0,
+          recentDeposits: deposits || [],
+          hasMore: summary.hasMore || false,
+          latestDeposits: deposits || []
+        });
+      } else {
+        console.error('Error fetching deposit stats:', response.data.error);
       }
     } catch (error) {
-      console.error("Error fetching deposit stats:", error);
+      console.error('Error fetching deposit stats:', error);
     }
   };
   
@@ -274,28 +346,60 @@ function Dashboard() {
     }
   };
   
-  const handleBalanceRefresh = async () => {
-    setRefreshing(true);
+  const refreshAllBalances = async () => {
     try {
-      // Call the manual refresh endpoint
-      const refreshResponse = await axios.get('/api/admin/refresh-all-balances');
+      setRefreshing(true);
+      
+      // Make the initial request to get the first page and total pages
+      const refreshResponse = await axios.get('/api/admin/refresh-all-balances?page=1&pageSize=20');
       
       if (refreshResponse.data && refreshResponse.data.success) {
-        // Show success message
-        alert(refreshResponse.data.message || 'Balance refresh initiated');
+        // Get pagination info from first request
+        const { totalPages, processed: firstPageProcessed } = refreshResponse.data;
+        let totalProcessed = firstPageProcessed;
         
-        // Wait a moment before fetching updated stats
-        setTimeout(async () => {
-          await fetchDepositStats();
-          setRefreshing(false);
-        }, 3000); // Wait 3 seconds to allow some time for the refresh to start
+        // Update status with progress info
+        setRefreshStatus(`Processing page 1 of ${totalPages}... (${totalProcessed} users)`);
+        
+        // Process remaining pages if there are any
+        if (totalPages > 1) {
+          for (let page = 2; page <= totalPages; page++) {
+            setRefreshStatus(`Processing page ${page} of ${totalPages}... (${totalProcessed} users so far)`);
+            
+            try {
+              const pageResponse = await axios.get(`/api/admin/refresh-all-balances?page=${page}&pageSize=20`);
+              
+              if (pageResponse.data && pageResponse.data.success) {
+                totalProcessed += pageResponse.data.processed;
+              } else {
+                console.error(`Error processing page ${page}:`, pageResponse.data);
+              }
+            } catch (pageError) {
+              console.error(`Error processing page ${page}:`, pageError);
+            }
+          }
+        }
+        
+        setRefreshStatus(`Completed refreshing balances for ${totalProcessed} users`);
+        toast.success(`Successfully refreshed balances for ${totalProcessed} users`);
+        
+        // Refresh data after updating balances
+        fetchDashboardData();
       } else {
-        throw new Error('Failed to initiate balance refresh');
+        setRefreshStatus('Failed to refresh balances');
+        toast.error('Failed to refresh balances');
       }
     } catch (error) {
-      console.error("Error refreshing balances:", error);
-      alert('Failed to refresh balances: ' + (error.message || 'Unknown error'));
+      console.error('Error refreshing balances:', error);
+      setRefreshStatus('Error refreshing balances');
+      toast.error('Error refreshing balances');
+    } finally {
       setRefreshing(false);
+      
+      // Clear status after a delay
+      setTimeout(() => {
+        setRefreshStatus('');
+      }, 5000);
     }
   };
 
@@ -324,6 +428,40 @@ function Dashboard() {
           </div>
         </StatsCard>
         
+        <DepositStatsCard>
+          <h3>Deposit Statistics</h3>
+          <div className="stat-item">
+            <div className="label">Total Deposits</div>
+            <div className="value">{depositStats.totalDeposits}</div>
+          </div>
+          <div className="stat-item">
+            <div className="label">Total Amount</div>
+            <div className="value">${depositStats.totalDepositAmount.toFixed(2)}</div>
+          </div>
+          
+          <div className="recent-deposits">
+            <h4>Recent Deposits</h4>
+            {depositStats.recentDeposits && depositStats.recentDeposits.length > 0 ? (
+              depositStats.recentDeposits.slice(0, 5).map((deposit, index) => (
+                <div key={index} className="deposit-item">
+                  <div className="deposit-details">
+                    <span>{deposit.amount} {deposit.token}</span>
+                    <span className="deposit-status">{deposit.status}</span>
+                  </div>
+                  <div className="deposit-user">User: {deposit.userId || 'Unknown'}</div>
+                  <div className="deposit-time">
+                    {deposit.timestamp ? new Date(deposit.timestamp).toLocaleString() : 'Unknown time'}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div style={{ color: 'rgba(255, 255, 255, 0.5)', textAlign: 'center', padding: '10px 0' }}>
+                No recent deposits
+              </div>
+            )}
+          </div>
+        </DepositStatsCard>
+        
         <BalanceCard>
           <h3>Latest Balances</h3>
           <div className="balance-grid">
@@ -349,7 +487,7 @@ function Dashboard() {
           </div>
           <button 
             className="refresh-button" 
-            onClick={handleBalanceRefresh}
+            onClick={refreshAllBalances}
             disabled={refreshing}
           >
             {refreshing ? 'Refreshing...' : 'Refresh Balances'}

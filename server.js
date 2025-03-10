@@ -140,7 +140,18 @@ const corsOptions = {
 
 // Middleware
 app.use(cors(corsOptions));
-app.use(bodyParser.json());
+
+// Increase json size limit to handle large requests
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+
+// Add middleware to handle large headers
+app.use((req, res, next) => {
+  // Increase header limits
+  req.connection.setMaxListeners(0);
+  req.connection.setTimeout(600000); // 10 minutes
+  next();
+});
 
 // Serve static files from build directory
 app.use(express.static(path.join(__dirname, 'build')));
@@ -1629,110 +1640,173 @@ async function checkSolanaBalance(address) {
 // Add endpoint to get deposit statistics
 app.get('/api/admin/deposit-stats', async (req, res) => {
   try {
-    // Get all transactions of type 'deposit'
-    const transactionsSnapshot = await db.collection('transactions')
+    // Get the page and page size from request
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = parseInt(req.query.pageSize) || 20;
+    
+    // Set up base query
+    let query = db.collection('transactions')
       .where('type', '==', 'deposit')
+      .orderBy('timestamp', 'desc')
+      .limit(pageSize);
+    
+    // Apply pagination
+    if (page > 1) {
+      const previousPageQuery = db.collection('transactions')
+        .where('type', '==', 'deposit')
+        .orderBy('timestamp', 'desc')
+        .limit((page - 1) * pageSize);
+      
+      const previousPageDocs = await previousPageQuery.get();
+      if (!previousPageDocs.empty) {
+        const lastDoc = previousPageDocs.docs[previousPageDocs.docs.length - 1];
+        query = query.startAfter(lastDoc);
+      }
+    }
+    
+    // Execute the query
+    const snapshot = await query.get();
+    
+    // Process the results
+    const deposits = [];
+    let totalAmount = 0;
+    
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      deposits.push({
+        id: doc.id,
+        ...data,
+        timestamp: data.timestamp?.toDate() || null
+      });
+      
+      totalAmount += parseFloat(data.amount || 0);
+    });
+    
+    // Get total deposit count with separate query
+    const countQuery = await db.collection('transactions')
+      .where('type', '==', 'deposit')
+      .count()
       .get();
     
-    // Get the latest balance stats
-    let latestBalances = null;
-    try {
-      const balanceStatsDoc = await db.collection('stats').doc('balances').get();
-      if (balanceStatsDoc.exists) {
-        latestBalances = balanceStatsDoc.data();
-      }
-    } catch (error) {
-      console.error('Error getting balance stats:', error);
-    }
+    const totalCount = countQuery.data().count;
     
-    if (transactionsSnapshot.empty && !latestBalances) {
-      return res.json({
-        success: true,
-        stats: {
-          totalDeposits: 0,
-          totalDepositAmount: 0,
-          uniqueUsers: 0,
-          pendingDeposits: 0,
-          latestBalances: {
-            ETH: 0,
-            BNB: 0, 
-            MATIC: 0,
-            SOL: 0,
-            lastUpdated: new Date().toISOString()
-          }
-        }
-      });
-    }
-    
-    // Calculate statistics
-    const depositsByUser = {};
-    let totalDepositAmount = 0;
-    
-    if (!transactionsSnapshot.empty) {
-      transactionsSnapshot.docs.forEach(doc => {
-        const transaction = doc.data();
-        const userId = transaction.userId;
-        const amount = transaction.amount || 0;
-        
-        // Track unique users
-        if (!depositsByUser[userId]) {
-          depositsByUser[userId] = {
-            totalAmount: 0,
-            count: 0
-          };
-        }
-        
-        depositsByUser[userId].totalAmount += amount;
-        depositsByUser[userId].count += 1;
-        totalDepositAmount += amount;
-      });
-    }
-    
-    // Get pending deposits count
-    let pendingDeposits = 0;
-    try {
-      const pendingSnapshot = await db.collection('pendingDeposits')
-        .where('status', '==', 'pending')
-        .get();
-      
-      pendingDeposits = pendingSnapshot.size;
-    } catch (error) {
-      console.error('Error getting pending deposits:', error);
-    }
-    
-    // Format the latest balances for the response
-    const formattedBalances = latestBalances ? {
-      ETH: latestBalances.ETH || 0,
-      BNB: latestBalances.BNB || 0,
-      MATIC: latestBalances.MATIC || 0,
-      SOL: latestBalances.SOL || 0,
-      lastUpdated: latestBalances.lastUpdated ? latestBalances.lastUpdated.toDate() : new Date(),
-      walletCount: latestBalances.walletCount || 0,
-      userCount: latestBalances.userCount || 0
-    } : {
-      ETH: 0,
-      BNB: 0,
-      MATIC: 0,
-      SOL: 0,
-      lastUpdated: new Date(),
-      walletCount: 0,
-      userCount: 0
+    // Calculate deposit metrics
+    const summary = {
+      totalCount,
+      totalPages: Math.ceil(totalCount / pageSize),
+      currentPage: page,
+      recentDeposits: deposits.length,
+      totalAmount: totalAmount,
+      averageAmount: deposits.length > 0 ? totalAmount / deposits.length : 0
     };
     
-    return res.json({
+    res.json({
       success: true,
-      stats: {
-        totalDeposits: transactionsSnapshot.size,
-        totalDepositAmount,
-        uniqueUsers: Object.keys(depositsByUser).length,
-        pendingDeposits,
-        depositsByUser,
-        latestBalances: formattedBalances
-      }
+      deposits,
+      summary
     });
   } catch (error) {
     console.error('Error getting deposit stats:', error);
-    return res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get deposit statistics',
+      message: error.message
+    });
+  }
+});
+
+// Add endpoint to refresh all balances
+app.get('/api/admin/refresh-all-balances', async (req, res) => {
+  try {
+    console.log('Admin requested to refresh all balances');
+    
+    // Get the page and page size from request
+    const page = parseInt(req.query.page) || 1;
+    const pageSize = parseInt(req.query.pageSize) || 20;
+    
+    // Get only a page of wallets to avoid header size issues
+    let walletsQuery = db.collection('walletAddresses')
+      .limit(pageSize);
+    
+    // Apply pagination
+    if (page > 1) {
+      const previousPageQuery = db.collection('walletAddresses')
+        .limit((page - 1) * pageSize);
+      
+      const previousPageDocs = await previousPageQuery.get();
+      if (!previousPageDocs.empty) {
+        const lastDoc = previousPageDocs.docs[previousPageDocs.docs.length - 1];
+        walletsQuery = walletsQuery.startAfter(lastDoc);
+      }
+    }
+    
+    // Execute the query
+    const walletsSnapshot = await walletsQuery.get();
+    
+    // Get total count
+    const countQuery = await db.collection('walletAddresses')
+      .count()
+      .get();
+    
+    const totalCount = countQuery.data().count;
+    
+    // Process wallet refreshes in parallel
+    const refreshPromises = [];
+    const refreshResults = {
+      success: [],
+      failed: []
+    };
+    
+    walletsSnapshot.forEach(walletDoc => {
+      const userId = walletDoc.id;
+      const walletData = walletDoc.data();
+      
+      // Skip wallets without addresses
+      if (!walletData.wallets) {
+        refreshResults.failed.push({
+          userId,
+          reason: 'No wallet addresses found'
+        });
+        return;
+      }
+      
+      // Process this wallet's balances
+      const promise = processAllChainBalances(userId, walletData)
+        .then(results => {
+          refreshResults.success.push({
+            userId,
+            results
+          });
+        })
+        .catch(error => {
+          console.error(`Error refreshing balances for ${userId}:`, error);
+          refreshResults.failed.push({
+            userId,
+            reason: error.message || 'Unknown error'
+          });
+        });
+      
+      refreshPromises.push(promise);
+    });
+    
+    // Wait for all refreshes to complete
+    await Promise.allSettled(refreshPromises);
+    
+    res.json({
+      success: true,
+      processed: walletsSnapshot.size,
+      totalUsers: totalCount,
+      currentPage: page,
+      totalPages: Math.ceil(totalCount / pageSize),
+      results: refreshResults
+    });
+  } catch (error) {
+    console.error('Error refreshing all balances:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to refresh balances',
+      message: error.message
+    });
   }
 });
 
@@ -2032,242 +2106,6 @@ async function processSolanaDeposits(address, privateKey, userId) {
   }
 }
 
-// Add an endpoint to refresh all user balances at once
-app.post('/api/admin/refresh-all-balances', async (req, res) => {
-  try {
-    console.log('Admin refreshing all balances...');
-    
-    // Get all wallet documents
-    const walletsSnapshot = await db.collection('walletAddresses').get();
-    
-    if (walletsSnapshot.empty) {
-      console.log('No wallets found in Firebase');
-      return res.json({ success: true, message: 'No wallets found to refresh', processed: 0 });
-    }
-    
-    console.log(`Found ${walletsSnapshot.size} wallets in Firebase`);
-    
-    let processed = 0;
-    let updated = 0;
-    const results = [];
-    
-    // Process each wallet
-    for (const walletDoc of walletsSnapshot.docs) {
-      try {
-        const userId = walletDoc.id;
-        console.log(`Processing wallet for user ${userId}`);
-        
-        const walletData = walletDoc.data();
-        console.log(`Found wallet data for user ${userId}, keys:`, Object.keys(walletData));
-        
-        // Handle different wallet data structures
-        let wallets = {};
-        
-        // Try to find wallet addresses in different possible locations
-        if (walletData.wallets) {
-          console.log(`User ${userId} has wallets property`);
-          wallets = walletData.wallets;
-        } else if (walletData.addresses) {
-          console.log(`User ${userId} has addresses property`);
-          wallets = walletData.addresses;
-        } else if (typeof walletData.ethereum === 'string' || 
-                  typeof walletData.bsc === 'string' || 
-                  typeof walletData.polygon === 'string' || 
-                  typeof walletData.solana === 'string') {
-          // The wallet addresses are at the root level
-          console.log(`User ${userId} has addresses at root level`);
-          wallets = {
-            ethereum: walletData.ethereum,
-            bsc: walletData.bsc,
-            polygon: walletData.polygon,
-            solana: walletData.solana
-          };
-        } else {
-          // Log the actual data to debug
-          console.log(`Cannot find wallet addresses for user ${userId}. Data:`, JSON.stringify(walletData));
-          results.push({
-            userId,
-            status: 'skipped',
-            reason: 'Cannot find wallet addresses'
-          });
-          continue;
-        }
-        
-        // Check which chains we have addresses for
-        const availableChains = Object.keys(wallets).filter(chain => 
-          wallets[chain] && typeof wallets[chain] === 'string' && wallets[chain].length > 0
-        );
-        
-        if (availableChains.length === 0) {
-          console.log(`No valid blockchain addresses found for user ${userId}`);
-          results.push({
-            userId,
-            status: 'skipped',
-            reason: 'No valid blockchain addresses'
-          });
-          continue;
-        }
-        
-        console.log(`Found wallet addresses for user ${userId}: ${availableChains.join(', ')}`);
-        
-        // Get user data to check current balances
-        const userDoc = await db.collection('users').doc(userId).get();
-        
-        if (!userDoc.exists) {
-          console.log(`User ${userId} not found in database, creating new balance record`);
-          // We will create the user document if needed
-        }
-        
-        const userData = userDoc.exists ? userDoc.data() : {};
-        const userBalances = userData.balances || {};
-        
-        // Object to store balances for each chain
-        const balances = {};
-        let userUpdated = false;
-        
-        // Check EVM chains (Ethereum, BSC, Polygon)
-        for (const chain of ['ethereum', 'bsc', 'polygon']) {
-          if (wallets[chain] && typeof wallets[chain] === 'string' && wallets[chain].length > 0) {
-            try {
-              console.log(`Checking ${chain} balance for address ${wallets[chain]}`);
-              const balance = await checkEVMBalance(chain, wallets[chain]);
-              
-              if (balance !== null) {
-                const numBalance = parseFloat(balance);
-                balances[chain] = balance;
-                
-                // Determine token symbol
-                let tokenSymbol = chain.toUpperCase();
-                if (chain === 'ethereum') tokenSymbol = 'ETH';
-                if (chain === 'bsc') tokenSymbol = 'BNB';
-                if (chain === 'polygon') tokenSymbol = 'MATIC';
-                
-                console.log(`${userId} ${chain} balance: ${balance} ${tokenSymbol} (recorded: ${userBalances[tokenSymbol] || 0})`);
-                
-                // Check if balance is higher than recorded
-                const currentBalance = userBalances[tokenSymbol] || 0;
-                
-                if (numBalance > currentBalance) {
-                  const depositAmount = numBalance - currentBalance;
-                  console.log(`Detected deposit of ${depositAmount} ${tokenSymbol} for user ${userId}`);
-                  
-                  // Record transaction
-                  await db.collection('transactions').add({
-                    userId,
-                    type: 'deposit',
-                    amount: depositAmount,
-                    token: tokenSymbol,
-                    chain,
-                    txHash: generateTxHash(chain),
-                    status: 'completed',
-                    timestamp: admin.firestore.FieldValue.serverTimestamp()
-                  });
-                  
-                  // Update user balance
-                  await db.collection('users').doc(userId).update({
-                    [`balances.${tokenSymbol}`]: admin.firestore.FieldValue.increment(depositAmount)
-                  });
-                  
-                  userUpdated = true;
-                  console.log(`Updated ${tokenSymbol} balance for user ${userId}`);
-                }
-              }
-            } catch (err) {
-              console.error(`Error checking ${chain} balance for ${userId}:`, err);
-              balances[chain] = 'Error checking balance';
-            }
-          }
-        }
-        
-        // Check Solana if available
-        if (wallets.solana && typeof wallets.solana === 'string' && wallets.solana.length > 0) {
-          try {
-            console.log(`Checking Solana balance for address ${wallets.solana}`);
-            const balance = await checkSolanaBalance(wallets.solana);
-            
-            if (balance !== null) {
-              const numBalance = parseFloat(balance);
-              balances.solana = balance;
-              
-              // Check if balance is higher than recorded
-              const tokenSymbol = 'SOL';
-              const currentBalance = userBalances[tokenSymbol] || 0;
-              
-              console.log(`${userId} Solana balance: ${balance} ${tokenSymbol} (recorded: ${currentBalance})`);
-              
-              if (numBalance > currentBalance) {
-                const depositAmount = numBalance - currentBalance;
-                console.log(`Detected deposit of ${depositAmount} ${tokenSymbol} for user ${userId}`);
-                
-                // Record transaction
-                await db.collection('transactions').add({
-                  userId,
-                  type: 'deposit',
-                  amount: depositAmount,
-                  token: tokenSymbol,
-                  chain: 'solana',
-                  txHash: generateTxHash('solana'),
-                  status: 'completed',
-                  timestamp: admin.firestore.FieldValue.serverTimestamp()
-                });
-                
-                // Update user balance
-                await db.collection('users').doc(userId).update({
-                  [`balances.${tokenSymbol}`]: admin.firestore.FieldValue.increment(depositAmount)
-                });
-                
-                userUpdated = true;
-                console.log(`Updated ${tokenSymbol} balance for user ${userId}`);
-              }
-            }
-          } catch (err) {
-            console.error(`Error checking Solana balance for ${userId}:`, err);
-            balances.solana = 'Error checking balance';
-          }
-        }
-        
-        processed++;
-        if (userUpdated) {
-          updated++;
-        }
-        
-        results.push({
-          userId,
-          status: 'processed',
-          updated: userUpdated,
-          balances
-        });
-        
-        // Add a small delay to avoid rate limits
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-      } catch (userError) {
-        console.error(`Error processing user ${walletDoc.id}:`, userError);
-        results.push({
-          userId: walletDoc.id,
-          status: 'error',
-          error: userError.message
-        });
-      }
-    }
-    
-    console.log(`Processed ${processed} wallets, updated ${updated} users`);
-    return res.json({
-      success: true,
-      processed,
-      updated,
-      results
-    });
-  } catch (error) {
-    console.error('Error refreshing all balances:', error);
-    return res.status(500).json({
-      error: 'Failed to refresh all balances',
-      message: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
-  }
-});
-
 // Add an endpoint to manually trigger balance refresh
 app.get('/api/admin/refresh-all-balances', async (req, res) => {
   try {
@@ -2296,9 +2134,12 @@ app.get('/api/admin/refresh-all-balances', async (req, res) => {
 // Add endpoint to get cached deposits with incremental updates
 app.get('/api/admin/cached-deposits', async (req, res) => {
   try {
-    // Get the last timestamp from the request
+    // Get the last timestamp and page from the request
     const lastTimestamp = req.query.lastTimestamp ? new Date(req.query.lastTimestamp) : null;
-    console.log(`Fetching deposits${lastTimestamp ? ' since ' + lastTimestamp.toISOString() : ' (initial fetch)'}`);
+    const pageSize = parseInt(req.query.pageSize) || 50; // Default to 50 items per page
+    const page = parseInt(req.query.page) || 1; // Default to first page
+    
+    console.log(`Fetching deposits${lastTimestamp ? ' since ' + lastTimestamp.toISOString() : ' (initial fetch)'} - Page ${page}, Page Size: ${pageSize}`);
     
     // Check if we need to update the cache
     const cacheDocRef = db.collection('admin').doc('depositCache');
@@ -2318,33 +2159,105 @@ app.get('/api/admin/cached-deposits', async (req, res) => {
           depositsQuery = db.collection('transactions')
             .where('type', '==', 'deposit')
             .where('timestamp', '>', firestoreTimestamp)
-            .orderBy('timestamp', 'desc');
+            .orderBy('timestamp', 'desc')
+            .limit(pageSize);
         } else {
-          // Get all deposits for initial load
+          // Get all deposits, but paginated
           depositsQuery = db.collection('transactions')
             .where('type', '==', 'deposit')
-            .orderBy('timestamp', 'desc');
+            .orderBy('timestamp', 'desc')
+            .limit(pageSize);
+            
+          // If we're not on the first page, use the appropriate offset
+          if (page > 1) {
+            // Get the last item from the previous page
+            const previousPageRef = db.collection('transactions')
+              .where('type', '==', 'deposit')
+              .orderBy('timestamp', 'desc')
+              .limit((page - 1) * pageSize);
+              
+            const previousPageSnapshot = await previousPageRef.get();
+            const lastVisible = previousPageSnapshot.docs[previousPageSnapshot.docs.length - 1];
+            
+            if (lastVisible) {
+              depositsQuery = db.collection('transactions')
+                .where('type', '==', 'deposit')
+                .orderBy('timestamp', 'desc')
+                .startAfter(lastVisible)
+                .limit(pageSize);
+            }
+          }
         }
         
-        const snapshot = await depositsQuery.get();
+        // Execute the query
+        const depositsSnapshot = await depositsQuery.get();
         
-        if (snapshot.empty) {
-          console.log(`No deposits found ${sinceTimestamp ? 'since ' + sinceTimestamp.toISOString() : ''}`);
-          return [];
-        }
+        // Extract the deposit data
+        const deposits = [];
+        let latestTimestamp = null;
         
-        console.log(`Found ${snapshot.size} deposits ${sinceTimestamp ? 'since ' + sinceTimestamp.toISOString() : ''}`);
-        
-        return snapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
+        depositsSnapshot.forEach(doc => {
+          const depositData = doc.data();
+          const deposit = {
             id: doc.id,
-            ...data,
-            timestamp: data.timestamp?.toDate() || new Date()
+            ...depositData,
+            // Convert Firestore timestamp to ISO string for serialization
+            timestamp: depositData.timestamp?.toDate?.()?.toISOString() || null
           };
+          
+          // Track the latest timestamp
+          if (depositData.timestamp) {
+            const depositTimestamp = depositData.timestamp.toDate();
+            if (!latestTimestamp || depositTimestamp > latestTimestamp) {
+              latestTimestamp = depositTimestamp;
+            }
+          }
+          
+          deposits.push(deposit);
         });
+        
+        // Calculate summary information
+        const totalDeposits = deposits.length;
+        const totalValue = deposits.reduce((sum, deposit) => sum + (deposit.amount || 0), 0);
+        
+        // Get total count from a separate query for pagination info
+        // Only do this for initial fetch
+        let totalCount = 0;
+        if (!sinceTimestamp) {
+          try {
+            const countSnapshot = await db.collection('transactions')
+              .where('type', '==', 'deposit')
+              .count()
+              .get();
+            totalCount = countSnapshot.data().count;
+          } catch (error) {
+            console.error('Error getting deposit count:', error);
+            // Fallback method if count() is not available
+            try {
+              const allDepositsSnapshot = await db.collection('transactions')
+                .where('type', '==', 'deposit')
+                .get();
+              totalCount = allDepositsSnapshot.size;
+            } catch (fallbackError) {
+              console.error('Error getting deposit count with fallback:', fallbackError);
+            }
+          }
+        }
+        
+        return {
+          deposits,
+          latestTimestamp,
+          summary: {
+            count: totalDeposits,
+            totalValue,
+            totalCount,
+            currentPage: page,
+            totalPages: Math.ceil(totalCount / pageSize),
+            hasMore: depositsSnapshot.size === pageSize
+          }
+        };
       } catch (error) {
-        console.error('Error in getDeposits:', error);
+        console.error('Error fetching deposits:', error);
         throw error;
       }
     };

@@ -355,7 +355,17 @@ const AllDeposits = () => {
   const navigate = useNavigate();
   const [deposits, setDeposits] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [intervalId, setIntervalId] = useState(null);
+  const [lastTimestamp, setLastTimestamp] = useState(null);
+  
+  // Add pagination state
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
   const [stats, setStats] = useState({
     totalDeposits: 0,
     totalDepositAmount: 0,
@@ -368,15 +378,9 @@ const AllDeposits = () => {
     network: 'all',
     currency: 'all',
   });
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const itemsPerPage = 10;
   const [userMap, setUserMap] = useState({});
   const [walletMap, setWalletMap] = useState({});
   const [copiedText, setCopiedText] = useState(null);
-  
-  // Store the last timestamp we received deposits for
-  const [lastTimestamp, setLastTimestamp] = useState(null);
   
   // Use a ref to keep track of the polling interval
   const pollingIntervalRef = React.useRef(null);
@@ -386,20 +390,16 @@ const AllDeposits = () => {
   // Add state to track when component becomes visible
   const [pageVisible, setPageVisible] = useState(true);
 
+  // Handle tab visibility changes
+  const handleVisibilityChange = useCallback(() => {
+    if (!document.hidden) {
+      console.log('Tab became visible, refreshing data');
+      fetchDeposits(false); // Perform incremental fetch
+    }
+  }, []);
+
   // Add visibility change handler to refresh data when tab becomes active
   useEffect(() => {
-    // Function to handle visibility change
-    const handleVisibilityChange = () => {
-      const isVisible = document.visibilityState === 'visible';
-      setPageVisible(isVisible);
-      
-      // If page becomes visible and we have deposits, refresh to get latest data
-      if (isVisible && deposits.length > 0) {
-        console.log('Page became visible, refreshing deposits');
-        fetchDeposits(true);
-      }
-    };
-    
     // Add event listener for visibility change
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
@@ -407,47 +407,75 @@ const AllDeposits = () => {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [deposits]);
+  }, [handleVisibilityChange]);
 
-  // Fetch deposits with the cached endpoint
-  const fetchDeposits = useCallback(async (forceRefresh = false) => {
+  // Update the fetchDeposits function to handle pagination
+  const fetchDeposits = async (isInitialFetch = false, pageToFetch = null) => {
     try {
-      if (!forceRefresh && refreshing) return; // Prevent concurrent refreshes
+      if (refreshing) {
+        // Already refreshing, don't do anything
+        return;
+      }
       
-      const isInitialFetch = !lastTimestamp || forceRefresh;
-      
-      if (forceRefresh) {
+      if (!isInitialFetch && !lastTimestamp) {
+        // If it's not the initial fetch and we don't have a last timestamp, treat it as an initial fetch
+        isInitialFetch = true;
         setRefreshing(true);
       } else if (isInitialFetch) {
         setLoading(true);
       }
       
-      // Build the URL with query params if we have a lastTimestamp
-      const url = '/api/admin/cached-deposits' + 
-        (isInitialFetch ? '' : `?lastTimestamp=${lastTimestamp.toISOString()}`);
+      // Use provided page or current page state
+      const currentPageToFetch = pageToFetch !== null ? pageToFetch : page;
       
-      console.log(`Fetching deposits: ${isInitialFetch ? 'initial' : 'incremental'} fetch`);
+      // Build the URL with query params
+      let url = '/api/admin/cached-deposits';
+      const params = new URLSearchParams();
+      
+      if (!isInitialFetch && lastTimestamp) {
+        params.append('lastTimestamp', lastTimestamp.toISOString());
+      }
+      
+      params.append('page', currentPageToFetch.toString());
+      params.append('pageSize', pageSize.toString());
+      
+      // Append query params if we have any
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
+      
+      console.log(`Fetching deposits: ${isInitialFetch ? 'initial' : 'incremental'} fetch - Page ${currentPageToFetch}`);
       
       const response = await axios.get(url);
       
       if (response.data && response.data.success) {
-        const { deposits: newDeposits, summary } = response.data;
+        const { deposits: newDeposits, summary, latestTimestamp } = response.data;
         
         if (isInitialFetch) {
           // Initial load - replace all deposits
           setDeposits(newDeposits || []);
         } else if (newDeposits && newDeposits.length > 0) {
           // Incremental update - add new deposits to the beginning
-          setDeposits(prevDeposits => {
-            // Combine arrays avoiding duplicates (by id)
-            const depositIds = new Set(prevDeposits.map(d => d.id));
-            const uniqueNewDeposits = newDeposits.filter(d => !depositIds.has(d.id));
-            
-            // Sort combined array by timestamp (newest first)
-            return [...uniqueNewDeposits, ...prevDeposits].sort((a, b) => {
-              return new Date(b.timestamp) - new Date(a.timestamp);
-            });
-          });
+          // or page load - append to existing deposits
+          if (pageToFetch !== null && pageToFetch > 1) {
+            // When loading a new page, append to existing deposits
+            setDeposits(prevDeposits => [...prevDeposits, ...newDeposits]);
+          } else {
+            // For incremental updates, add to beginning
+            setDeposits(prevDeposits => [...newDeposits, ...prevDeposits]);
+          }
+        }
+        
+        // Update pagination information
+        if (summary) {
+          setTotalPages(summary.totalPages || 1);
+          setTotalCount(summary.totalCount || 0);
+          setHasMore(summary.hasMore || false);
+        }
+        
+        // Update the last timestamp for incremental updates
+        if (latestTimestamp) {
+          setLastTimestamp(new Date(latestTimestamp));
         }
         
         // Update stats
@@ -461,26 +489,40 @@ const AllDeposits = () => {
           });
         }
         
-        // Set the lastTimestamp to the current time for future incremental updates
-        setLastTimestamp(new Date());
-        
         // Extract all user IDs from the deposits for user info fetching
         const allUserIds = [...new Set((newDeposits || []).map(d => d.userId))];
         if (allUserIds.length > 0) {
           console.log(`Fetching user info for ${allUserIds.length} users from deposits`);
           await fetchUserInfo(newDeposits || []);
         }
+        
+        return true;
+      } else {
+        console.error('Error in response:', response.data?.error || 'Unknown error');
+        setError(response.data?.error || 'Failed to fetch deposits');
+        return false;
       }
-      
     } catch (error) {
-      console.error("Error fetching deposits:", error);
-      toast.error("Failed to fetch deposits");
+      console.error('Error fetching deposits:', error);
+      setError('Failed to fetch deposits');
+      return false;
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [lastTimestamp, refreshing]);
-  
+  };
+
+  // Add loadMore function to handle pagination
+  const loadMoreDeposits = async () => {
+    if (loading || refreshing || !hasMore) return;
+    
+    const nextPage = page + 1;
+    if (nextPage <= totalPages) {
+      setPage(nextPage);
+      await fetchDeposits(false, nextPage);
+    }
+  };
+
   // Get the visible deposits (filtered and paginated)
   const getVisibleDeposits = useCallback(() => {
     // Apply filters
@@ -500,7 +542,7 @@ const AllDeposits = () => {
     
     // Calculate pagination
     const totalItems = filteredDeposits.length;
-    const calculatedTotalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+    const calculatedTotalPages = Math.max(1, Math.ceil(totalItems / pageSize));
     
     if (calculatedTotalPages !== totalPages) {
       setTotalPages(calculatedTotalPages);
@@ -512,70 +554,37 @@ const AllDeposits = () => {
     
     // Return paginated results
     return filteredDeposits.slice(
-      (page - 1) * itemsPerPage,
-      page * itemsPerPage
+      (page - 1) * pageSize,
+      page * pageSize
     );
   }, [deposits, filters, page, totalPages]);
   
-  // Set up initial fetch and polling
+  // Add a function to initialize deposits
+  const initializeDeposits = async () => {
+    await fetchDeposits(true); // Initial fetch
+  };
+
+  // Initial fetch of deposits
   useEffect(() => {
-    // Force refresh on initial load to get all data immediately
-    fetchDeposits(true);
+    initializeDeposits();
     
-    // Set up polling for new deposits every 30 seconds
-    pollingIntervalRef.current = setInterval(() => {
-      if (lastTimestamp) {
-        fetchDeposits();
-      }
+    // Start polling for new deposits every 30 seconds
+    const interval = setInterval(() => {
+      fetchDeposits(false); // Incremental fetch
     }, 30000);
     
-    // Clean up interval on unmount
+    setIntervalId(interval);
+    
+    // Cleanup function
     return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
+      if (interval) clearInterval(interval);
     };
-  }, [fetchDeposits]);
-  
-  // Re-fetch when filters or page changes
-  useEffect(() => {
-    // No need to fetch from backend, just recalculate visible deposits
-  }, [filters, page]);
-  
-  // Manual refresh handler
+  }, []); // Empty dependency array to run only on mount
+
+  // Handle the refresh button click
   const handleRefresh = () => {
-    setRefreshing(true);
-    axios.get('/api/admin/check-deposits')
-      .then(response => {
-        console.log('Deposit refresh response:', response.data);
-        
-        // Log a summary of the transaction hash formats for debugging
-        if (response.data.deposits && response.data.deposits.length > 0) {
-          console.log('Deposit transaction hash analysis:');
-          response.data.deposits.forEach(deposit => {
-            if (deposit.txHash) {
-              console.log(`[${deposit.chain}] Hash: ${deposit.txHash} - Format valid: ${/^(0x)?[0-9a-fA-F]{64}$/.test(deposit.txHash)}`);
-            }
-          });
-        }
-        
-        setDeposits(response.data.deposits || []);
-        
-        // Track unique user IDs for fetching user info
-        const uniqueUserIds = [...new Set(response.data.deposits.map(d => d.userId))];
-        
-        // Batch fetch user info
-        if (uniqueUserIds.length > 0) {
-          fetchUserInfo(uniqueUserIds);
-        }
-      })
-      .catch(error => {
-        console.error('Error refreshing deposits:', error);
-        toast.error('Failed to refresh deposits');
-      })
-      .finally(() => {
-        setRefreshing(false);
-      });
+    // Force a complete refresh
+    fetchDeposits(true);
   };
 
   const fetchUserInfo = useCallback(async (depositsToProcess) => {
@@ -807,6 +816,63 @@ const AllDeposits = () => {
     }
   };
 
+  // Add pagination UI at the bottom of the component's return
+  const renderPagination = () => {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginTop: '20px' 
+      }}>
+        <div>
+          Showing {deposits.length} of {totalCount} deposits
+        </div>
+        <div style={{ 
+          display: 'flex', 
+          gap: '10px' 
+        }}>
+          <button
+            onClick={() => {
+              if (page > 1) {
+                setPage(page - 1);
+                fetchDeposits(true, page - 1);
+              }
+            }}
+            disabled={page <= 1 || loading || refreshing}
+            style={{
+              padding: '8px 16px',
+              background: page <= 1 ? '#444' : '#2d3748',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: page <= 1 ? 'not-allowed' : 'pointer'
+            }}
+          >
+            Previous
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            Page {page} of {totalPages}
+          </div>
+          <button
+            onClick={loadMoreDeposits}
+            disabled={page >= totalPages || loading || refreshing || !hasMore}
+            style={{
+              padding: '8px 16px',
+              background: page >= totalPages || !hasMore ? '#444' : '#2d3748',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: page >= totalPages || !hasMore ? 'not-allowed' : 'pointer'
+            }}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Container>
       <h1>Deposit Transactions</h1>
@@ -966,31 +1032,7 @@ const AllDeposits = () => {
               </tbody>
             </DepositsTable>
             
-            <Pagination>
-              <PageButton 
-                onClick={() => setPage(prev => Math.max(1, prev - 1))}
-                disabled={page === 1}
-              >
-                <i className="bi bi-chevron-left"></i>
-              </PageButton>
-              
-              {[...Array(totalPages).keys()].map(pageNum => (
-                <PageButton 
-                  key={pageNum + 1}
-                  active={page === pageNum + 1}
-                  onClick={() => setPage(pageNum + 1)}
-                >
-                  {pageNum + 1}
-                </PageButton>
-              ))}
-              
-              <PageButton 
-                onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={page === totalPages}
-              >
-                <i className="bi bi-chevron-right"></i>
-              </PageButton>
-            </Pagination>
+            {renderPagination()}
           </>
         )}
       </Card>
