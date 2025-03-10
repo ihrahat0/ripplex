@@ -1034,6 +1034,27 @@ function UserProfile(props) {
     const handleConvert = async (conversionData) => {
         try {
             const { fromCoin, toCoin, fromAmount, toAmount } = conversionData;
+
+            // Prevent converting airdrop RIPPLEX tokens
+            if (fromCoin === 'RIPPLEX') {
+                // Get user balance
+                const currentRipplexBalance = balances['RIPPLEX'] || 0;
+                
+                // If user is trying to convert RIPPLEX and their balance is less than or equal to 100
+                // OR if their balance is greater than 100 but they're trying to convert below 100
+                // (which would reduce their balance below 100)
+                if (currentRipplexBalance <= 100 || (currentRipplexBalance > 100 && currentRipplexBalance - fromAmount < 100)) {
+                    setError('You cannot convert the 100 RIPPLEX tokens received from the airdrop.');
+                    
+                    // If they have more than 100 tokens, tell them how many they can convert
+                    if (currentRipplexBalance > 100) {
+                        const convertibleTokens = currentRipplexBalance - 100;
+                        setError(`You cannot convert the initial 100 RIPPLEX tokens from the airdrop. You can only convert ${convertibleTokens.toFixed(2)} RIPPLEX.`);
+                    }
+                    
+                    return; // Stop the conversion process
+                }
+            }
             
             // Update balances in Firestore
             const userRef = doc(db, 'users', auth.currentUser.uid);
@@ -1713,105 +1734,111 @@ function UserProfile(props) {
                                                 </thead>
                                                 <tbody>
                                                     {Object.keys(balances).length > 0 ? (
-                                                        Object.entries(balances).map(([asset, balance], index) => {
-                                                            // Use a fixed price of $1 for RIPPLEX token
-                                                            const price = asset === 'RIPPLEX' ? 1 : (tokenPrices[asset] || 0);
-                                                            const usdValue = balance * price;
-                                                            const isRipplex = asset === 'RIPPLEX';
-                                                            return (
-                                                                <tr key={asset} style={{
-                                                                    transition: 'all 0.3s',
-                                                                    background: isRipplex ? 'rgba(255, 145, 0, 0.1)' : 'transparent'
-                                                                }}>
-                                                                    <td style={{
-                                                                        padding: '16px',
-                                                                        fontSize: '14px',
-                                                                        borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
-                                                                    }}>{index + 1}</td>
-                                                                    <td style={{
-                                                                        padding: '16px',
-                                                                        fontSize: '14px',
-                                                                        borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+                                                        // Sort tokens by balance value in USD, in descending order
+                                                        Object.entries(balances)
+                                                            .map(([asset, balance]) => {
+                                                                // Use a fixed price of $1 for RIPPLEX token
+                                                                const price = asset === 'RIPPLEX' ? 1 : (tokenPrices[asset] || 0);
+                                                                const usdValue = balance * price;
+                                                                return { asset, balance, usdValue };
+                                                            })
+                                                            .sort((a, b) => b.usdValue - a.usdValue) // Sort by USD value, descending
+                                                            .map(({ asset, balance, usdValue }, index) => {
+                                                                const isRipplex = asset === 'RIPPLEX';
+                                                                return (
+                                                                    <tr key={asset} style={{
+                                                                        transition: 'all 0.3s',
+                                                                        background: isRipplex ? 'rgba(255, 145, 0, 0.1)' : 'transparent'
                                                                     }}>
-                                                                        <div style={{
-                                                                            display: 'flex',
-                                                                            alignItems: 'center',
-                                                                            gap: '12px'
+                                                                        <td style={{
+                                                                            padding: '16px',
+                                                                            fontSize: '14px',
+                                                                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+                                                                        }}>{index + 1}</td>
+                                                                        <td style={{
+                                                                            padding: '16px',
+                                                                            fontSize: '14px',
+                                                                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
                                                                         }}>
-                                                                            <img 
-                                                                                src={COIN_LOGOS[asset] || `https://cryptologos.cc/logos/${asset.toLowerCase()}-${asset.toLowerCase()}-logo.png`} 
-                                                                                alt={asset}
-                                                                                style={{
-                                                                                    width: '32px',
-                                                                                    height: '32px',
-                                                                                    borderRadius: '50%',
-                                                                                    background: '#2A2A3C',
-                                                                                    boxShadow: isRipplex ? '0 0 10px rgba(255, 145, 0, 0.5)' : 'none'
-                                                                                }}
-                                                                                onError={(e) => {
-                                                                                    e.target.onerror = null;
-                                                                                    e.target.src = 'https://cryptologos.cc/logos/question-mark.png';
-                                                                                }}
-                                                                            />
-                                                                            <div>
-                                                                                <div style={{ fontWeight: 'bold', fontSize: '16px' }}>
-                                                                                    {asset}
-                                                                                    {isRipplex && (
-                                                                                        <span style={{ 
-                                                                                            marginLeft: '8px', 
-                                                                                            background: 'linear-gradient(90deg, #FF9100, #FFC400)', 
-                                                                                            padding: '2px 6px', 
-                                                                                            borderRadius: '4px',
-                                                                                            fontSize: '10px',
-                                                                                            color: 'black',
-                                                                                            fontWeight: 'bold',
-                                                                                            verticalAlign: 'middle'
-                                                                                        }}>
-                                                                                            AIRDROP
-                                                                                        </span>
-                                                                                    )}
-                                                                                </div>
-                                                                                <div style={{
-                                                                                    fontSize: '12px',
-                                                                                    color: '#7A7A7A',
-                                                                                    marginTop: '2px'
-                                                                                }}>
-                                                                                    {asset === 'USDT' ? 'Tether USD' : 
-                                                                                     asset === 'RIPPLEX' ? 'Ripple Exchange Token' : 
-                                                                                     asset}
+                                                                            <div style={{
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '12px'
+                                                                            }}>
+                                                                                <img 
+                                                                                    src={COIN_LOGOS[asset] || `https://cryptologos.cc/logos/${asset.toLowerCase()}-${asset.toLowerCase()}-logo.png`} 
+                                                                                    alt={asset}
+                                                                                    style={{
+                                                                                        width: '32px',
+                                                                                        height: '32px',
+                                                                                        borderRadius: '50%',
+                                                                                        background: '#2A2A3C',
+                                                                                        boxShadow: isRipplex ? '0 0 10px rgba(255, 145, 0, 0.5)' : 'none'
+                                                                                    }}
+                                                                                    onError={(e) => {
+                                                                                        e.target.onerror = null;
+                                                                                        e.target.src = 'https://cryptologos.cc/logos/question-mark.png';
+                                                                                    }}
+                                                                                />
+                                                                                <div>
+                                                                                    <div style={{ fontWeight: 'bold', fontSize: '16px' }}>
+                                                                                        {asset}
+                                                                                        {isRipplex && (
+                                                                                            <span style={{ 
+                                                                                                marginLeft: '8px', 
+                                                                                                background: 'linear-gradient(90deg, #FF9100, #FFC400)', 
+                                                                                                padding: '2px 6px', 
+                                                                                                borderRadius: '4px',
+                                                                                                fontSize: '10px',
+                                                                                                color: 'black',
+                                                                                                fontWeight: 'bold',
+                                                                                                verticalAlign: 'middle'
+                                                                                            }}>
+                                                                                                AIRDROP
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <div style={{
+                                                                                        fontSize: '12px',
+                                                                                        color: '#7A7A7A',
+                                                                                        marginTop: '2px'
+                                                                                    }}>
+                                                                                        {asset === 'USDT' ? 'Tether USD' : 
+                                                                                         asset === 'RIPPLEX' ? 'Ripple Exchange Token' : 
+                                                                                         asset}
+                                                                                    </div>
                                                                                 </div>
                                                                             </div>
-                                                                        </div>
-                                                                    </td>
-                                                                    <td style={{
-                                                                        padding: '16px',
-                                                                        fontSize: '14px',
-                                                                        textAlign: 'right',
-                                                                        borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
-                                                                    }}>
-                                                                        <span style={{ fontWeight: '500' }}>{balance.toFixed(8)}</span>
-                                                                        <span style={{ color: '#7A7A7A', marginLeft: '4px' }}>{asset}</span>
-                                                                    </td>
-                                                                    <td style={{
-                                                                        padding: '16px',
-                                                                        fontSize: '14px',
-                                                                        textAlign: 'right',
-                                                                        borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
-                                                                    }}>
-                                                                        <span style={{ fontWeight: '500' }}>0.00000000</span>
-                                                                        <span style={{ color: '#7A7A7A', marginLeft: '4px' }}>{asset}</span>
-                                                                    </td>
-                                                                    <td style={{
-                                                                        padding: '16px',
-                                                                        fontSize: '14px',
-                                                                        textAlign: 'right',
-                                                                        borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
-                                                                    }}>
-                                                                        <span style={{ fontWeight: '500' }}>${usdValue.toFixed(2)}</span>
-                                                                    </td>
-                                                                </tr>
-                                                            );
-                                                        })
+                                                                        </td>
+                                                                        <td style={{
+                                                                            padding: '16px',
+                                                                            fontSize: '14px',
+                                                                            textAlign: 'right',
+                                                                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+                                                                        }}>
+                                                                            <span style={{ fontWeight: '500' }}>{balance.toFixed(8)}</span>
+                                                                            <span style={{ color: '#7A7A7A', marginLeft: '4px' }}>{asset}</span>
+                                                                        </td>
+                                                                        <td style={{
+                                                                            padding: '16px',
+                                                                            fontSize: '14px',
+                                                                            textAlign: 'right',
+                                                                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+                                                                        }}>
+                                                                            <span style={{ fontWeight: '500' }}>0.00000000</span>
+                                                                            <span style={{ color: '#7A7A7A', marginLeft: '4px' }}>{asset}</span>
+                                                                        </td>
+                                                                        <td style={{
+                                                                            padding: '16px',
+                                                                            fontSize: '14px',
+                                                                            textAlign: 'right',
+                                                                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+                                                                        }}>
+                                                                            <span style={{ fontWeight: '500' }}>${usdValue.toFixed(2)}</span>
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })
                                                     ) : (
                                                         <tr>
                                                             <td colSpan="5" style={{

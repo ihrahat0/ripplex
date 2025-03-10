@@ -969,7 +969,72 @@ function CryptoPrices() {
     fetchPrices();
   }, [dataInitialized]);
 
-  // Extracted processing logic to a separate function for reuse
+  // After the useEffect declaration, add a function to filter cryptocurrencies by category
+  const filterByCategory = (cryptoList, category) => {
+    if (!cryptoList || cryptoList.length === 0) return [];
+    
+    switch (category) {
+      case 'Popular':
+        // Popular coins based on market cap and volume
+        return cryptoList
+          .sort((a, b) => {
+            // Sort by numericMarketCap in descending order
+            return (b.numericMarketCap || 0) - (a.numericMarketCap || 0);
+          })
+          .slice(0, 20); // Top 20 by market cap
+      
+      case 'Recently added':
+        // Sort by createdAt or timestamp if available
+        return cryptoList
+          .filter(crypto => crypto.createdAt || crypto.timestamp || crypto.launchDate)
+          .sort((a, b) => {
+            const dateA = a.createdAt || a.timestamp || a.launchDate || 0;
+            const dateB = b.createdAt || b.timestamp || b.launchDate || 0;
+            return dateB - dateA; // Most recent first
+          })
+          .slice(0, 20);
+      
+      case 'Trending':
+        // Sort by price change percentage (absolute value) in descending order
+        return cryptoList
+          .filter(crypto => {
+            // Extract percentage value from sale property
+            const percentChange = parseFloat(crypto.sale?.replace(/[^0-9.-]+/g, '')) || 0;
+            return !isNaN(percentChange); // Filter out entries with invalid percentage
+          })
+          .sort((a, b) => {
+            // Sort by absolute percentage change
+            const percentA = Math.abs(parseFloat(a.sale?.replace(/[^0-9.-]+/g, '')) || 0);
+            const percentB = Math.abs(parseFloat(b.sale?.replace(/[^0-9.-]+/g, '')) || 0);
+            return percentB - percentA; // Highest change first
+          })
+          .slice(0, 20);
+      
+      case 'Memes':
+        // Filter known meme coins
+        const memeCoins = ['DOGE', 'SHIB', 'PEPE', 'FLOKI', 'ELON', 'BONK', 'CULT', 'SAMO', 'BABYDOGE'];
+        return cryptoList
+          .filter(crypto => {
+            // Check if it's tagged as a meme or has one of the known meme coin symbols
+            return crypto.category === 'meme' || 
+                  crypto.tags?.includes('meme') ||
+                  memeCoins.includes(crypto.symbol) ||
+                  crypto.name?.toLowerCase().includes('doge') ||
+                  crypto.name?.toLowerCase().includes('shib') ||
+                  crypto.name?.toLowerCase().includes('pepe') ||
+                  crypto.name?.toLowerCase().includes('floki') ||
+                  crypto.name?.toLowerCase().includes('inu') ||
+                  crypto.name?.toLowerCase().includes('cat') ||
+                  crypto.name?.toLowerCase().includes('meme');
+          });
+      
+      case 'All':
+      default:
+        return cryptoList;
+    }
+  };
+
+  // Modify the processTokensData function to add category tags
   const processTokensData = async (tokensData) => {
     return Promise.all(
       tokensData.map(async (token) => {
@@ -984,7 +1049,22 @@ function CryptoPrices() {
             ...token,
             address: token.address || token.contractAddress,
             chainId: token.chainId || token.chain || 'bsc',
-            icon: token.icon || token.logoUrl || token.logo // Add fallback to logoUrl field from admin panel
+            icon: token.icon || token.logoUrl || token.logo, // Add fallback to logoUrl field from admin panel
+            
+            // Add category info based on known coins
+            isMeme: ['DOGE', 'SHIB', 'PEPE', 'FLOKI', 'ELON', 'BONK', 'CULT', 'SAMO', 'BABYDOGE'].includes(token.symbol) ||
+                    token.name?.toLowerCase().includes('doge') ||
+                    token.name?.toLowerCase().includes('shib') ||
+                    token.name?.toLowerCase().includes('pepe') ||
+                    token.name?.toLowerCase().includes('floki') ||
+                    token.name?.toLowerCase().includes('inu') ||
+                    token.name?.toLowerCase().includes('cat') ||
+                    token.name?.toLowerCase().includes('meme'),
+            
+            isPopular: ['BTC', 'ETH', 'BNB', 'XRP', 'SOL', 'ADA', 'DOGE', 'MATIC', 'DOT', 'LINK', 'AVAX', 'UNI'].includes(token.symbol),
+            
+            // Set createdAt if not present (for Recently added filter)
+            createdAt: token.createdAt || token.timestamp || token.launchDate || Date.now()
           };
 
           if (normalizedToken.type === 'dex' && normalizedToken.address) {
@@ -1440,7 +1520,7 @@ function CryptoPrices() {
           </tr>
         </thead>
         <tbody>
-          {prices.map((crypto, index) => crypto && (
+          {filterByCategory(prices, activeCategory).map((crypto, index) => crypto && (
             <tr key={crypto.id}>
               <Td>
                 <StarButton
