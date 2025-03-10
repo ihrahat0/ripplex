@@ -1034,27 +1034,6 @@ function UserProfile(props) {
     const handleConvert = async (conversionData) => {
         try {
             const { fromCoin, toCoin, fromAmount, toAmount } = conversionData;
-
-            // Prevent converting airdrop RIPPLEX tokens
-            if (fromCoin === 'RIPPLEX') {
-                // Get user balance
-                const currentRipplexBalance = balances['RIPPLEX'] || 0;
-                
-                // If user is trying to convert RIPPLEX and their balance is less than or equal to 100
-                // OR if their balance is greater than 100 but they're trying to convert below 100
-                // (which would reduce their balance below 100)
-                if (currentRipplexBalance <= 100 || (currentRipplexBalance > 100 && currentRipplexBalance - fromAmount < 100)) {
-                    setError('You cannot convert the 100 RIPPLEX tokens received from the airdrop.');
-                    
-                    // If they have more than 100 tokens, tell them how many they can convert
-                    if (currentRipplexBalance > 100) {
-                        const convertibleTokens = currentRipplexBalance - 100;
-                        setError(`You cannot convert the initial 100 RIPPLEX tokens from the airdrop. You can only convert ${convertibleTokens.toFixed(2)} RIPPLEX.`);
-                    }
-                    
-                    return; // Stop the conversion process
-                }
-            }
             
             // Update balances in Firestore
             const userRef = doc(db, 'users', auth.currentUser.uid);

@@ -533,6 +533,8 @@ function ConvertModal({ isOpen, onClose, balances, tokenPrices, onConvert }) {
           usdValue: symbol === 'USDT' ? balance : usdValue // USDT is pegged to USD
         };
       })
+      // Filter out RIPPLEX from conversion options
+      .filter(coin => coin.symbol !== 'RIPPLEX')
       .sort((a, b) => {
         // If both have zero balance, sort alphabetically
         if (a.balance === 0 && b.balance === 0) {
