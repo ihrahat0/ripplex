@@ -954,16 +954,26 @@ const calculatePnL = (position, currentMarketPrice) => {
   const { type, entryPrice, leverage, margin } = position;
   
   try {
+    // Ensure all values are proper numbers
+    const entryPriceNum = parseFloat(entryPrice);
+    const currentMarketPriceNum = parseFloat(currentMarketPrice);
+    const leverageNum = parseFloat(leverage);
+    const marginNum = parseFloat(margin);
+    
+    // Validation
+    if (isNaN(entryPriceNum) || isNaN(currentMarketPriceNum) || isNaN(leverageNum) || isNaN(marginNum)) {
+      console.error('Invalid values for PnL calculation:', { entryPrice, currentMarketPrice, leverage, margin });
+      return 0;
+    }
+    
     if (type === 'buy') {
-      const priceDiff = currentMarketPrice - entryPrice;
-      const percentageChange = (priceDiff / entryPrice) * 100;
-      // Fix for large numbers: don't use toLocaleString() inside Number()
-      return Number((margin * (percentageChange / 100) * leverage));
+      const priceDiff = currentMarketPriceNum - entryPriceNum;
+      const percentageChange = (priceDiff / entryPriceNum) * 100;
+      return +(marginNum * (percentageChange / 100) * leverageNum).toFixed(2);
     } else {
-      const priceDiff = entryPrice - currentMarketPrice;
-      const percentageChange = (priceDiff / entryPrice) * 100;
-      // Fix for large numbers: don't use toLocaleString() inside Number()
-      return Number((margin * (percentageChange / 100) * leverage));
+      const priceDiff = entryPriceNum - currentMarketPriceNum;
+      const percentageChange = (priceDiff / entryPriceNum) * 100;
+      return +(marginNum * (percentageChange / 100) * leverageNum).toFixed(2);
     }
   } catch (error) {
     console.error('Error calculating PnL:', error);
@@ -2472,15 +2482,18 @@ const Trading = () => {
       setIsPending(true);
       setClosingPositionId(position.id);
       
-      if (!marketPrice || isNaN(marketPrice) || marketPrice <= 0) {
+      // Parse and ensure market price is a proper number
+      const currentMarketPrice = parseFloat(marketPrice);
+      
+      if (isNaN(currentMarketPrice) || currentMarketPrice <= 0) {
         console.error('Invalid market price for closing position:', marketPrice);
         throw new Error('Cannot close position: Invalid market price');
       }
       
-      console.log(`Attempting to close position ${position.id} at price $${marketPrice}`);
+      console.log(`Attempting to close position ${position.id} at price $${currentMarketPrice}`);
       
-      // Pass the currentUser.uid as the first parameter
-      const result = await tradingService.closePosition(currentUser.uid, position.id, marketPrice);
+      // Pass the currentUser.uid as the first parameter with the properly formatted price
+      const result = await tradingService.closePosition(currentUser.uid, position.id, currentMarketPrice);
       
       console.log('Position close result:', result);
       
@@ -4109,13 +4122,16 @@ const Trading = () => {
         if (shouldLiquidate) {
           console.log(`Position ${position.id} is being liquidated at market price ${marketPrice}`);
           try {
-            // Close the position at current market price
-            await tradingService.closePosition(currentUser.uid, position.id, marketPrice);
+            // Ensure we're using the full market price, not a truncated value
+            const currentMarketPrice = parseFloat(marketPrice);
             
-            // Show notification
+            // Close the position at current market price
+            await tradingService.closePosition(currentUser.uid, position.id, currentMarketPrice);
+            
+            // Show notification with properly formatted price
             setNotification({
               type: 'warning',
-              message: `Position ${position.symbol} has been liquidated at ${marketPrice} USDT`
+              message: `Position ${position.symbol} has been liquidated at ${currentMarketPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} USDT`
             });
             
             // Refresh positions
@@ -4480,9 +4496,13 @@ const Trading = () => {
                     </TableCell>
                           <TableCell>{position.amount || 0} {position.symbol || ''}</TableCell>
                     <TableCell>${position.entryPrice?.toLocaleString() || '0.00'}</TableCell>
-                    <TableCell>${marketPrice >= 1000 ? marketPrice.toLocaleString() : marketPrice.toLocaleString() || '0.00'}</TableCell>
+                    <TableCell>${
+                      typeof marketPrice === 'number' 
+                        ? marketPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) 
+                        : '0.00'
+                    }</TableCell>
                     <TableCell style={{ color: '#F44336' }}>
-                      ${liquidationPrice.toLocaleString()}
+                      ${typeof liquidationPrice === 'number' ? liquidationPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00'}
                     </TableCell>
                           <TableCell>{position.leverage || 1}x</TableCell>
                     <TableCell>
@@ -4536,7 +4556,11 @@ const Trading = () => {
                         </TableCell>
                         <TableCell>{position.amount || 0} {position.symbol || ''}</TableCell>
                         <TableCell>${position.entryPrice?.toLocaleString() || '0.00'}</TableCell>
-                        <TableCell>${position.closePrice?.toLocaleString() || '0.00'}</TableCell>
+                        <TableCell>${
+                          typeof position.closePrice === 'number' 
+                            ? position.closePrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) 
+                            : '0.00'
+                        }</TableCell>
                         <TableCell>{position.leverage || 1}x</TableCell>
                         <TableCell>
                           <PnLValue value={position.finalPnL || 0}>

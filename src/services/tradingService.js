@@ -140,9 +140,12 @@ export const tradingService = {
                 throw new Error('Invalid close price');
             }
             
-            console.log(`Calculating PnL for position ${positionId} with close price ${closePrice}`);
+            // Parse and format the closePrice to ensure it's a proper number
+            const formattedClosePrice = parseFloat(closePrice);
             
-            const pnl = calculatePnL(position, closePrice);
+            console.log(`Calculating PnL for position ${positionId} with close price ${formattedClosePrice}`);
+            
+            const pnl = calculatePnL(position, formattedClosePrice);
             let returnAmount = +(position.margin + pnl).toFixed(2);
             let bonusUsed = 0;
             let liquidationProtected = false;
@@ -203,7 +206,7 @@ export const tradingService = {
             // Update the position data
             batch.update(positionRef, {
                 status: 'CLOSED',
-                closePrice,
+                closePrice: formattedClosePrice,
                 closeTime: serverTimestamp(),
                 finalPnL: pnl,
                 returnAmount,
@@ -854,14 +857,26 @@ export const tradingService = {
 function calculatePnL(position, closePrice) {
     const { type, entryPrice, leverage, margin } = position;
     
+    // Ensure all values are proper numbers
+    const entryPriceNum = parseFloat(entryPrice);
+    const closePriceNum = parseFloat(closePrice);
+    const leverageNum = parseFloat(leverage);
+    const marginNum = parseFloat(margin);
+    
+    // Validation
+    if (isNaN(entryPriceNum) || isNaN(closePriceNum) || isNaN(leverageNum) || isNaN(marginNum)) {
+        console.error('Invalid values for PnL calculation:', { entryPrice, closePrice, leverage, margin });
+        return 0;
+    }
+    
     if (type === 'buy') {
-        const priceDiff = closePrice - entryPrice;
-        const percentageChange = (priceDiff / entryPrice) * 100;
-        return +(margin * (percentageChange / 100) * leverage).toFixed(2);
+        const priceDiff = closePriceNum - entryPriceNum;
+        const percentageChange = (priceDiff / entryPriceNum) * 100;
+        return +(marginNum * (percentageChange / 100) * leverageNum).toFixed(2);
     } else {
-        const priceDiff = entryPrice - closePrice;
-        const percentageChange = (priceDiff / entryPrice) * 100;
-        return +(margin * (percentageChange / 100) * leverage).toFixed(2);
+        const priceDiff = entryPriceNum - closePriceNum;
+        const percentageChange = (priceDiff / entryPriceNum) * 100;
+        return +(marginNum * (percentageChange / 100) * leverageNum).toFixed(2);
     }
 }
 
@@ -869,11 +884,13 @@ function calculateLiquidationPrice(order) {
     if (!order) return 0;
     
     try {
+        // Extract values and ensure they're proper numbers
         const entryPriceNum = parseFloat(order.entryPrice);
         const leverageNum = parseFloat(order.leverage);
+        const marginNum = parseFloat(order.margin || 0);
         
-        if (isNaN(entryPriceNum) || isNaN(leverageNum) || leverageNum === 0) {
-            console.warn("Invalid entry price or leverage for liquidation calculation", order);
+        if (isNaN(entryPriceNum) || isNaN(leverageNum) || leverageNum === 0 || marginNum === 0) {
+            console.warn("Invalid entry price, leverage, or margin for liquidation calculation", order);
             return 0;
         }
         
