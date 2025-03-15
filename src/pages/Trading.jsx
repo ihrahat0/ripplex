@@ -723,6 +723,11 @@ const PositionsTable = styled.table`
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
   }
+  
+  @media (max-width: 768px) {
+    /* Mobile-specific styles */
+    font-size: 12px;
+  }
 `;
 
 const TableHeader = styled.th`
@@ -731,6 +736,17 @@ const TableHeader = styled.th`
   padding: 8px;
   font-size: 12px;
   text-align: left;
+  
+  @media (max-width: 768px) {
+    /* Hide specific columns on mobile */
+    &:nth-child(2), /* Amount */
+    &:nth-child(3), /* Entry Price */
+    &:nth-child(4), /* Mark Price */
+    &:nth-child(5), /* Liquidation */
+    &:nth-child(6) { /* Leverage */
+      display: none;
+    }
+  }
 `;
 
 const TableCell = styled.td`
@@ -738,6 +754,32 @@ const TableCell = styled.td`
   font-size: 12px;
   color: var(--text);
   border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+  
+  @media (max-width: 768px) {
+    /* Hide specific columns on mobile */
+    &:nth-child(2), /* Amount */
+    &:nth-child(3), /* Entry Price */
+    &:nth-child(4), /* Mark Price */
+    &:nth-child(5), /* Liquidation */
+    &:nth-child(6) { /* Leverage */
+      display: none;
+    }
+    
+    /* Style for the symbol that appears next to the type on mobile */
+    .mobile-only-symbol {
+      display: inline-block;
+      font-size: 12px;
+      opacity: 1;
+      margin-left: 6px;
+      color: #D4AF37; /* Gold color for better visibility */
+      font-weight: bold;
+    }
+  }
+  
+  /* Hide the symbol on desktop */
+  .mobile-only-symbol {
+    display: none;
+  }
 `;
 
 const PnLValue = styled.span`
@@ -1339,8 +1381,13 @@ const formatSmallNumber = (num) => {
     return number.toFixed(2);
   }
   
-  // For larger numbers, format with commas and no decimal places
-  return number.toLocaleString(undefined, {maximumFractionDigits: 0});
+  // For larger numbers like Bitcoin (typically > 1000)
+  // Always use toLocaleString with both minimumFractionDigits and maximumFractionDigits
+  // This ensures we have proper formatting with commas AND always show .00
+  return number.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
 };
 
 // Trading component function
@@ -3770,7 +3817,7 @@ const Trading = () => {
                   <TableCell style={{ 
                     color: order.type === 'buy' ? '#0ECB81' : '#F6465D' 
                   }}>
-                    {(order.side || order.type)?.toUpperCase() || 'N/A'}
+                    {(order.side || order.type)?.toUpperCase() || 'N/A'} <span className="mobile-only-symbol">[{order.symbol}]</span>
         </TableCell>
                   <TableCell>{order.amount || 0} {order.symbol || ''}</TableCell>
                   <TableCell>
@@ -3874,15 +3921,17 @@ const Trading = () => {
     const numPrice = typeof price === 'string' ? parseFloat(price) : price;
     
     // Match the same formatting logic used in the order book generation
-    if (numPrice >= 10000) return numPrice.toLocaleString(undefined, {maximumFractionDigits: 0});
-    if (numPrice >= 1000) return numPrice.toLocaleString(undefined, {maximumFractionDigits: 1});
-    if (numPrice >= 100) return numPrice.toLocaleString(undefined, {maximumFractionDigits: 2});
-    if (numPrice >= 10) return numPrice.toLocaleString(undefined, {maximumFractionDigits: 3});
-    if (numPrice >= 1) return numPrice.toLocaleString(undefined, {maximumFractionDigits: 4});
-    if (numPrice >= 0.1) return numPrice.toLocaleString(undefined, {maximumFractionDigits: 5});
-    if (numPrice >= 0.01) return numPrice.toLocaleString(undefined, {maximumFractionDigits: 6});
-    if (numPrice >= 0.001) return numPrice.toLocaleString(undefined, {maximumFractionDigits: 7});
-    return numPrice.toLocaleString(undefined, {maximumFractionDigits: 8});
+    // Always use both minimumFractionDigits and maximumFractionDigits to ensure consistent display
+    // This prevents prices like "$84" temporarily showing up instead of "$84,000.00"
+    if (numPrice >= 10000) return numPrice.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
+    if (numPrice >= 1000) return numPrice.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
+    if (numPrice >= 100) return numPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    if (numPrice >= 10) return numPrice.toLocaleString(undefined, {minimumFractionDigits: 3, maximumFractionDigits: 3});
+    if (numPrice >= 1) return numPrice.toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 4});
+    if (numPrice >= 0.1) return numPrice.toLocaleString(undefined, {minimumFractionDigits: 5, maximumFractionDigits: 5});
+    if (numPrice >= 0.01) return numPrice.toLocaleString(undefined, {minimumFractionDigits: 6, maximumFractionDigits: 6});
+    if (numPrice >= 0.001) return numPrice.toLocaleString(undefined, {minimumFractionDigits: 7, maximumFractionDigits: 7});
+    return numPrice.toLocaleString(undefined, {minimumFractionDigits: 8, maximumFractionDigits: 8});
   };
 
   // Load user's positions and pending limit orders when authenticated
@@ -4492,7 +4541,7 @@ const Trading = () => {
                     <TableCell style={{ 
                       color: position.side === 'sell' ? '#F6465D' : '#0ECB81' 
                     }}>
-                      {position.side?.toUpperCase() || position.type?.toUpperCase() || 'N/A'}
+                      {position.side?.toUpperCase() || position.type?.toUpperCase() || 'N/A'} <span className="mobile-only-symbol">[{position.symbol}]</span>
                     </TableCell>
                           <TableCell>{position.amount || 0} {position.symbol || ''}</TableCell>
                     <TableCell>${position.entryPrice?.toLocaleString() || '0.00'}</TableCell>
@@ -4552,7 +4601,7 @@ const Trading = () => {
                         <TableCell style={{ 
                           color: position.side === 'sell' ? '#F6465D' : '#0ECB81' 
                         }}>
-                          {position.side?.toUpperCase() || position.type?.toUpperCase() || 'N/A'}
+                          {position.side?.toUpperCase() || position.type?.toUpperCase() || 'N/A'} <span className="mobile-only-symbol">[{position.symbol}]</span>
                         </TableCell>
                         <TableCell>{position.amount || 0} {position.symbol || ''}</TableCell>
                         <TableCell>${position.entryPrice?.toLocaleString() || '0.00'}</TableCell>
