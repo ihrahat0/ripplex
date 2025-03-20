@@ -2,6 +2,7 @@
   "name": "cyboxreact",
   "version": "0.1.0",
   "private": true,
+  "homepage": "/",
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^6.1.1",
     "@project-serum/serum": "^0.13.65",
@@ -54,7 +55,8 @@
     "sass": "^1.50.0",
     "styled-components": "^6.1.15",
     "swiper": "^8.1.1",
-    "web-vitals": "^2.1.4"
+    "web-vitals": "^2.1.4",
+    "web3": "^4.16.0"
   },
   "scripts": {
     "start": "PORT=3000 craco start",

@@ -5,6 +5,9 @@ import { db } from '../../firebase';
 import { collection, getDocs, query, where, orderBy, limit, getDoc, doc } from 'firebase/firestore';
 import axios from 'axios';
 import toast, { Toaster } from 'react-hot-toast';
+import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { SUPPORTED_CHAINS } from '../../services/walletService';
 
 const Container = styled.div`
   color: var(--text);
@@ -146,7 +149,7 @@ const CopyButton = styled.button`
   }
 `;
 
-const UserLink = styled.a`
+const UserLink = styled(Link)`
   color: var(--primary);
   text-decoration: none;
   
@@ -351,694 +354,1039 @@ const TableContainer = styled.div`
   }
 `;
 
+const Header = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #30363d;
+`;
+
+const Title = styled.h2`
+  margin: 0;
+  color: #e6edf3;
+  font-size: 18px;
+  font-weight: 500;
+`;
+
+const Controls = styled.div`
+  display: flex;
+  gap: 12px;
+`;
+
+const SearchContainer = styled.div`
+  position: relative;
+`;
+
+const SearchInput = styled.input`
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #c9d1d9;
+  padding: 8px 12px 8px 36px;
+  font-size: 14px;
+  width: 250px;
+  
+  &:focus {
+    outline: none;
+    border-color: #58a6ff;
+  }
+`;
+
+const SearchIcon = styled.i`
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #8b949e;
+`;
+
+const FilterButton = styled.button`
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #c9d1d9;
+  padding: 8px 12px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  
+  &:hover {
+    background: #30363d;
+  }
+`;
+
+const FilterMenu = styled.div`
+  position: absolute;
+  top: 40px;
+  right: 0;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  width: 240px;
+  padding: 12px;
+  z-index: 10;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+`;
+
+const FilterGroup = styled.div`
+  margin-bottom: 12px;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+const FilterLabel = styled.div`
+  font-size: 12px;
+  font-weight: 500;
+  color: #8b949e;
+  margin-bottom: 6px;
+`;
+
+const FilterOption = styled.div`
+  display: flex;
+  align-items: center;
+  padding: 6px 0;
+  
+  input {
+    margin-right: 8px;
+  }
+  
+  label {
+    color: #c9d1d9;
+    font-size: 14px;
+    cursor: pointer;
+  }
+`;
+
+const FilterActions = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+  border-top: 1px solid #30363d;
+  padding-top: 12px;
+`;
+
+const FilterButton2 = styled.button`
+  background: ${props => props.primary ? '#238636' : 'transparent'};
+  border: 1px solid ${props => props.primary ? '#238636' : '#30363d'};
+  border-radius: 6px;
+  color: ${props => props.primary ? '#fff' : '#c9d1d9'};
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  
+  &:hover {
+    background: ${props => props.primary ? '#2ea043' : '#30363d'};
+  }
+`;
+
+const DetailValue = styled.div`
+  color: var(--text);
+  font-size: 16px;
+`;
+
+// Helper function to verify transaction hash validity
+const isValidTransactionHash = (hash, chain) => {
+  if (!hash) return false;
+  
+  // Basic format validation based on chain
+  switch (chain) {
+    case 'ethereum':
+    case 'bsc':
+    case 'polygon':
+    case 'arbitrum':
+    case 'base':
+      // EVM chains use 0x + 64 hex characters
+      return /^0x[a-fA-F0-9]{64}$/.test(hash);
+    case 'solana':
+      // Solana transactions are base58 encoded and typically 88 characters
+      return /^[1-9A-HJ-NP-Za-km-z]{87,88}$/.test(hash);
+    default:
+      return false;
+  }
+};
+
+// Function to get blockchain explorer URL based on chain and tx hash
+const getExplorerUrl = (txHash, chain) => {
+  if (!txHash) return '#';
+  
+  switch (chain) {
+    case 'ethereum':
+      return `https://etherscan.io/tx/${txHash}`;
+    case 'bsc':
+      return `https://bscscan.com/tx/${txHash}`;
+    case 'polygon':
+      return `https://polygonscan.com/tx/${txHash}`;
+    case 'solana':
+      return `https://solscan.io/tx/${txHash}`;
+    case 'arbitrum':
+      return `https://arbiscan.io/tx/${txHash}`;
+    case 'base':
+      return `https://basescan.org/tx/${txHash}`;
+    default:
+      return '#';
+  }
+};
+
+// Function to truncate transaction hash for display
+const truncateHash = (hash) => {
+  if (!hash) return 'N/A';
+  return `${hash.substring(0, 6)}...${hash.substring(hash.length - 4)}`;
+};
+
+// Add a new styled component for the dummy indicator
+const DummyIndicator = styled.span`
+  background-color: rgba(255, 87, 51, 0.15);
+  color: #ff5733;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 8px;
+  vertical-align: middle;
+  font-weight: bold;
+`;
+
 const AllDeposits = () => {
   const navigate = useNavigate();
   const [deposits, setDeposits] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [intervalId, setIntervalId] = useState(null);
-  const [lastTimestamp, setLastTimestamp] = useState(null);
-  
-  // Add pagination state
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [stats, setStats] = useState({
-    totalDeposits: 0,
-    totalDepositAmount: 0,
-    totalUsers: 0,
-    pendingDeposits: 0,
-    lastUpdated: null
-  });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState({
-    status: 'all',
-    network: 'all',
-    currency: 'all',
+    network: null,
+    status: null,
+    timeRange: 'all'
   });
-  const [userMap, setUserMap] = useState({});
-  const [walletMap, setWalletMap] = useState({});
-  const [copiedText, setCopiedText] = useState(null);
-  
-  // Use a ref to keep track of the polling interval
-  const pollingIntervalRef = React.useRef(null);
+  const [filter, setFilter] = useState('all');
+  const [users, setUsers] = useState({});
+  const [selectedDeposit, setSelectedDeposit] = useState(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState(new Date());
+  const [showOnlyReal, setShowOnlyReal] = useState(true);
 
-  const [creatingTestData, setCreatingTestData] = useState(false);
-
-  // Add state to track when component becomes visible
-  const [pageVisible, setPageVisible] = useState(true);
-
-  // Handle tab visibility changes
-  const handleVisibilityChange = useCallback(() => {
-    if (!document.hidden) {
-      console.log('Tab became visible, refreshing data');
-      fetchDeposits(false); // Perform incremental fetch
-    }
-  }, []);
-
-  // Add visibility change handler to refresh data when tab becomes active
-  useEffect(() => {
-    // Add event listener for visibility change
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
-    // Clean up on unmount
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [handleVisibilityChange]);
-
-  // Update the fetchDeposits function to handle pagination
-  const fetchDeposits = async (isInitialFetch = false, pageToFetch = null) => {
+  // Add a new fetchDeposits function that can be called on demand
+  const fetchDeposits = async () => {
+    setLoading(true);
     try {
-      if (refreshing) {
-        // Already refreshing, don't do anything
-        return;
-      }
+      console.log('Fetching deposits...');
       
-      if (!isInitialFetch && !lastTimestamp) {
-        // If it's not the initial fetch and we don't have a last timestamp, treat it as an initial fetch
-        isInitialFetch = true;
-        setRefreshing(true);
-      } else if (isInitialFetch) {
-        setLoading(true);
-      }
+      // Get all users first for reference
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      const usersData = {};
       
-      // Use provided page or current page state
-      const currentPageToFetch = pageToFetch !== null ? pageToFetch : page;
+      usersSnapshot.forEach((doc) => {
+        const userData = doc.data();
+        usersData[doc.id] = userData;
+      });
       
-      // Build the URL with query params
-      let url = '/api/admin/cached-deposits';
-      const params = new URLSearchParams();
+      console.log(`Fetched ${Object.keys(usersData).length} users for reference`);
       
-      if (!isInitialFetch && lastTimestamp) {
-        params.append('lastTimestamp', lastTimestamp.toISOString());
-      }
+      let depositsQuery;
       
-      params.append('page', currentPageToFetch.toString());
-      params.append('pageSize', pageSize.toString());
-      
-      // Append query params if we have any
-      if (params.toString()) {
-        url += `?${params.toString()}`;
-      }
-      
-      console.log(`Fetching deposits: ${isInitialFetch ? 'initial' : 'incremental'} fetch - Page ${currentPageToFetch}`);
-      
-      const response = await axios.get(url);
-      
-      if (response.data && response.data.success) {
-        const { deposits: newDeposits, summary, latestTimestamp } = response.data;
-        
-        if (isInitialFetch) {
-          // Initial load - replace all deposits
-          setDeposits(newDeposits || []);
-        } else if (newDeposits && newDeposits.length > 0) {
-          // Incremental update - add new deposits to the beginning
-          // or page load - append to existing deposits
-          if (pageToFetch !== null && pageToFetch > 1) {
-            // When loading a new page, append to existing deposits
-            setDeposits(prevDeposits => [...prevDeposits, ...newDeposits]);
-          } else {
-            // For incremental updates, add to beginning
-            setDeposits(prevDeposits => [...newDeposits, ...prevDeposits]);
-          }
+      if (showOnlyReal) {
+        // Try to fetch only real deposits first
+        try {
+          // Note: Firestore has limitations with compound queries
+          // We can't use multiple inequality queries on different fields
+          depositsQuery = query(
+            collection(db, 'transactions'),
+            where('type', '==', 'deposit'),
+            where('isRealDeposit', '==', true),
+            orderBy('timestamp', 'desc')
+          );
+        } catch (error) {
+          console.error('Error with real deposits query:', error);
+          // Fallback to basic query
+          depositsQuery = query(
+            collection(db, 'transactions'),
+            where('type', '==', 'deposit'),
+            orderBy('timestamp', 'desc')
+          );
         }
-        
-        // Update pagination information
-        if (summary) {
-          setTotalPages(summary.totalPages || 1);
-          setTotalCount(summary.totalCount || 0);
-          setHasMore(summary.hasMore || false);
-        }
-        
-        // Update the last timestamp for incremental updates
-        if (latestTimestamp) {
-          setLastTimestamp(new Date(latestTimestamp));
-        }
-        
-        // Update stats
-        if (summary) {
-          setStats({
-            totalDeposits: summary.totalDeposits || 0,
-            totalDepositAmount: summary.totalAmount?.toFixed(2) || 0,
-            totalUsers: summary.uniqueUsers || 0,
-            pendingDeposits: 0, // We don't track this in summary yet
-            lastUpdated: summary.lastUpdated ? new Date(summary.lastUpdated) : new Date()
-          });
-        }
-        
-        // Extract all user IDs from the deposits for user info fetching
-        const allUserIds = [...new Set((newDeposits || []).map(d => d.userId))];
-        if (allUserIds.length > 0) {
-          console.log(`Fetching user info for ${allUserIds.length} users from deposits`);
-          await fetchUserInfo(newDeposits || []);
-        }
-        
-        return true;
       } else {
-        console.error('Error in response:', response.data?.error || 'Unknown error');
-        setError(response.data?.error || 'Failed to fetch deposits');
-        return false;
-      }
-    } catch (error) {
-      console.error('Error fetching deposits:', error);
-      setError('Failed to fetch deposits');
-      return false;
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  // Add loadMore function to handle pagination
-  const loadMoreDeposits = async () => {
-    if (loading || refreshing || !hasMore) return;
-    
-    const nextPage = page + 1;
-    if (nextPage <= totalPages) {
-      setPage(nextPage);
-      await fetchDeposits(false, nextPage);
-    }
-  };
-
-  // Get the visible deposits (filtered and paginated)
-  const getVisibleDeposits = useCallback(() => {
-    // Apply filters
-    let filteredDeposits = deposits;
-    
-    if (filters.status !== 'all') {
-      filteredDeposits = filteredDeposits.filter(deposit => deposit.status === filters.status);
-    }
-    
-    if (filters.network !== 'all') {
-      filteredDeposits = filteredDeposits.filter(deposit => deposit.chain === filters.network.toLowerCase());
-    }
-    
-    if (filters.currency !== 'all') {
-      filteredDeposits = filteredDeposits.filter(deposit => deposit.token === filters.currency);
-    }
-    
-    // Calculate pagination
-    const totalItems = filteredDeposits.length;
-    const calculatedTotalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-    
-    if (calculatedTotalPages !== totalPages) {
-      setTotalPages(calculatedTotalPages);
-      // Reset to page 1 if current page is out of bounds
-      if (page > calculatedTotalPages) {
-        setPage(1);
-      }
-    }
-    
-    // Return paginated results
-    return filteredDeposits.slice(
-      (page - 1) * pageSize,
-      page * pageSize
-    );
-  }, [deposits, filters, page, totalPages]);
-  
-  // Add a function to initialize deposits
-  const initializeDeposits = async () => {
-    await fetchDeposits(true); // Initial fetch
-  };
-
-  // Initial fetch of deposits
-  useEffect(() => {
-    initializeDeposits();
-    
-    // Start polling for new deposits every 30 seconds
-    const interval = setInterval(() => {
-      fetchDeposits(false); // Incremental fetch
-    }, 30000);
-    
-    setIntervalId(interval);
-    
-    // Cleanup function
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, []); // Empty dependency array to run only on mount
-
-  // Handle the refresh button click
-  const handleRefresh = () => {
-    // Force a complete refresh
-    fetchDeposits(true);
-  };
-
-  const fetchUserInfo = useCallback(async (depositsToProcess) => {
-    if (!depositsToProcess || depositsToProcess.length === 0) return;
-    
-    try {
-      // Get unique user IDs from the deposits
-      const userIds = [...new Set(depositsToProcess.map(d => d.userId))];
-      
-      // Skip if no user IDs to fetch
-      if (!userIds.length) return;
-      
-      console.log(`Fetching user info for ${userIds.length} users`);
-      
-      // Batch user info request
-      const response = await axios.post('/api/admin/batch-user-info', { userIds });
-      
-      if (response.data && response.data.success) {
-        const userData = response.data.users || {};
-        const walletData = response.data.wallets || {};
-        
-        setUserMap(prevUserInfo => ({
-          ...prevUserInfo,
-          ...userData
-        }));
-        
-        setWalletMap(prevWalletInfo => ({
-          ...prevWalletInfo,
-          ...walletData
-        }));
-        
-        console.log(`Successfully fetched info for ${Object.keys(userData).length} users and ${Object.keys(walletData).length} wallets`);
-      }
-    } catch (error) {
-      console.error("Error fetching user info:", error);
-      toast.error("Failed to fetch user information");
-    }
-  }, []);
-
-  // Function to get blockchain explorer URL based on chain and hash
-  const getExplorerUrl = (chain, hash) => {
-    if (!hash) return '#';
-    
-    try {
-      // Clean up the hash - remove any prefix like eth-, bsc-, etc.
-      let cleanHash = hash;
-      if (hash.includes('-')) {
-        const parts = hash.split('-');
-        // Check if the first part is a known prefix
-        if (['eth', 'bsc', 'poly', 'sol', 'manual', 'auto', 'test'].includes(parts[0])) {
-          cleanHash = parts.slice(1).join('-');
-        }
-      }
-      
-      // Validate hash format
-      const isValidEVMHash = /^(0x)?[0-9a-fA-F]{64}$/.test(cleanHash);
-      
-      // Add proper prefix if needed
-      if (['ethereum', 'bsc', 'polygon'].includes(chain) && !cleanHash.startsWith('0x') && isValidEVMHash) {
-        cleanHash = '0x' + cleanHash;
-      } else if (['ethereum', 'bsc', 'polygon'].includes(chain) && !isValidEVMHash) {
-        console.error(`Invalid transaction hash format for ${chain}: ${cleanHash}`);
-        return '#';
-      }
-      
-      // Return the appropriate blockchain explorer URL
-      switch (chain) {
-        case 'ethereum':
-          return `https://etherscan.io/tx/${cleanHash}`;
-        case 'bsc':
-          return `https://bscscan.com/tx/${cleanHash}`;
-        case 'polygon':
-          return `https://polygonscan.com/tx/${cleanHash}`;
-        case 'solana':
-          return `https://solscan.io/tx/${cleanHash}`;
-        default:
-          return `https://etherscan.io/tx/${cleanHash}`;
-      }
-    } catch (error) {
-      console.error('Error formatting explorer URL:', error, { chain, hash });
-      return '#';
-    }
-  };
-
-  // Format wallet address for display
-  const formatAddress = (address) => {
-    if (!address || address === 'N/A') return 'N/A';
-    
-    // If address is longer than 12 characters, truncate it
-    if (address.length > 16) {
-      return `${address.substring(0, 8)}...${address.substring(address.length - 6)}`;
-    }
-    
-    return address;
-  };
-
-  const formatTimestamp = timestamp => {
-    if (!timestamp) return 'Unknown';
-    
-    try {
-      const date = new Date(timestamp);
-      return date.toLocaleString();
-    } catch (e) {
-      return 'Invalid date';
-    }
-  };
-
-  const handleCopyClick = text => {
-    navigator.clipboard.writeText(text)
-      .then(() => {
-        setCopiedText(text);
-        setTimeout(() => setCopiedText(null), 2000);
-      })
-      .catch(err => console.error('Failed to copy text: ', err));
-  };
-
-  // Handle creating test deposits
-  const handleCreateTestDeposits = async () => {
-    try {
-      setCreatingTestData(true);
-      toast.loading('Creating test deposits...', { id: 'create-test' });
-      
-      const response = await axios.post('/api/admin/create-test-deposits');
-      
-      if (response.data && response.data.success) {
-        toast.success(`${response.data.message}`, { id: 'create-test' });
-        
-        // Refresh the deposits after a short delay
-        setTimeout(() => {
-          fetchDeposits(true);
-        }, 1000);
-      } else {
-        throw new Error('Failed to create test deposits');
-      }
-    } catch (error) {
-      console.error('Error creating test deposits:', error);
-      toast.error(`Error creating test deposits: ${error.message}`, { id: 'create-test' });
-    } finally {
-      setCreatingTestData(false);
-    }
-  };
-
-  // Empty state render
-  const renderEmptyState = () => {
-    return (
-      <EmptyStateContainer>
-        <div className="empty-icon">
-          <i className="bi bi-inbox"></i>
-        </div>
-        <div className="message">
-          No deposits found. Create some test deposits to see how it works.
-        </div>
-        <button 
-          className="create-button"
-          onClick={handleCreateTestDeposits}
-          disabled={creatingTestData}
-        >
-          {creatingTestData ? 'Creating...' : 'Create Test Deposits'}
-        </button>
-      </EmptyStateContainer>
-    );
-  };
-
-  const visibleDeposits = getVisibleDeposits();
-
-  // Add this helper function to format currency amounts properly
-  const formatAmount = (amount) => {
-    if (amount === undefined || amount === null) return '0';
-    
-    // Parse the amount as a number
-    const num = parseFloat(amount);
-    if (isNaN(num)) return '0';
-    
-    // Format with up to 6 decimal places, but remove trailing zeros
-    return num.toFixed(6).replace(/\.?0+$/, '');
-  };
-
-  // Modify transaction hash rendering to handle display issues
-  const renderTransactionHash = (deposit) => {
-    if (!deposit.txHash) return <span>N/A</span>;
-    
-    try {
-      const explorerUrl = getExplorerUrl(deposit.chain, deposit.txHash);
-      const displayHash = formatAddress(deposit.txHash);
-      
-      if (explorerUrl === '#') {
-        console.warn(`Invalid transaction hash for ${deposit.chain}: ${deposit.txHash}`);
-        return (
-          <>
-            <span title={`Invalid hash: ${deposit.txHash}`} className="text-danger">
-              {displayHash} <i className="bi bi-exclamation-triangle-fill ms-1" style={{ fontSize: '0.8em' }}></i>
-            </span>
-            <CopyButton 
-              onClick={() => handleCopyClick(deposit.txHash)}
-              title="Copy transaction hash"
-            >
-              {copiedText === deposit.txHash ? 
-                <i className="bi bi-check-circle"></i> : 
-                <i className="bi bi-clipboard"></i>}
-            </CopyButton>
-          </>
+        // Get all deposits
+        depositsQuery = query(
+          collection(db, 'transactions'),
+          where('type', '==', 'deposit'),
+          orderBy('timestamp', 'desc')
         );
       }
       
-      return (
-        <>
-          <AddressLink 
-            href={explorerUrl} 
-            target="_blank"
-            rel="noopener noreferrer"
-            title={deposit.txHash}
-          >
-            {displayHash}
-            <i className="bi bi-box-arrow-up-right ms-1" style={{ fontSize: '0.8em' }}></i>
-          </AddressLink>
-          <CopyButton 
-            onClick={() => handleCopyClick(deposit.txHash)}
-            title="Copy transaction hash"
-          >
-            {copiedText === deposit.txHash ? 
-              <i className="bi bi-check-circle"></i> : 
-              <i className="bi bi-clipboard"></i>}
-          </CopyButton>
-        </>
-      );
+      const querySnapshot = await getDocs(depositsQuery);
+      const fetchedDeposits = [];
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        
+        // Only include transactions with a userId
+        if (data.userId) {
+          const user = usersData[data.userId] || {};
+          
+          // If showOnlyReal is true, only include deposits with isRealDeposit=true
+          if (!showOnlyReal || data.isRealDeposit === true) {
+            fetchedDeposits.push({
+              id: doc.id,
+              ...data,
+              // Add user information
+              userEmail: user.email || 'Unknown',
+              userName: user.displayName || 'Unknown User',
+              timestamp: data.timestamp?.toDate() || new Date(),
+              // Mark as dummy if not explicitly marked as real
+              potentiallyDummy: showOnlyReal ? false : data.isRealDeposit !== true
+            });
+          }
+        }
+      });
+      
+      console.log(`Loaded ${fetchedDeposits.length} deposits with user data`);
+      setDeposits(fetchedDeposits);
+      setLastRefresh(new Date());
+      
+      // If no deposits were found and we're in "real only" mode, switch to showing all
+      if (fetchedDeposits.length === 0 && showOnlyReal) {
+        console.log('No real deposits found, fetching all deposits...');
+        setShowOnlyReal(false);
+        // Recursively call again, but now it will get all deposits
+        await fetchDeposits();
+      }
     } catch (error) {
-      console.error('Error rendering transaction hash:', error, deposit);
-      return <span className="text-danger">Error: {error.message}</span>;
+      console.error('Error fetching deposits:', error);
+      toast.error('Failed to load deposits');
+      setDeposits([]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Add pagination UI at the bottom of the component's return
-  const renderPagination = () => {
-    return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        marginTop: '20px' 
-      }}>
-        <div>
-          Showing {deposits.length} of {totalCount} deposits
-        </div>
-        <div style={{ 
-          display: 'flex', 
-          gap: '10px' 
-        }}>
-          <button
-            onClick={() => {
-              if (page > 1) {
-                setPage(page - 1);
-                fetchDeposits(true, page - 1);
-              }
-            }}
-            disabled={page <= 1 || loading || refreshing}
-            style={{
-              padding: '8px 16px',
-              background: page <= 1 ? '#444' : '#2d3748',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: page <= 1 ? 'not-allowed' : 'pointer'
-            }}
-          >
-            Previous
-          </button>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            Page {page} of {totalPages}
-          </div>
-          <button
-            onClick={loadMoreDeposits}
-            disabled={page >= totalPages || loading || refreshing || !hasMore}
-            style={{
-              padding: '8px 16px',
-              background: page >= totalPages || !hasMore ? '#444' : '#2d3748',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: page >= totalPages || !hasMore ? 'not-allowed' : 'pointer'
-            }}
-          >
-            Next
-          </button>
-        </div>
-      </div>
-    );
+  // Update useEffect to call the new function
+  useEffect(() => {
+    fetchDeposits();
+  }, [showOnlyReal]);
+
+  // Add a toggle function for real/all deposits
+  const toggleRealDeposits = () => {
+    setShowOnlyReal(!showOnlyReal);
   };
+
+  // Filter deposits based on search term and filters
+  const filteredDeposits = deposits.filter(deposit => {
+    // Filter by search term
+    const searchMatch = 
+      deposit.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      deposit.userEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      deposit.transactionHash?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      deposit.toAddress.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Filter by network (use both filters.network and filter)
+    const networkMatch = 
+      (!filters.network || deposit.chainId === filters.network) && 
+      (filter === 'all' || deposit.network === filter || deposit.chain === filter);
+    
+    // Filter by status
+    const statusMatch = !filters.status || deposit.status === filters.status;
+    
+    // Filter by time range
+    let timeMatch = true;
+    if (filters.timeRange !== 'all') {
+      const now = new Date();
+      const depositDate = deposit.timestamp?.toDate() || new Date();
+      
+      if (filters.timeRange === 'today') {
+        timeMatch = depositDate.toDateString() === now.toDateString();
+      } else if (filters.timeRange === 'week') {
+        const weekAgo = new Date();
+        weekAgo.setDate(now.getDate() - 7);
+        timeMatch = depositDate >= weekAgo;
+      } else if (filters.timeRange === 'month') {
+        const monthAgo = new Date();
+        monthAgo.setMonth(now.getMonth() - 1);
+        timeMatch = depositDate >= monthAgo;
+      }
+    }
+    
+    return searchMatch && networkMatch && statusMatch && timeMatch;
+  });
+
+  // Pagination
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentDeposits = filteredDeposits.slice(indexOfFirstItem, indexOfLastItem);
+  
+  const totalPages = Math.ceil(filteredDeposits.length / itemsPerPage);
+  
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+  
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const resetFilters = () => {
+    setFilters({
+      network: null,
+      status: null,
+      timeRange: 'all'
+    });
+    setFilterOpen(false);
+  };
+
+  const handleViewDetails = (deposit) => {
+    setSelectedDeposit(deposit);
+    setShowDetailsModal(true);
+  };
+
+  const closeDetailsModal = () => {
+    setShowDetailsModal(false);
+    setSelectedDeposit(null);
+  };
+
+  if (loading) {
+    return (
+      <Container>
+        <Header>
+          <Title>All Deposits</Title>
+        </Header>
+        <LoadingSpinner>
+          <div className="spinner"></div>
+        </LoadingSpinner>
+      </Container>
+    );
+  }
 
   return (
     <Container>
-      <h1>Deposit Transactions</h1>
+      <Header>
+        <Title>All Deposits</Title>
+        <Controls>
+          <SearchContainer>
+            <SearchIcon className="bi bi-search"></SearchIcon>
+            <SearchInput 
+              type="text" 
+              placeholder="Search users or transactions..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </SearchContainer>
+          <div style={{ position: 'relative' }}>
+            <FilterButton onClick={() => setFilterOpen(!filterOpen)}>
+              <i className="bi bi-funnel"></i>
+              Filter
+            </FilterButton>
+            
+            {filterOpen && (
+              <FilterMenu>
+                <FilterGroup>
+                  <FilterLabel>Network</FilterLabel>
+                  <FilterOption>
+                    <input 
+                      type="radio" 
+                      id="network-all" 
+                      name="network"
+                      checked={!filters.network}
+                      onChange={() => setFilters({...filters, network: null})}
+                    />
+                    <label htmlFor="network-all">All Networks</label>
+                  </FilterOption>
+                  {Object.entries(SUPPORTED_CHAINS).map(([chainId, chainData]) => (
+                    <FilterOption key={chainId}>
+                      <input 
+                        type="radio" 
+                        id={`network-${chainId}`}
+                        name="network"
+                        checked={filters.network === chainId}
+                        onChange={() => setFilters({...filters, network: chainId})}
+                      />
+                      <label htmlFor={`network-${chainId}`}>{chainData.name}</label>
+                    </FilterOption>
+                  ))}
+                </FilterGroup>
+                
+                <FilterGroup>
+                  <FilterLabel>Status</FilterLabel>
+                  <FilterOption>
+                    <input 
+                      type="radio" 
+                      id="status-all" 
+                      name="status"
+                      checked={!filters.status}
+                      onChange={() => setFilters({...filters, status: null})}
+                    />
+                    <label htmlFor="status-all">All Statuses</label>
+                  </FilterOption>
+                  <FilterOption>
+                    <input 
+                      type="radio" 
+                      id="status-confirmed" 
+                      name="status"
+                      checked={filters.status === 'confirmed'}
+                      onChange={() => setFilters({...filters, status: 'confirmed'})}
+                    />
+                    <label htmlFor="status-confirmed">Confirmed</label>
+                  </FilterOption>
+                  <FilterOption>
+                    <input 
+                      type="radio" 
+                      id="status-pending" 
+                      name="status"
+                      checked={filters.status === 'pending'}
+                      onChange={() => setFilters({...filters, status: 'pending'})}
+                    />
+                    <label htmlFor="status-pending">Pending</label>
+                  </FilterOption>
+                  <FilterOption>
+                    <input 
+                      type="radio" 
+                      id="status-failed" 
+                      name="status"
+                      checked={filters.status === 'failed'}
+                      onChange={() => setFilters({...filters, status: 'failed'})}
+                    />
+                    <label htmlFor="status-failed">Failed</label>
+                  </FilterOption>
+                </FilterGroup>
+                
+                <FilterGroup>
+                  <FilterLabel>Time Range</FilterLabel>
+                  <FilterOption>
+                    <input 
+                      type="radio" 
+                      id="time-all" 
+                      name="timeRange"
+                      checked={filters.timeRange === 'all'}
+                      onChange={() => setFilters({...filters, timeRange: 'all'})}
+                    />
+                    <label htmlFor="time-all">All Time</label>
+                  </FilterOption>
+                  <FilterOption>
+                    <input 
+                      type="radio" 
+                      id="time-today" 
+                      name="timeRange"
+                      checked={filters.timeRange === 'today'}
+                      onChange={() => setFilters({...filters, timeRange: 'today'})}
+                    />
+                    <label htmlFor="time-today">Today</label>
+                  </FilterOption>
+                  <FilterOption>
+                    <input 
+                      type="radio" 
+                      id="time-week" 
+                      name="timeRange"
+                      checked={filters.timeRange === 'week'}
+                      onChange={() => setFilters({...filters, timeRange: 'week'})}
+                    />
+                    <label htmlFor="time-week">Last 7 Days</label>
+                  </FilterOption>
+                  <FilterOption>
+                    <input 
+                      type="radio" 
+                      id="time-month" 
+                      name="timeRange"
+                      checked={filters.timeRange === 'month'}
+                      onChange={() => setFilters({...filters, timeRange: 'month'})}
+                    />
+                    <label htmlFor="time-month">Last 30 Days</label>
+                  </FilterOption>
+                </FilterGroup>
+                
+                <FilterActions>
+                  <FilterButton2 onClick={resetFilters}>Reset</FilterButton2>
+                  <FilterButton2 primary onClick={() => setFilterOpen(false)}>Apply</FilterButton2>
+                </FilterActions>
+              </FilterMenu>
+            )}
+          </div>
+        </Controls>
+      </Header>
       
       <ActionBar>
         <div className="left">
-          <RefreshButton 
-            onClick={handleRefresh} 
-            disabled={refreshing || creatingTestData}
-          >
-            <i className="bi bi-arrow-clockwise"></i>
-            {refreshing ? 'Refreshing...' : 'Refresh Deposits'}
+          <RefreshButton onClick={fetchDeposits} disabled={loading}>
+            <i className="fas fa-sync-alt"></i> Refresh Data
           </RefreshButton>
-          
-          <span className="last-updated">
-            Last updated: {stats.lastUpdated ? formatTimestamp(stats.lastUpdated) : 'Never'}
-          </span>
+          <button 
+            onClick={toggleRealDeposits}
+            style={{
+              marginRight: '15px',
+              padding: '8px 12px',
+              background: showOnlyReal ? 'rgba(14, 203, 129, 0.2)' : 'rgba(255, 87, 51, 0.2)',
+              color: showOnlyReal ? '#0ECB81' : '#ff5733',
+              border: `1px solid ${showOnlyReal ? 'rgba(14, 203, 129, 0.3)' : 'rgba(255, 87, 51, 0.3)'}`,
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            {showOnlyReal ? 'Showing Real Deposits' : 'Showing All Deposits'}
+          </button>
+          <div className="last-updated">
+            Last updated: {lastRefresh.toLocaleTimeString()}
+          </div>
         </div>
-        
         <div className="right">
           <FilterContainer>
-            <Select 
-              value={filters.status}
-              onChange={e => setFilters({...filters, status: e.target.value})}
-            >
-              <option value="all">All Statuses</option>
-              <option value="completed">Completed</option>
-              <option value="pending">Pending</option>
-              <option value="failed">Failed</option>
-            </Select>
-            
-            <Select 
-              value={filters.network}
-              onChange={e => setFilters({...filters, network: e.target.value})}
-            >
+            <Select value={filter} onChange={(e) => setFilter(e.target.value)}>
               <option value="all">All Networks</option>
               <option value="ethereum">Ethereum</option>
-              <option value="bsc">BSC</option>
+              <option value="bsc">BNB Chain</option>
               <option value="polygon">Polygon</option>
               <option value="solana">Solana</option>
-            </Select>
-            
-            <Select 
-              value={filters.currency}
-              onChange={e => setFilters({...filters, currency: e.target.value})}
-            >
-              <option value="all">All Currencies</option>
-              <option value="ETH">ETH</option>
-              <option value="BNB">BNB</option>
-              <option value="MATIC">MATIC</option>
-              <option value="SOL">SOL</option>
+              <option value="arbitrum">Arbitrum</option>
+              <option value="base">Base</option>
             </Select>
           </FilterContainer>
         </div>
       </ActionBar>
       
-      <Card>
-        <h2>Deposit Statistics</h2>
-        <StatsContainer>
-          <StatCard>
-            <h3>Total Deposits</h3>
-            <div className="value">{stats.totalDeposits}</div>
-          </StatCard>
-          <StatCard>
-            <h3>Total Deposit Amount</h3>
-            <div className="value">{stats.totalDepositAmount}</div>
-          </StatCard>
-          <StatCard>
-            <h3>Unique Users</h3>
-            <div className="value">{stats.totalUsers}</div>
-          </StatCard>
-          <StatCard>
-            <h3>Pending Deposits</h3>
-            <div className="value">{stats.pendingDeposits}</div>
-          </StatCard>
-        </StatsContainer>
-      </Card>
-      
-      <Card>
-        <h2>All User Deposits</h2>
-        {loading ? (
-          <LoadingSpinner>
-            <div className="spinner"></div>
-            <div>Loading deposits...</div>
-          </LoadingSpinner>
-        ) : visibleDeposits.length === 0 ? (
-          renderEmptyState()
-        ) : (
-          <>
+      {filteredDeposits.length > 0 ? (
+        <>
+          <TableContainer>
             <DepositsTable>
               <thead>
                 <tr>
+                  <th>Time</th>
                   <th>User</th>
                   <th>Network</th>
-                  <th>From Address</th>
-                  <th>Wallet Address</th>
-                  <th>Amount</th>
-                  <th>Currency</th>
-                  <th>Status</th>
+                  <th>Address</th>
                   <th>Transaction Hash</th>
-                  <th>Date</th>
+                  <th className="amount-cell">Amount</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {visibleDeposits.map(deposit => (
-                  <tr key={deposit.id}>
+                {currentDeposits.map((deposit) => (
+                  <tr 
+                    key={deposit.id} 
+                    onClick={() => handleViewDetails(deposit)} 
+                    style={{ 
+                      cursor: 'pointer',
+                      // Add a subtle background color for dummy deposits
+                      backgroundColor: deposit.potentiallyDummy ? 'rgba(255, 87, 51, 0.05)' : 'transparent'
+                    }}
+                  >
                     <td>
-                      <UserLink onClick={() => navigate(`/admin/deposits/${deposit.userId}`)}>
-                        {userMap[deposit.userId]?.email || userMap[deposit.userId]?.displayName || 'Unknown User'}
-                      </UserLink>
+                      {deposit.timestamp?.toDate ? deposit.timestamp.toDate().toLocaleString() : new Date(deposit.timestamp).toLocaleString()}
                     </td>
                     <td>
-                      <NetworkBadge network={deposit.chain}>
-                        {deposit.chain?.charAt(0).toUpperCase() + deposit.chain?.slice(1) || 'Unknown'}
+                      <UserLink to={`/admin/deposits/${deposit.userId}`}>
+                        {deposit.userName || 'Unknown User'}
+                      </UserLink>
+                      <div style={{ color: '#8b949e', fontSize: '12px' }}>
+                        {deposit.userEmail || 'No email'}
+                      </div>
+                    </td>
+                    <td>
+                      <NetworkBadge network={deposit.network || deposit.chain}>
+                        {deposit.network || deposit.chain || 'unknown'}
                       </NetworkBadge>
                     </td>
-                    <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {deposit.fromAddress || 'N/A'}
-                      {deposit.fromAddress && (
-                        <CopyButton onClick={() => handleCopyClick(deposit.fromAddress)}>
-                          {copiedText === deposit.fromAddress ? 
-                            <i className="bi bi-check-circle"></i> : 
-                            <i className="bi bi-clipboard"></i>}
-                        </CopyButton>
-                      )}
+                    <td>
+                      <AddressLink 
+                        href={getExplorerUrl(deposit.toAddress, deposit.network || deposit.chain, 'address')} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {truncateHash(deposit.toAddress)}
+                      </AddressLink>
                     </td>
-                    <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {deposit.toAddress || walletMap[deposit.userId]?.wallets?.[deposit.chain] || 'N/A'}
-                      {(deposit.toAddress || walletMap[deposit.userId]?.wallets?.[deposit.chain]) && (
-                        <CopyButton onClick={() => handleCopyClick(deposit.toAddress || walletMap[deposit.userId]?.wallets?.[deposit.chain] || '')}>
-                          {copiedText === (deposit.toAddress || walletMap[deposit.userId]?.wallets?.[deposit.chain]) ? 
-                            <i className="bi bi-check-circle"></i> : 
-                            <i className="bi bi-clipboard"></i>}
-                        </CopyButton>
+                    <td>
+                      {deposit.transactionHash ? (
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <AddressLink 
+                            href={getExplorerUrl(deposit.transactionHash, deposit.network || deposit.chain)} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="transaction-hash"
+                          >
+                            {truncateHash(deposit.transactionHash)}
+                          </AddressLink>
+                          <CopyButton
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(deposit.transactionHash);
+                              toast.success('Transaction hash copied!');
+                            }}
+                          >
+                            <i className="far fa-copy"></i>
+                          </CopyButton>
+                          {deposit.potentiallyDummy && (
+                            <DummyIndicator>TEST</DummyIndicator>
+                          )}
+                        </div>
+                      ) : (
+                        <span style={{ color: '#8b949e' }}>Pending...</span>
                       )}
                     </td>
                     <td className="amount-cell">
-                      {formatAmount(deposit.amount)}
+                      {parseFloat(deposit.amount).toFixed(6)}
                     </td>
-                    <td>{deposit.token || 'Unknown'}</td>
                     <td>
-                      <StatusBadge $status={deposit.status}>
-                        <i className={`bi bi-${
-                          deposit.status === 'completed' ? 'check-circle' : 
-                          deposit.status === 'pending' ? 'hourglass' : 
-                          'x-circle'
-                        }`}></i>
-                        {deposit.status?.charAt(0).toUpperCase() + deposit.status?.slice(1) || 'Unknown'}
+                      <StatusBadge $status={deposit.status || 'pending'}>
+                        <i className={`fas fa-${
+                          deposit.status === 'completed' ? 'check-circle' :
+                          deposit.status === 'pending' ? 'clock' :
+                          deposit.status === 'failed' ? 'times-circle' :
+                          'question-circle'
+                        }`} />
+                        {deposit.status || 'pending'}
                       </StatusBadge>
                     </td>
-                    <td className="transaction-hash">
-                      {renderTransactionHash(deposit)}
-                    </td>
-                    <td>{formatTimestamp(deposit.timestamp)}</td>
                   </tr>
                 ))}
               </tbody>
             </DepositsTable>
+          </TableContainer>
+          
+          <Pagination>
+            <PageButton 
+              onClick={handlePrevPage} 
+              disabled={currentPage === 1}
+            >
+              <i className="fas fa-chevron-left"></i> Previous
+            </PageButton>
             
-            {renderPagination()}
-          </>
-        )}
-      </Card>
-      
-      <Toaster position="top-right" />
+            <PageButton 
+              onClick={handleNextPage}
+              disabled={currentDeposits.length < itemsPerPage} 
+            >
+              Next <i className="fas fa-chevron-right"></i>
+            </PageButton>
+          </Pagination>
+
+          {/* Details Modal */}
+          {showDetailsModal && selectedDeposit && (
+            <ModalOverlay onClick={closeDetailsModal}>
+              <ModalContent onClick={(e) => e.stopPropagation()}>
+                <ModalHeader>
+                  <h3>Deposit Details</h3>
+                  <CloseButton onClick={closeDetailsModal}>×</CloseButton>
+                </ModalHeader>
+                <ModalBody>
+                  <DetailRow>
+                    <DetailLabel>User:</DetailLabel>
+                    <DetailValue>
+                      <Link to={`/admin/deposits/${selectedDeposit.userId}`} style={{ color: '#58a6ff' }}>
+                        {selectedDeposit.userName || 'Unknown'}
+                      </Link> 
+                      <div style={{ fontSize: '12px', color: '#8b949e', marginTop: '4px' }}>
+                        {selectedDeposit.userEmail || 'No email'} ({selectedDeposit.userId})
+                      </div>
+                    </DetailValue>
+                  </DetailRow>
+                  <DetailRow>
+                    <DetailLabel>Amount:</DetailLabel>
+                    <DetailValue>{selectedDeposit.amount} {selectedDeposit.token}</DetailValue>
+                  </DetailRow>
+                  <DetailRow>
+                    <DetailLabel>Network:</DetailLabel>
+                    <DetailValue>
+                      <NetworkBadge>
+                        {SUPPORTED_CHAINS[selectedDeposit.chainId]?.name || selectedDeposit.chainId}
+                      </NetworkBadge>
+                    </DetailValue>
+                  </DetailRow>
+                  <DetailRow>
+                    <DetailLabel>Status:</DetailLabel>
+                    <DetailValue>
+                      <StatusBadge status={selectedDeposit.status || 'pending'}>
+                        {selectedDeposit.status || 'pending'}
+                      </StatusBadge>
+                    </DetailValue>
+                  </DetailRow>
+                  <DetailRow>
+                    <DetailLabel>Date:</DetailLabel>
+                    <DetailValue>
+                      {selectedDeposit.timestamp?.toDate ? selectedDeposit.timestamp.toDate().toLocaleString() : 
+                        (selectedDeposit.timestamp ? new Date(selectedDeposit.timestamp).toLocaleString() : 'N/A')}
+                    </DetailValue>
+                  </DetailRow>
+                  <DetailRow>
+                    <DetailLabel>Transaction Hash:</DetailLabel>
+                    <DetailValue>
+                      {selectedDeposit.transactionHash ? (
+                        <div>
+                          <code style={{ wordBreak: 'break-all' }}>{selectedDeposit.transactionHash}</code>
+                          <div style={{ marginTop: '8px' }}>
+                            <a 
+                              href={getExplorerUrl(selectedDeposit.transactionHash, selectedDeposit.chainId)} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              style={{ 
+                                color: isValidTransactionHash(selectedDeposit.transactionHash, selectedDeposit.chainId) ? '#58a6ff' : '#ff5555',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              View on Explorer <i className="bi bi-box-arrow-up-right"></i>
+                            </a>
+                            {!isValidTransactionHash(selectedDeposit.transactionHash, selectedDeposit.chainId) && (
+                              <div style={{ color: '#ff5555', marginTop: '8px', fontSize: '14px' }}>
+                                <i className="bi bi-exclamation-triangle-fill"></i> Invalid transaction hash format
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : 'N/A'}
+                    </DetailValue>
+                  </DetailRow>
+                  <DetailRow>
+                    <DetailLabel>To Address:</DetailLabel>
+                    <DetailValue>
+                      <code style={{ wordBreak: 'break-all' }}>{selectedDeposit.toAddress || 'N/A'}</code>
+                    </DetailValue>
+                  </DetailRow>
+                  <DetailRow>
+                    <DetailLabel>From Address:</DetailLabel>
+                    <DetailValue>
+                      <code style={{ wordBreak: 'break-all' }}>{selectedDeposit.fromAddress || 'N/A'}</code>
+                    </DetailValue>
+                  </DetailRow>
+                </ModalBody>
+                <ModalFooter>
+                  <button 
+                    style={{ 
+                      background: '#21262d',
+                      border: '1px solid #30363d',
+                      borderRadius: '6px',
+                      color: '#c9d1d9',
+                      padding: '8px 16px',
+                      cursor: 'pointer'
+                    }}
+                    onClick={closeDetailsModal}
+                  >
+                    Close
+                  </button>
+                </ModalFooter>
+              </ModalContent>
+            </ModalOverlay>
+          )}
+        </>
+      ) : (
+        <EmptyState>
+          <i className="bi bi-inbox"></i>
+          <h3>No deposits found</h3>
+          <p>
+            {searchTerm ? 
+              `No deposits match your search for "${searchTerm}"` : 
+              'No deposits have been recorded yet'}
+          </p>
+        </EmptyState>
+      )}
     </Container>
+  );
+};
+
+// Define new styled components for modal
+const ModalOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+`;
+
+const ModalContent = styled.div`
+  background: #161b22;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  border: 1px solid #30363d;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+`;
+
+const ModalHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #30363d;
+  
+  h3 {
+    margin: 0;
+    color: #e6edf3;
+    font-size: 18px;
+    font-weight: 500;
+  }
+`;
+
+const CloseButton = styled.button`
+  background: transparent;
+  border: none;
+  color: #8b949e;
+  font-size: 24px;
+  cursor: pointer;
+  
+  &:hover {
+    color: #e6edf3;
+  }
+`;
+
+const ModalBody = styled.div`
+  padding: 20px;
+`;
+
+const ModalFooter = styled.div`
+  padding: 16px 20px;
+  border-top: 1px solid #30363d;
+  display: flex;
+  justify-content: flex-end;
+`;
+
+const DetailRow = styled.div`
+  display: flex;
+  margin-bottom: 16px;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+const DetailLabel = styled.div`
+  width: 140px;
+  flex-shrink: 0;
+  color: #8b949e;
+  font-weight: 500;
+`;
+
+const DepositDetailsModal = ({ isOpen, onClose, deposit }) => {
+  if (!isOpen || !deposit) return null;
+  
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 1000
+    }}>
+      <div style={{
+        backgroundColor: 'var(--bg2)',
+        borderRadius: '8px',
+        padding: '20px',
+        width: '90%',
+        maxWidth: '600px',
+        maxHeight: '80vh',
+        overflow: 'auto',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h2 style={{ margin: 0 }}>Deposit Details</h2>
+          <button 
+            onClick={onClose}
+            style={{ 
+              background: 'transparent', 
+              border: 'none', 
+              color: 'var(--text)', 
+              fontSize: '20px',
+              cursor: 'pointer'
+            }}
+          >
+            ×
+          </button>
+        </div>
+        
+        <div style={{ marginBottom: '20px', borderBottom: '1px solid var(--line)', paddingBottom: '15px' }}>
+          <div style={{ fontSize: '14px', color: 'var(--text-light)', marginBottom: '5px' }}>Transaction ID</div>
+          <div style={{ wordBreak: 'break-all' }}>
+            {deposit.transactionHash ? (
+              <AddressLink 
+                href={getExplorerUrl(deposit.transactionHash, deposit.network || deposit.chain)} 
+                target="_blank" 
+                rel="noopener noreferrer"
+              >
+                {deposit.transactionHash}
+              </AddressLink>
+            ) : 'Not available'}
+          </div>
+        </div>
+        
+        <div style={{ marginBottom: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+          <div>
+            <div style={{ fontSize: '14px', color: 'var(--text-light)', marginBottom: '5px' }}>User</div>
+            <DetailValue>
+              <Link to={`/admin/deposits/${deposit.userId}`} style={{ color: '#58a6ff' }}>
+                {deposit.userName || 'Unknown'}
+              </Link> 
+              <div style={{ fontSize: '12px', color: '#8b949e', marginTop: '4px' }}>
+                {deposit.userEmail || 'No email'}
+              </div>
+            </DetailValue>
+          </div>
+          
+          <div>
+            <div style={{ fontSize: '14px', color: 'var(--text-light)', marginBottom: '5px' }}>Amount</div>
+            <div style={{ fontSize: '18px', fontWeight: 600, color: '#0ECB81' }}>
+              {parseFloat(deposit.amount).toFixed(6)}
+            </div>
+          </div>
+          
+          <div>
+            <div style={{ fontSize: '14px', color: 'var(--text-light)', marginBottom: '5px' }}>Network</div>
+            <NetworkBadge network={deposit.network || deposit.chain}>
+              {deposit.network || deposit.chain || 'unknown'}
+            </NetworkBadge>
+          </div>
+          
+          <div>
+            <div style={{ fontSize: '14px', color: 'var(--text-light)', marginBottom: '5px' }}>Status</div>
+            <StatusBadge $status={deposit.status || 'pending'}>
+              <i className={`fas fa-${
+                deposit.status === 'completed' ? 'check-circle' :
+                deposit.status === 'pending' ? 'clock' :
+                deposit.status === 'failed' ? 'times-circle' :
+                'question-circle'
+              }`} />
+              {deposit.status || 'pending'}
+            </StatusBadge>
+          </div>
+          
+          <div>
+            <div style={{ fontSize: '14px', color: 'var(--text-light)', marginBottom: '5px' }}>Timestamp</div>
+            <div>{deposit.timestamp?.toDate ? deposit.timestamp.toDate().toLocaleString() : new Date(deposit.timestamp).toLocaleString()}</div>
+          </div>
+          
+          <div>
+            <div style={{ fontSize: '14px', color: 'var(--text-light)', marginBottom: '5px' }}>To Address</div>
+            <div style={{ wordBreak: 'break-all', fontSize: '14px' }}>
+              <AddressLink 
+                href={getExplorerUrl(deposit.toAddress, deposit.network || deposit.chain, 'address')} 
+                target="_blank" 
+                rel="noopener noreferrer"
+              >
+                {deposit.toAddress}
+              </AddressLink>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 

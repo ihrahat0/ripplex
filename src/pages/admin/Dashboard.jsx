@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, limit, getDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
@@ -168,6 +168,59 @@ const DepositStatsCard = styled(ActivityCard)`
     }
   }
   
+  .networks-distribution {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0;
+  }
+  
+  .network-badge {
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #e6edf3;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    
+    &.ethereum {
+      background: rgba(98, 126, 234, 0.2);
+      color: #627eea;
+    }
+    
+    &.bsc {
+      background: rgba(243, 186, 47, 0.2);
+      color: #f3ba2f;
+    }
+    
+    &.polygon {
+      background: rgba(130, 71, 229, 0.2);
+      color: #8247e5;
+    }
+    
+    &.solana {
+      background: rgba(20, 241, 149, 0.2);
+      color: #14f195;
+    }
+    
+    &.arbitrum {
+      background: rgba(40, 160, 240, 0.2);
+      color: #28a0f0;
+    }
+    
+    &.base {
+      background: rgba(0, 137, 123, 0.2);
+      color: #00897b;
+    }
+    
+    .count {
+      font-weight: 600;
+      margin-left: 2px;
+    }
+  }
+  
   .recent-deposits {
     margin-top: 15px;
     
@@ -176,6 +229,23 @@ const DepositStatsCard = styled(ActivityCard)`
       margin-bottom: 10px;
       font-weight: 500;
       color: #e6edf3;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      
+      button {
+        font-size: 12px;
+        padding: 4px 10px;
+        background: rgba(255, 114, 90, 0.1);
+        color: #ff725a;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        
+        &:hover {
+          background: rgba(255, 114, 90, 0.2);
+        }
+      }
     }
     
     .deposit-item {
@@ -190,9 +260,37 @@ const DepositStatsCard = styled(ActivityCard)`
         margin-bottom: 4px;
       }
       
+      .deposit-status {
+        font-size: 12px;
+        padding: 2px 6px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.1);
+        
+        &.completed, &.confirmed {
+          background: rgba(14, 203, 129, 0.2);
+          color: #0ECB81;
+        }
+        
+        &.pending {
+          background: rgba(243, 186, 47, 0.2);
+          color: #f3ba2f;
+        }
+        
+        &.failed {
+          background: rgba(246, 70, 93, 0.2);
+          color: #F6465D;
+        }
+      }
+      
       .deposit-user {
         font-size: 13px;
         color: rgba(255, 255, 255, 0.7);
+        cursor: pointer;
+        
+        &:hover {
+          text-decoration: underline;
+          color: #ff725a;
+        }
       }
       
       .deposit-time {
@@ -203,13 +301,13 @@ const DepositStatsCard = styled(ActivityCard)`
   }
 `;
 
-function Dashboard() {
+function Dashboard({ stats: propStats }) {
   const navigate = useNavigate();
   const [stats, setStats] = useState({
-    users: 0,
-    pendingWithdrawals: 0,
-    totalTransactions: 0,
-    activeUsers: 0
+    users: propStats?.users || 0,
+    pendingWithdrawals: propStats?.pendingWithdrawals || 0,
+    totalTransactions: propStats?.totalTransactions || 0,
+    activeUsers: propStats?.activeUsers || 0
   });
   const [balances, setBalances] = useState({
     ETH: 0,
@@ -230,6 +328,15 @@ function Dashboard() {
     recentDeposits: [],
     hasMore: false,
     latestDeposits: []
+  });
+  const [networkDistribution, setNetworkDistribution] = useState({
+    ethereum: 0,
+    bsc: 0,
+    polygon: 0,
+    solana: 0,
+    arbitrum: 0,
+    base: 0,
+    other: 0
   });
 
   useEffect(() => {
@@ -301,26 +408,143 @@ function Dashboard() {
   
   const fetchDepositStats = async () => {
     try {
-      // Make the initial request to get the first page and total pages
-      const response = await axios.get('/api/admin/deposit-stats?page=1&pageSize=20');
+      console.log("Fetching deposit stats...");
+      setLoading(true);
       
-      if (response.data && response.data.success) {
-        // Extract deposit information from the response
-        const { deposits, summary } = response.data;
+      // Fetch all transactions with type 'deposit' and isRealDeposit=true
+      const q = query(
+        collection(db, 'transactions'),
+        where('type', '==', 'deposit'),
+        where('isRealDeposit', '==', true),
+        orderBy('timestamp', 'desc')
+      );
+      
+      const querySnapshot = await getDocs(q);
+      
+      let totalAmount = 0;
+      let recentDeposits = [];
+      let depositsByNetwork = {};
+      let depositsOverTime = {};
+      let largestDeposit = { amount: 0 };
+      let userDeposits = {};
+      
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
         
-        // Update the stats state with the summary data
-        setDepositStats({
-          totalDeposits: summary.totalCount || 0,
-          totalDepositAmount: summary.totalAmount || 0,
-          recentDeposits: deposits || [],
-          hasMore: summary.hasMore || false,
-          latestDeposits: deposits || []
-        });
-      } else {
-        console.error('Error fetching deposit stats:', response.data.error);
+        // Only include transactions with userId (real deposits)
+        if (data.userId) {
+          // Calculate total amount
+          const amount = parseFloat(data.amount);
+          totalAmount += amount;
+          
+          // Track deposits by network
+          const network = data.network || data.chain || 'unknown';
+          if (!depositsByNetwork[network]) {
+            depositsByNetwork[network] = 0;
+          }
+          depositsByNetwork[network] += amount;
+          
+          // Track deposits over time
+          let dateKey = 'Unknown';
+          if (data.timestamp) {
+            const date = data.timestamp.toDate();
+            dateKey = date.toISOString().split('T')[0];
+          }
+          
+          if (!depositsOverTime[dateKey]) {
+            depositsOverTime[dateKey] = 0;
+          }
+          depositsOverTime[dateKey] += amount;
+          
+          // Find largest deposit
+          if (amount > largestDeposit.amount) {
+            largestDeposit = {
+              amount: amount,
+              network: network,
+              timestamp: data.timestamp,
+              userId: data.userId
+            };
+          }
+          
+          // Track deposits by user
+          if (!userDeposits[data.userId]) {
+            userDeposits[data.userId] = 0;
+          }
+          userDeposits[data.userId] += amount;
+          
+          // Add to recent deposits
+          if (recentDeposits.length < 5) {
+            recentDeposits.push({
+              id: doc.id,
+              ...data,
+              network: network
+            });
+          }
+        }
+      });
+      
+      // Convert deposits over time to array for chart
+      const timeLabels = Object.keys(depositsOverTime).sort();
+      const depositSeries = timeLabels.map(date => depositsOverTime[date]);
+      
+      // Convert deposits by network to array
+      const networkLabels = Object.keys(depositsByNetwork);
+      const networkSeries = networkLabels.map(network => depositsByNetwork[network]);
+      
+      // Find top users
+      const topUsers = Object.entries(userDeposits)
+        .map(([userId, total]) => ({ userId, total }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 5);
+      
+      // Fetch user details for top users
+      const topUsersDetails = [];
+      for (const user of topUsers) {
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.userId));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            topUsersDetails.push({
+              ...user,
+              email: userData.email || 'Unknown',
+              displayName: userData.displayName || 'Unknown'
+            });
+          } else {
+            topUsersDetails.push({
+              ...user,
+              email: 'Unknown',
+              displayName: 'Unknown'
+            });
+          }
+        } catch (error) {
+          console.error('Error fetching user details:', error);
+          topUsersDetails.push({
+            ...user,
+            email: 'Error fetching',
+            displayName: 'Error fetching'
+          });
+        }
       }
+      
+      // Update state
+      setStats({
+        totalAmount: totalAmount.toFixed(6),
+        totalDeposits: querySnapshot.size,
+        recentDeposits,
+        networkLabels,
+        networkSeries,
+        timeLabels,
+        depositSeries,
+        largestDeposit,
+        topUsers: topUsersDetails
+      });
+      
+      console.log("Deposit stats fetched successfully");
     } catch (error) {
-      console.error('Error fetching deposit stats:', error);
+      console.error("Error fetching deposit stats:", error);
+      toast.error("Failed to load deposit statistics");
+    } finally {
+      setLoading(false);
     }
   };
   
@@ -403,6 +627,13 @@ function Dashboard() {
     }
   };
 
+  // Navigate to specific user's deposits
+  const handleViewUserDeposits = (userId) => {
+    if (userId) {
+      navigate(`/admin/deposits/${userId}`);
+    }
+  };
+
   return (
     <div>
       <DashboardContainer>
@@ -432,23 +663,42 @@ function Dashboard() {
           <h3>Deposit Statistics</h3>
           <div className="stat-item">
             <div className="label">Total Deposits</div>
-            <div className="value">{depositStats.totalDeposits}</div>
+            <div className="value">{stats.totalDeposits}</div>
           </div>
           <div className="stat-item">
             <div className="label">Total Amount</div>
-            <div className="value">${depositStats.totalDepositAmount.toFixed(2)}</div>
+            <div className="value">${stats.totalAmount}</div>
+          </div>
+          
+          <div className="networks-distribution">
+            {Object.entries(networkDistribution).map(([network, count]) => (
+              count > 0 && (
+                <div key={network} className={`network-badge ${network}`}>
+                  {network.charAt(0).toUpperCase() + network.slice(1)}
+                  <span className="count">{count}</span>
+                </div>
+              )
+            ))}
           </div>
           
           <div className="recent-deposits">
-            <h4>Recent Deposits</h4>
-            {depositStats.recentDeposits && depositStats.recentDeposits.length > 0 ? (
-              depositStats.recentDeposits.slice(0, 5).map((deposit, index) => (
+            <h4>
+              Recent Deposits
+              <button onClick={() => navigate('/admin/deposits')}>View All</button>
+            </h4>
+            {stats.recentDeposits && stats.recentDeposits.length > 0 ? (
+              stats.recentDeposits.slice(0, 5).map((deposit, index) => (
                 <div key={index} className="deposit-item">
                   <div className="deposit-details">
                     <span>{deposit.amount} {deposit.token}</span>
-                    <span className="deposit-status">{deposit.status}</span>
+                    <span className={`deposit-status ${deposit.status}`}>{deposit.status}</span>
                   </div>
-                  <div className="deposit-user">User: {deposit.userId || 'Unknown'}</div>
+                  <div 
+                    className="deposit-user" 
+                    onClick={() => handleViewUserDeposits(deposit.userId)}
+                  >
+                    User: {deposit.userId || 'Unknown'}
+                  </div>
                   <div className="deposit-time">
                     {deposit.timestamp ? new Date(deposit.timestamp).toLocaleString() : 'Unknown time'}
                   </div>

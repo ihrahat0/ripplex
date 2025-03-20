@@ -228,7 +228,8 @@ const AdminPanel = () => {
     users: 0,
     pendingWithdrawals: 0,
     totalTransactions: 0,
-    activeUsers: 0
+    activeUsers: 0,
+    recentDeposits: 0
   });
 
   useEffect(() => {
@@ -291,11 +292,24 @@ const AdminPanel = () => {
       );
       const activeUsersSnapshot = await getDocs(activeUsersQuery);
       
+      // Count recent deposits (last 24 hours)
+      const oneDayAgo = new Date();
+      oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+      
+      const recentDepositsQuery = query(
+        collection(db, 'transactions'),
+        where('type', '==', 'deposit'),
+        where('timestamp', '>=', oneDayAgo),
+        limit(1000)
+      );
+      const recentDepositsSnapshot = await getDocs(recentDepositsQuery);
+      
       setStats({
         users: usersSnapshot.size,
         pendingWithdrawals: pendingWithdrawalsSnapshot.size,
         totalTransactions: transactionsSnapshot.size,
-        activeUsers: activeUsersSnapshot.size
+        activeUsers: activeUsersSnapshot.size,
+        recentDeposits: recentDepositsSnapshot.size
       });
     } catch (error) {
       console.error("Error fetching dashboard stats:", error);
@@ -400,6 +414,22 @@ const AdminPanel = () => {
           <NavItem>
             <NavLink to="/admin/deposits" active={location.pathname.includes('/admin/deposits') ? 'true' : undefined}>
               <i className="bi bi-box-arrow-in-down"></i> Deposits
+              {stats.recentDeposits > 0 && (
+                <span style={{
+                  background: '#4cd964',
+                  color: 'white',
+                  borderRadius: '50%',
+                  width: '20px',
+                  height: '20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '12px',
+                  marginLeft: 'auto'
+                }}>
+                  {stats.recentDeposits}
+                </span>
+              )}
             </NavLink>
           </NavItem>
           <NavItem>
