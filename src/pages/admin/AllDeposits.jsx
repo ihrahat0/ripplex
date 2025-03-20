@@ -492,7 +492,10 @@ const DetailValue = styled.div`
 
 // Helper function to verify transaction hash validity
 const isValidTransactionHash = (hash, chain) => {
-  if (!hash) return false;
+  if (!hash || !chain) return false;
+  
+  // Ignore validation for specific hash formats (these are our internal identifiers)
+  if (hash.includes('_')) return true;
   
   // Basic format validation based on chain
   switch (chain) {
@@ -507,29 +510,32 @@ const isValidTransactionHash = (hash, chain) => {
       // Solana transactions are base58 encoded and typically 88 characters
       return /^[1-9A-HJ-NP-Za-km-z]{87,88}$/.test(hash);
     default:
-      return false;
+      return true; // Be lenient with unknown chains
   }
 };
 
 // Function to get blockchain explorer URL based on chain and tx hash
-const getExplorerUrl = (txHash, chain) => {
-  if (!txHash) return '#';
+const getExplorerUrl = (value, chain, type = 'tx') => {
+  if (!value || !chain) return '#';
   
-  switch (chain) {
-    case 'ethereum':
-      return `https://etherscan.io/tx/${txHash}`;
-    case 'bsc':
-      return `https://bscscan.com/tx/${txHash}`;
-    case 'polygon':
-      return `https://polygonscan.com/tx/${txHash}`;
-    case 'solana':
-      return `https://solscan.io/tx/${txHash}`;
-    case 'arbitrum':
-      return `https://arbiscan.io/tx/${txHash}`;
-    case 'base':
-      return `https://basescan.org/tx/${txHash}`;
-    default:
-      return '#';
+  const explorers = {
+    ethereum: 'https://etherscan.io',
+    bsc: 'https://bscscan.com',
+    polygon: 'https://polygonscan.com',
+    solana: 'https://solscan.io',
+    arbitrum: 'https://arbiscan.io',
+    base: 'https://basescan.org'
+  };
+  
+  const explorer = explorers[chain] || '#';
+  
+  if (explorer === '#') return '#';
+  
+  // Handle different URL formats based on type
+  if (type === 'address') {
+    return `${explorer}/address/${value}`;
+  } else {
+    return `${explorer}/tx/${value}`;
   }
 };
 
@@ -599,22 +605,25 @@ const AllDeposits = () => {
             collection(db, 'transactions'),
             where('type', '==', 'deposit'),
             where('isRealDeposit', '==', true),
+            where('status', '==', 'completed'), // Only show completed deposits
             orderBy('timestamp', 'desc')
           );
-        } catch (error) {
+    } catch (error) {
           console.error('Error with real deposits query:', error);
           // Fallback to basic query
           depositsQuery = query(
             collection(db, 'transactions'),
             where('type', '==', 'deposit'),
+            where('status', '==', 'completed'), // Only show completed deposits
             orderBy('timestamp', 'desc')
           );
         }
       } else {
-        // Get all deposits
+        // Get all deposits but still only completed ones
         depositsQuery = query(
           collection(db, 'transactions'),
           where('type', '==', 'deposit'),
+          where('status', '==', 'completed'),
           orderBy('timestamp', 'desc')
         );
       }
@@ -625,8 +634,8 @@ const AllDeposits = () => {
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         
-        // Only include transactions with a userId
-        if (data.userId) {
+        // Only include transactions with a userId AND a valid transaction hash
+        if (data.userId && data.transactionHash && data.transactionHash !== 'Pending...') {
           const user = usersData[data.userId] || {};
           
           // If showOnlyReal is true, only include deposits with isRealDeposit=true
@@ -753,7 +762,7 @@ const AllDeposits = () => {
   };
 
   if (loading) {
-    return (
+      return (
       <Container>
         <Header>
           <Title>All Deposits</Title>
@@ -765,7 +774,7 @@ const AllDeposits = () => {
     );
   }
 
-  return (
+    return (
     <Container>
       <Header>
         <Title>All Deposits</Title>
@@ -808,7 +817,7 @@ const AllDeposits = () => {
                         checked={filters.network === chainId}
                         onChange={() => setFilters({...filters, network: chainId})}
                       />
-                      <label htmlFor={`network-${chainId}`}>{chainData.name}</label>
+                      <label htmlFor={`network-${chainId}`}>{chainData?.name || chainId}</label>
                     </FilterOption>
                   ))}
                 </FilterGroup>
@@ -907,7 +916,7 @@ const AllDeposits = () => {
                 </FilterActions>
               </FilterMenu>
             )}
-          </div>
+        </div>
         </Controls>
       </Header>
       
@@ -916,7 +925,7 @@ const AllDeposits = () => {
           <RefreshButton onClick={fetchDeposits} disabled={loading}>
             <i className="fas fa-sync-alt"></i> Refresh Data
           </RefreshButton>
-          <button 
+          <button
             onClick={toggleRealDeposits}
             style={{
               marginRight: '15px',
@@ -959,8 +968,9 @@ const AllDeposits = () => {
                   <th>Time</th>
                   <th>User</th>
                   <th>Network</th>
-                  <th>Address</th>
-                  <th>Transaction Hash</th>
+                  <th>To Address</th>
+                  <th>From Address</th>
+                  <th>Transaction ID</th>
                   <th className="amount-cell">Amount</th>
                   <th>Status</th>
                 </tr>
@@ -989,7 +999,9 @@ const AllDeposits = () => {
                     </td>
                     <td>
                       <NetworkBadge network={deposit.network || deposit.chain}>
-                        {deposit.network || deposit.chain || 'unknown'}
+                        {typeof SUPPORTED_CHAINS[deposit.network || deposit.chain] === 'object' 
+                          ? SUPPORTED_CHAINS[deposit.network || deposit.chain]?.name 
+                          : deposit.network || deposit.chain || 'Unknown'}
                       </NetworkBadge>
                     </td>
                     <td>
@@ -1003,7 +1015,32 @@ const AllDeposits = () => {
                       </AddressLink>
                     </td>
                     <td>
-                      {deposit.transactionHash ? (
+                      {deposit.fromAddress && deposit.fromAddress !== 'N/A' ? (
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <AddressLink 
+                            href={getExplorerUrl(deposit.fromAddress, deposit.network || deposit.chain, 'address')} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {truncateHash(deposit.fromAddress)}
+                          </AddressLink>
+                          <CopyButton
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(deposit.fromAddress);
+                              toast.success('From address copied!');
+                            }}
+                          >
+                            <i className="far fa-copy"></i>
+                          </CopyButton>
+                        </div>
+                      ) : (
+                        <span style={{ color: '#8b949e' }}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      {deposit.transactionHash && deposit.transactionHash !== 'Pending...' ? (
                         <div style={{ display: 'flex', alignItems: 'center' }}>
                           <AddressLink 
                             href={getExplorerUrl(deposit.transactionHash, deposit.network || deposit.chain)} 
@@ -1037,7 +1074,7 @@ const AllDeposits = () => {
                     <td>
                       <StatusBadge $status={deposit.status || 'pending'}>
                         <i className={`fas fa-${
-                          deposit.status === 'completed' ? 'check-circle' :
+                          deposit.status === 'completed' ? 'check-circle' : 
                           deposit.status === 'pending' ? 'clock' :
                           deposit.status === 'failed' ? 'times-circle' :
                           'question-circle'
@@ -1094,8 +1131,10 @@ const AllDeposits = () => {
                   <DetailRow>
                     <DetailLabel>Network:</DetailLabel>
                     <DetailValue>
-                      <NetworkBadge>
-                        {SUPPORTED_CHAINS[selectedDeposit.chainId]?.name || selectedDeposit.chainId}
+                      <NetworkBadge network={selectedDeposit.network || selectedDeposit.chain}>
+                        {typeof SUPPORTED_CHAINS[selectedDeposit.network || selectedDeposit.chain] === 'object' 
+                          ? SUPPORTED_CHAINS[selectedDeposit.network || selectedDeposit.chain]?.name 
+                          : selectedDeposit.network || selectedDeposit.chain || 'Unknown'}
                       </NetworkBadge>
                     </DetailValue>
                   </DetailRow>
@@ -1122,11 +1161,11 @@ const AllDeposits = () => {
                           <code style={{ wordBreak: 'break-all' }}>{selectedDeposit.transactionHash}</code>
                           <div style={{ marginTop: '8px' }}>
                             <a 
-                              href={getExplorerUrl(selectedDeposit.transactionHash, selectedDeposit.chainId)} 
+                              href={getExplorerUrl(selectedDeposit.transactionHash, selectedDeposit.network || selectedDeposit.chain)} 
                               target="_blank" 
                               rel="noopener noreferrer"
                               style={{ 
-                                color: isValidTransactionHash(selectedDeposit.transactionHash, selectedDeposit.chainId) ? '#58a6ff' : '#ff5555',
+                                color: '#58a6ff',
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: '4px'
@@ -1134,11 +1173,6 @@ const AllDeposits = () => {
                             >
                               View on Explorer <i className="bi bi-box-arrow-up-right"></i>
                             </a>
-                            {!isValidTransactionHash(selectedDeposit.transactionHash, selectedDeposit.chainId) && (
-                              <div style={{ color: '#ff5555', marginTop: '8px', fontSize: '14px' }}>
-                                <i className="bi bi-exclamation-triangle-fill"></i> Invalid transaction hash format
-                              </div>
-                            )}
                           </div>
                         </div>
                       ) : 'N/A'}
@@ -1350,7 +1384,9 @@ const DepositDetailsModal = ({ isOpen, onClose, deposit }) => {
           <div>
             <div style={{ fontSize: '14px', color: 'var(--text-light)', marginBottom: '5px' }}>Network</div>
             <NetworkBadge network={deposit.network || deposit.chain}>
-              {deposit.network || deposit.chain || 'unknown'}
+              {typeof SUPPORTED_CHAINS[deposit.network || deposit.chain] === 'object' 
+                ? SUPPORTED_CHAINS[deposit.network || deposit.chain]?.name 
+                : deposit.network || deposit.chain || 'Unknown'}
             </NetworkBadge>
           </div>
           
@@ -1382,6 +1418,23 @@ const DepositDetailsModal = ({ isOpen, onClose, deposit }) => {
               >
                 {deposit.toAddress}
               </AddressLink>
+            </div>
+          </div>
+          
+          <div>
+            <div style={{ fontSize: '14px', color: 'var(--text-light)', marginBottom: '5px' }}>From Address</div>
+            <div style={{ wordBreak: 'break-all', fontSize: '14px' }}>
+              {deposit.fromAddress && deposit.fromAddress !== 'blockchain' && deposit.fromAddress !== 'N/A' ? (
+                <AddressLink 
+                  href={getExplorerUrl(deposit.fromAddress, deposit.network || deposit.chain, 'address')} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                >
+                  {deposit.fromAddress}
+                </AddressLink>
+              ) : (
+                <span>Unknown</span>
+              )}
             </div>
           </div>
         </div>

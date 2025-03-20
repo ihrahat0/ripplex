@@ -302,17 +302,23 @@ const UserDeposits = () => {
     });
   };
 
-  const getExplorerUrl = (txHash, chain) => {
-    if (!txHash || !chain) return '#';
+  const getExplorerUrl = (value, chain, type = 'tx') => {
+    if (!value || !chain) return '#';
     
     const explorer = SUPPORTED_CHAINS[chain]?.explorer;
     if (!explorer) return '#';
     
-    if (chain === 'solana') {
-      return `${explorer}/tx/${txHash}`;
+    // Handle different URL formats based on type
+    if (type === 'address') {
+      return `${explorer}/address/${value}`;
     } else {
-      return `${explorer}/tx/${txHash}`;
+      return `${explorer}/tx/${value}`;
     }
+  };
+
+  const truncateAddress = (address) => {
+    if (!address) return 'N/A';
+    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
   };
 
   if (loading) {
@@ -417,24 +423,42 @@ const UserDeposits = () => {
                       </NetworkBadge>
                     </td>
                     <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {deposit.fromAddress || 'N/A'}
-                      {deposit.fromAddress && (
-                        <CopyButton onClick={() => copyToClipboard(deposit.fromAddress)}>
-                          {copiedAddress === deposit.fromAddress ? 
-                            <i className="bi bi-check-circle"></i> : 
-                            <i className="bi bi-clipboard"></i>}
-                        </CopyButton>
-                      )}
+                      {deposit.fromAddress ? (
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <a 
+                            href={getExplorerUrl(deposit.fromAddress, deposit.chain || deposit.network, 'address')}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: 'var(--primary)' }}
+                          >
+                            {truncateAddress(deposit.fromAddress)}
+                          </a>
+                          <CopyButton onClick={() => copyToClipboard(deposit.fromAddress)}>
+                            {copiedAddress === deposit.fromAddress ? 
+                              <i className="bi bi-check-circle"></i> : 
+                              <i className="bi bi-clipboard"></i>}
+                          </CopyButton>
+                        </div>
+                      ) : 'N/A'}
                     </td>
                     <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {deposit.toAddress || userWallets[deposit.chain || deposit.network] || 'N/A'}
-                      {(deposit.toAddress || userWallets[deposit.chain || deposit.network]) && (
-                        <CopyButton onClick={() => copyToClipboard(deposit.toAddress || userWallets[deposit.chain || deposit.network])}>
-                          {copiedAddress === (deposit.toAddress || userWallets[deposit.chain || deposit.network]) ? 
-                            <i className="bi bi-check-circle"></i> : 
-                            <i className="bi bi-clipboard"></i>}
-                        </CopyButton>
-                      )}
+                      {deposit.toAddress ? (
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <a 
+                            href={getExplorerUrl(deposit.toAddress, deposit.chain || deposit.network, 'address')}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: 'var(--primary)' }}
+                          >
+                            {truncateAddress(deposit.toAddress)}
+                          </a>
+                          <CopyButton onClick={() => copyToClipboard(deposit.toAddress)}>
+                            {copiedAddress === deposit.toAddress ? 
+                              <i className="bi bi-check-circle"></i> : 
+                              <i className="bi bi-clipboard"></i>}
+                          </CopyButton>
+                        </div>
+                      ) : 'N/A'}
                     </td>
                     <td>
                       <StatusBadge $status={deposit.status}>
@@ -449,23 +473,23 @@ const UserDeposits = () => {
                     </td>
                     <td>
                       {(deposit.txHash || deposit.transactionHash) ? (
-                        <a 
-                          href={getExplorerUrl(deposit.txHash || deposit.transactionHash, deposit.chain || deposit.network)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ color: 'var(--primary)' }}
-                        >
-                          {(deposit.txHash || deposit.transactionHash).substring(0, 8)}...
-                        </a>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <a 
+                            href={getExplorerUrl(deposit.txHash || deposit.transactionHash, deposit.chain || deposit.network)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: 'var(--primary)' }}
+                          >
+                            {truncateAddress(deposit.txHash || deposit.transactionHash)}
+                          </a>
+                          <CopyButton onClick={() => copyToClipboard(deposit.txHash || deposit.transactionHash)}>
+                            {copiedAddress === (deposit.txHash || deposit.transactionHash) ? 
+                              <i className="bi bi-check-circle"></i> : 
+                              <i className="bi bi-clipboard"></i>}
+                          </CopyButton>
+                        </div>
                       ) : (
                         'N/A'
-                      )}
-                      {(deposit.txHash || deposit.transactionHash) && (
-                        <CopyButton onClick={() => copyToClipboard(deposit.txHash || deposit.transactionHash)}>
-                          {copiedAddress === (deposit.txHash || deposit.transactionHash) ? 
-                            <i className="bi bi-check-circle"></i> : 
-                            <i className="bi bi-clipboard"></i>}
-                        </CopyButton>
                       )}
                     </td>
                   </tr>

@@ -1018,7 +1018,7 @@ const Deposit = () => {
               <Description>
                 Select the coin you want to deposit and the blockchain network. Only send{' '}
                 {selectedCoin && <><CoinLogo src={COIN_LOGOS[selectedCoin]} alt={selectedCoin} />{selectedCoin}</>}{' '}
-                on the {SUPPORTED_CHAINS[selectedChain]?.name || ''} network to this address.
+                on the {typeof SUPPORTED_CHAINS[selectedChain] === 'object' ? SUPPORTED_CHAINS[selectedChain]?.name : selectedChain || ''} network to this address.
                 {SUPPORTED_CHAINS[selectedChain]?.isSPL && selectedCoin && <TokenTag isSPL>SPL Token</TokenTag>}
               </Description>
               
@@ -1060,7 +1060,7 @@ const Deposit = () => {
                   <WalletAddress>
                     <AddressHeader>
                       <AddressLabel>
-                        Deposit Address ({SUPPORTED_CHAINS[selectedChain]?.name})
+                        Deposit Address ({typeof SUPPORTED_CHAINS[selectedChain] === 'object' ? SUPPORTED_CHAINS[selectedChain]?.name : selectedChain})
                         {SUPPORTED_CHAINS[selectedChain]?.isSPL && <TokenTag isSPL>SPL</TokenTag>}
                       </AddressLabel>
                       <AddressValue>
@@ -1085,7 +1085,7 @@ const Deposit = () => {
                   <Warning>
                     {SUPPORTED_CHAINS[selectedChain]?.isSPL ? 
                       `This is a Solana SPL token address. Only send ${selectedCoin} using the Solana network.` : 
-                      `Only send ${selectedCoin} on the ${SUPPORTED_CHAINS[selectedChain]?.name} network to this address.`} 
+                      `Only send ${selectedCoin} on the ${typeof SUPPORTED_CHAINS[selectedChain] === 'object' ? SUPPORTED_CHAINS[selectedChain]?.name : selectedChain} network to this address.`} 
                     Sending any other asset may result in permanent loss.
                   </Warning>
                 </>

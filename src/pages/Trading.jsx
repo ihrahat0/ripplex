@@ -387,9 +387,9 @@ const AmountInput = styled.input`
 `;
 
 const Button = styled.button`
-  background: ${props => props.$variant === 'buy' ? 'var(--success)' : props.$variant === 'sell' ? 'var(--danger)' : 'var(--primary)'};
+  background: ${props => props.$variant === 'buy' ? 'transparent' : props.$variant === 'sell' ? 'transparent' : 'transparent'};
   color: white;
-  border: none;
+  border: 1px solid #fff;
   padding: 8px;
   border-radius: 8px;
   font-size: 14px;

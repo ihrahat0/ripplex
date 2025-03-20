@@ -1993,7 +1993,7 @@ function UserProfile(props) {
                                             }}>
                                                 <h5 style={{ color: '#F7931A', marginBottom: '10px' }}>How it works</h5>
                                                 <p style={{ marginBottom: '15px' }}>
-                                                    Invite friends to Ripple Exchange and earn 10% of their deposits as commission!
+                                                    Invite friends to Ripple Exchange and get 1 RIPPLEX token as Airdrop for every referral!
                                                 </p>
                                                 
                                                 <ul style={{ listStyleType: 'none', padding: '0', margin: '0' }}>
@@ -2023,7 +2023,7 @@ function UserProfile(props) {
                                                             lineHeight: '24px', 
                                                             marginRight: '10px' 
                                                         }}>2</span>
-                                                        They sign up using your link and make deposits
+                                                        They sign up using your referral link and complete social tasks
                                                     </li>
                                                     <li style={{ display: 'flex', alignItems: 'center' }}>
                                                         <span style={{ 
@@ -2037,7 +2037,7 @@ function UserProfile(props) {
                                                             lineHeight: '24px', 
                                                             marginRight: '10px' 
                                                         }}>3</span>
-                                                        You earn 10% commission on their deposits
+                                                        You get 1 RIPPLEX token = $1 for each referral
                                                     </li>
                                                 </ul>
                                             </div>
@@ -2081,9 +2081,9 @@ function UserProfile(props) {
                                                     borderRadius: '10px',
                                                     margin: '0 0 10px 0'
                                                 }}>
-                                                    <h5 style={{ color: '#7A7A7A', fontSize: '14px', marginBottom: '5px' }}>Total Commission</h5>
-                                                    <h3 style={{ color: '#0ECB81', fontSize: '24px' }}>
-                                                        ${(referralData?.stats?.totalCommission || 0).toFixed(2)}
+                                                    <h5 style={{ color: '#7A7A7A', fontSize: '14px', marginBottom: '5px' }}>RIPPLEX Earned</h5>
+                                                    <h3 style={{ color: '#F7931A', fontSize: '24px' }}>
+                                                        {referralData?.stats?.totalReferrals || 0} <span style={{ fontSize: '16px' }}>RIPPLEX</span>
                                                     </h3>
                                                 </div>
                                             </div>
