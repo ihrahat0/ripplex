@@ -24,6 +24,12 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
       allow update: if isAuthenticated() && (isOwner(userId) || isAdmin());
       allow delete: if isAdmin();
+      
+      // IMPORTANT: Allow any authenticated user to update referral fields on any user document
+      // This is needed for the referral system to work properly
+      allow update: if isAuthenticated() && 
+        (request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['referrals', 'referralStats', 'referredBy', 'joinedViaReferral', 'balances', 'referralCode', 'referralLink']));
     }
     
     // Allow users to manage their wallet data

@@ -163,6 +163,53 @@ apiRouter.get('/health', (req, res) => {
   res.json({ status: 'ok', serverKey });
 });
 
+// Email API endpoints
+apiRouter.post('/send-verification-code', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Email is required' });
+    }
+    
+    console.log(`Server: Sending verification code to ${email}`);
+    
+    const result = await emailService.sendVerificationEmail(email, code || null);
+    
+    if (result.success) {
+      return res.json({ success: true, message: 'Verification code sent successfully' });
+    } else {
+      return res.status(500).json({ success: false, error: result.error || 'Failed to send verification code' });
+    }
+  } catch (error) {
+    console.error('Error sending verification code:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+apiRouter.post('/send-password-reset', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Email is required' });
+    }
+    
+    console.log(`Server: Sending password reset to ${email}`);
+    
+    const result = await emailService.sendPasswordResetEmail(email, code || null);
+    
+    if (result.success) {
+      return res.json({ success: true, message: 'Password reset email sent successfully' });
+    } else {
+      return res.status(500).json({ success: false, error: result.error || 'Failed to send password reset email' });
+    }
+  } catch (error) {
+    console.error('Error sending password reset:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
 // Mount API router first - all API routes go through this
 app.use('/api', apiRouter);
 
@@ -187,6 +234,8 @@ app.use(express.static(path.join(__dirname, 'build'), {
       res.setHeader('Content-Type', 'application/vnd.ms-fontobject');
     } else if (filePath.endsWith('.svg')) {
       res.setHeader('Content-Type', 'image/svg+xml');
+    } else if (filePath.endsWith('.html')) {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
     }
   }
 }));
@@ -196,5 +245,13 @@ app.use('/emails', express.static(path.join(__dirname, 'emails')));
 
 // This must be the last route - handles React routing
 app.get('*', (req, res) => {
+  // Always serve the index.html for any route - React's router will handle the route
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.sendFile(path.join(__dirname, 'build', 'index.html'));
+});
+
+// Start the server
+const serverKey = Math.random().toString(36).substring(2, 15);
+app.listen(port, () => {
+  console.log(`Server running on port ${port} (key: ${serverKey})`);
 });
