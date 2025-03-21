@@ -114,6 +114,9 @@ export const referralService = {
                 joinedViaReferral: true
             });
             
+            // Award 1 RIPPLEX token to the referrer
+            await this.awardReferralBonus(referrerId);
+            
             return true;
         } catch (error) {
             console.error('Error registering referral:', error);
@@ -254,6 +257,58 @@ export const referralService = {
         } catch (error) {
             console.error('Error getting referral stats:', error);
             throw error;
+        }
+    },
+
+    /**
+     * Award 1 RIPPLEX token to the referrer when a user completes signup
+     * @param {string} referrerId - The referrer's user ID
+     * @returns {Promise<boolean>} - Whether the bonus was awarded successfully
+     */
+    async awardReferralBonus(referrerId) {
+        try {
+            if (!referrerId) {
+                console.error('No referrer ID provided');
+                return false;
+            }
+            
+            const referrerRef = doc(db, 'users', referrerId);
+            const referrerDoc = await getDoc(referrerRef);
+            
+            if (!referrerDoc.exists()) {
+                console.error('Referrer not found');
+                return false;
+            }
+            
+            // Add 1 RIPPLEX token to the referrer's balance
+            await updateDoc(referrerRef, {
+                'balances.RIPPLEX': increment(1)
+            });
+            
+            // Record the bonus in a transactions collection for tracking
+            const transactionRef = doc(collection(db, 'transactions'));
+            await setDoc(transactionRef, {
+                type: 'referral_bonus',
+                toUserId: referrerId,
+                amount: 1,
+                currency: 'RIPPLEX',
+                createdAt: serverTimestamp(),
+                status: 'completed',
+                description: 'Referral bonus - 1 RIPPLEX token'
+            });
+            
+            // Create a notification for the referrer
+            await notificationService.createNotification(
+                referrerId,
+                'Referral Bonus',
+                'You received 1 RIPPLEX token for your referral!',
+                'referral_bonus'
+            );
+            
+            return true;
+        } catch (error) {
+            console.error('Error awarding referral bonus:', error);
+            return false;
         }
     }
 }; 

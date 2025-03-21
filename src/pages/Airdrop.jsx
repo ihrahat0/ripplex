@@ -553,20 +553,20 @@ const Airdrop = () => {
       return (
         <TaskCard delay="0.2s">
           <TaskTitle>
-            <i className="fab fa-twitter"></i>
+          <i class="fa-brands fa-square-x-twitter"></i>
             Follow us on Twitter
           </TaskTitle>
           <p>Follow our official Twitter account to stay updated on the latest Ripplex news and updates.</p>
           
           <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column' }}>
             <SocialButton 
-              href="https://twitter.com/RippleExchange" 
+              href="https://x.com/ripple_exch" 
               target="_blank" 
               rel="noopener noreferrer"
               twitter
               onClick={handleTwitterFollow}
             >
-              <i className="fab fa-twitter"></i>
+              <i class="fa-brands fa-square-x-twitter"></i>
               Follow @RippleExchange
             </SocialButton>
             
@@ -595,19 +595,19 @@ const Airdrop = () => {
         <TaskCard delay="0.3s">
           <TaskTitle>
             <i className="fab fa-telegram-plane"></i>
-            Join our Telegram Group
+            Join Ripple Exchange Telegram Channel
           </TaskTitle>
           <p>Join our vibrant community on Telegram to chat with other users and get instant support.</p>
           
           <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column' }}>
             <SocialButton 
-              href="https://t.me/RippleExchangeOfficial" 
+              href="https://t.me/Ripple_exch" 
               target="_blank" 
               rel="noopener noreferrer"
               onClick={handleTelegramFollow}
             >
               <i className="fab fa-telegram-plane"></i>
-              Join Telegram Group
+              Join Ripple Exchange Telegram Channel
             </SocialButton>
             
             {hasFollowed.telegram && (

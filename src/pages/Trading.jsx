@@ -30,6 +30,42 @@ import btcIcon from '../assets/images/coin/btc.png';
 import LightweightChartComponent from '../components/LightweightChartComponent';
 import soundEffect from '../assets/sound/sound-effect.wav';
 
+// Add immediately after imports
+// Global state to track trading operations and prevent cross-contamination between coins
+// This will be used to ensure operations on one coin don't affect other coins
+if (typeof window !== 'undefined') {
+  window.RIPPLE_TRADING_STATE = window.RIPPLE_TRADING_STATE || null;
+  
+  // If we have a stale state from a previous session, clear it
+  if (window.RIPPLE_TRADING_STATE && 
+      window.RIPPLE_TRADING_STATE.timestamp && 
+      Date.now() - window.RIPPLE_TRADING_STATE.timestamp > 1000 * 60 * 5) { // 5 minutes
+    console.log('Clearing stale trading state:', window.RIPPLE_TRADING_STATE);
+    window.RIPPLE_TRADING_STATE = null;
+  }
+}
+
+// Function to safely clear trading state
+const clearTradingState = () => {
+  if (typeof window !== 'undefined') {
+    window.RIPPLE_TRADING_STATE = null;
+    console.log('[ISOLATION] Cleared trading state');
+  }
+};
+
+// Function to set trading state with coin isolation
+const setTradingState = (operationType, symbol) => {
+  if (typeof window !== 'undefined') {
+    const normalizedSymbol = (symbol || '').toLowerCase().replace(/usdt$/, '');
+    window.RIPPLE_TRADING_STATE = {
+      operationType,
+      symbol: normalizedSymbol,
+      timestamp: Date.now()
+    };
+    console.log(`[ISOLATION] Set trading state: ${operationType} for ${normalizedSymbol}`);
+  }
+};
+
 // Simple notification function using console.log
 const addNotification = ({ title, message, type, playSound = false }) => {
   console.log(`[${type || 'info'}] ${title}: ${message}`);
@@ -351,9 +387,9 @@ const AmountInput = styled.input`
 `;
 
 const Button = styled.button`
-  background: ${props => props.$variant === 'buy' ? 'var(--success)' : props.$variant === 'sell' ? 'var(--danger)' : 'var(--primary)'};
+  background: ${props => props.$variant === 'buy' ? 'transparent' : props.$variant === 'sell' ? 'transparent' : 'transparent'};
   color: white;
-  border: none;
+  border: 1px solid #fff;
   padding: 8px;
   border-radius: 8px;
   font-size: 14px;
@@ -723,6 +759,11 @@ const PositionsTable = styled.table`
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
   }
+  
+  @media (max-width: 768px) {
+    /* Mobile-specific styles */
+    font-size: 12px;
+  }
 `;
 
 const TableHeader = styled.th`
@@ -731,6 +772,17 @@ const TableHeader = styled.th`
   padding: 8px;
   font-size: 12px;
   text-align: left;
+  
+  @media (max-width: 768px) {
+    /* Hide specific columns on mobile */
+    &:nth-child(2), /* Amount */
+    &:nth-child(3), /* Entry Price */
+    &:nth-child(4), /* Mark Price */
+    &:nth-child(5), /* Liquidation */
+    &:nth-child(6) { /* Leverage */
+      display: none;
+    }
+  }
 `;
 
 const TableCell = styled.td`
@@ -738,6 +790,32 @@ const TableCell = styled.td`
   font-size: 12px;
   color: var(--text);
   border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+  
+  @media (max-width: 768px) {
+    /* Hide specific columns on mobile */
+    &:nth-child(2), /* Amount */
+    &:nth-child(3), /* Entry Price */
+    &:nth-child(4), /* Mark Price */
+    &:nth-child(5), /* Liquidation */
+    &:nth-child(6) { /* Leverage */
+      display: none;
+    }
+    
+    /* Style for the symbol that appears next to the type on mobile */
+    .mobile-only-symbol {
+      display: inline-block;
+      font-size: 12px;
+      opacity: 1;
+      margin-left: 6px;
+      color: #D4AF37; /* Gold color for better visibility */
+      font-weight: bold;
+    }
+  }
+  
+  /* Hide the symbol on desktop */
+  .mobile-only-symbol {
+    display: none;
+  }
 `;
 
 const PnLValue = styled.span`
@@ -954,16 +1032,26 @@ const calculatePnL = (position, currentMarketPrice) => {
   const { type, entryPrice, leverage, margin } = position;
   
   try {
+    // Ensure all values are proper numbers
+    const entryPriceNum = parseFloat(entryPrice);
+    const currentMarketPriceNum = parseFloat(currentMarketPrice);
+    const leverageNum = parseFloat(leverage);
+    const marginNum = parseFloat(margin);
+    
+    // Validation
+    if (isNaN(entryPriceNum) || isNaN(currentMarketPriceNum) || isNaN(leverageNum) || isNaN(marginNum)) {
+      console.error('Invalid values for PnL calculation:', { entryPrice, currentMarketPrice, leverage, margin });
+      return 0;
+    }
+    
     if (type === 'buy') {
-      const priceDiff = currentMarketPrice - entryPrice;
-      const percentageChange = (priceDiff / entryPrice) * 100;
-      // Fix for large numbers: don't use toLocaleString() inside Number()
-      return Number((margin * (percentageChange / 100) * leverage));
+      const priceDiff = currentMarketPriceNum - entryPriceNum;
+      const percentageChange = (priceDiff / entryPriceNum) * 100;
+      return +(marginNum * (percentageChange / 100) * leverageNum).toFixed(2);
     } else {
-      const priceDiff = entryPrice - currentMarketPrice;
-      const percentageChange = (priceDiff / entryPrice) * 100;
-      // Fix for large numbers: don't use toLocaleString() inside Number()
-      return Number((margin * (percentageChange / 100) * leverage));
+      const priceDiff = entryPriceNum - currentMarketPriceNum;
+      const percentageChange = (priceDiff / entryPriceNum) * 100;
+      return +(marginNum * (percentageChange / 100) * leverageNum).toFixed(2);
     }
   } catch (error) {
     console.error('Error calculating PnL:', error);
@@ -1329,8 +1417,13 @@ const formatSmallNumber = (num) => {
     return number.toFixed(2);
   }
   
-  // For larger numbers, format with commas and no decimal places
-  return number.toLocaleString(undefined, {maximumFractionDigits: 0});
+  // For larger numbers like Bitcoin (typically > 1000)
+  // Always use toLocaleString with both minimumFractionDigits and maximumFractionDigits
+  // This ensures we have proper formatting with commas AND always show .00
+  return number.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
 };
 
 // Trading component function
@@ -1380,6 +1473,9 @@ const Trading = () => {
   // Add a state variable for the order being edited
   const [editingOrderId, setEditingOrderId] = useState(null);
   const [editTargetPrice, setEditTargetPrice] = useState('');
+  // Price validation states
+  const [isPriceConsistent, setIsPriceConsistent] = useState(true);
+  const [lastVerifiedPrices, setLastVerifiedPrices] = useState({});
 
   // Refs for cleanup
   const ws = useRef(null);
@@ -1848,21 +1944,31 @@ const Trading = () => {
               const newPrice = parseFloat(data.p);
               if (!isNaN(newPrice) && newPrice > 0) {
                 console.log(`Received WebSocket price update for ${formattedSymbol}:`, newPrice);
-                // Use exactly the same price for all state updates
-                setMarketPrice(newPrice);
-                setLastPrice(newPrice);
-                setCurrentPrice(newPrice);
                 
-                // Generate order book with the exact same price
-                console.log('Generating order book with exact WebSocket price:', newPrice);
-                const newOrderBook = generateDummyOrders(newPrice);
+                // Validate the price and update consistency state
+                const isValid = trackPrice(newPrice, formattedSymbol);
+                setIsPriceConsistent(isValid);
+                
+                // Get safe price (either the original or a fallback if suspicious)
+                const safePrice = getSafePrice(newPrice, formattedSymbol);
+                
+                // Use safe price for all state updates
+                setMarketPrice(safePrice);
+                setLastPrice(safePrice);
+                setCurrentPrice(safePrice);
+                
+                // Generate order book with the safe price
+                console.log('Generating order book with WebSocket price:', safePrice);
+                const newOrderBook = generateDummyOrders(safePrice);
                 setOrderBook(newOrderBook);
               } else {
                 console.warn('Invalid price received from WebSocket:', data.p);
+                setIsPriceConsistent(false);
               }
       }
     } catch (error) {
             console.error('Error processing WebSocket message:', error);
+            setIsPriceConsistent(false);
           }
         };
 
@@ -2321,6 +2427,32 @@ const Trading = () => {
       return;
     }
 
+    // Store current coin symbol for strict isolation
+    const currentSymbol = cryptoData?.token?.symbol?.toLowerCase() || 'btc';
+    const normalizedCurrentSymbol = currentSymbol.replace(/usdt$/, '');
+    
+    console.log(`[ISOLATION] Opening position for specific coin: ${normalizedCurrentSymbol.toUpperCase()}`);
+    
+    // Check if there's an ongoing operation for a different coin
+    if (window.RIPPLE_TRADING_STATE && 
+        window.RIPPLE_TRADING_STATE.symbol !== normalizedCurrentSymbol &&
+        window.RIPPLE_TRADING_STATE.timestamp > Date.now() - 30000) { // Within 30 seconds
+      
+      console.log(`[ISOLATION] Cannot open position for ${normalizedCurrentSymbol} - ongoing operation for ${window.RIPPLE_TRADING_STATE.symbol}`);
+      
+      // Show warning notification
+      addNotification({
+        title: 'Trading Operation In Progress',
+        message: `Please wait for the current ${window.RIPPLE_TRADING_STATE.symbol.toUpperCase()} operation to complete`,
+        type: 'warning'
+      });
+      
+      return;
+    }
+    
+    // Set trading state for this operation
+    setTradingState('OPENING_POSITION', normalizedCurrentSymbol);
+
     // Use forcedOrderType if provided, otherwise use state
     const currentOrderType = forcedOrderType || orderType;
     console.log("Creating position with order type:", currentOrderType);
@@ -2331,11 +2463,13 @@ const Trading = () => {
 
     if (!tradeAmount || !currentMarketPrice || !leverage) {
       setError('Please fill in all fields');
+      clearTradingState();
       return;
     }
 
     if (userBalance?.USDT < requiredMargin) {
       setError('Insufficient balance');
+      clearTradingState();
       return;
     }
 
@@ -2347,7 +2481,12 @@ const Trading = () => {
       leverage: parseInt(leverage),
       entryPrice: currentMarketPrice,
       margin: requiredMargin,
-      orderMode: orderMode
+      orderMode: orderMode,
+      // Add isolation data to ensure we only affect this symbol
+      isolationData: {
+        symbol: normalizedCurrentSymbol,
+        timestamp: Date.now()
+      }
     };
 
     // For limit orders, add the target price
@@ -2456,33 +2595,108 @@ const Trading = () => {
       setAmount('');
       setLeverage(1);
       setLimitPrice('');
+      
+      // Clear the trading state
+      clearTradingState();
     }
   };
 
-  // Add the handleClosePosition function
-  const handleClosePosition = async (position) => {
-    // We no longer need to check if the position is for a different symbol
-    // since we're only showing positions for the current symbol
+  // Update the handleClosePosition function to implement strict coin isolation
+  const handleClosePosition = async (position, isLiquidation = false) => {
+    if (!position || !position.id || !currentUser) {
+      console.error("Invalid position or user data for closing");
+      return;
+    }
     
-    if (isPending) return;
+    if (isPending || closingPositionId) {
+      console.log("Already processing another position closure, cannot close multiple positions simultaneously");
+      return;
+    }
     
     try {
-      console.log('Closing position:', position);
+      // Get the position's symbol for isolation
+      const positionSymbol = (position.symbol || '').toLowerCase().replace(/usdt$/, '');
+      
+      console.log(`[ISOLATION] ${isLiquidation ? 'Liquidating' : 'Manually closing'} ${positionSymbol.toUpperCase()} position`);
+      
+      // Check if there's an ongoing operation for a different coin
+      if (window.RIPPLE_TRADING_STATE && 
+          window.RIPPLE_TRADING_STATE.symbol !== positionSymbol &&
+          window.RIPPLE_TRADING_STATE.timestamp > Date.now() - 30000) { // Within 30 seconds
+        
+        console.log(`[ISOLATION] Cannot close ${positionSymbol} position - ongoing operation for ${window.RIPPLE_TRADING_STATE.symbol}`);
+        
+        // Show warning notification
+        addNotification({
+          title: 'Trading Operation In Progress',
+          message: `Please wait for the current ${window.RIPPLE_TRADING_STATE.symbol.toUpperCase()} operation to complete`,
+          type: 'warning'
+        });
+        
+        return;
+      }
+      
+      // Set trading state for this operation
+      setTradingState(isLiquidation ? 'LIQUIDATING_POSITION' : 'CLOSING_POSITION', positionSymbol);
+      
       setError('');
       setIsPending(true);
       setClosingPositionId(position.id);
       
-      if (!marketPrice || isNaN(marketPrice) || marketPrice <= 0) {
-        console.error('Invalid market price for closing position:', marketPrice);
+      // Get current price for this specific symbol
+      const currentPrice = marketPrice;
+      
+      if (isNaN(currentPrice) || currentPrice <= 0) {
+        console.error(`Invalid market price for closing ${positionSymbol} position:`, currentPrice);
         throw new Error('Cannot close position: Invalid market price');
       }
       
-      console.log(`Attempting to close position ${position.id} at price $${marketPrice}`);
+      console.log(`Attempting to close ${positionSymbol} position ${position.id} at price $${currentPrice}`);
       
-      // Pass the currentUser.uid as the first parameter
-      const result = await tradingService.closePosition(currentUser.uid, position.id, marketPrice);
+      // Create closeData with detailed validation and isolation info
+      const closeData = {
+        positionId: position.id,
+        closePrice: currentPrice,
+        entryPrice: position.entryPrice,
+        symbol: positionSymbol,
+        reason: isLiquidation ? 'liquidation' : 'manual',
+        validationChecks: {
+          frontendValidated: true,
+          timestamp: Date.now(),
+          isManual: !isLiquidation,
+          userInitiated: !isLiquidation
+        },
+        // Add isolation data to ensure we only affect this position's coin
+        isolationData: {
+          symbol: positionSymbol,
+          operationType: isLiquidation ? 'LIQUIDATING_POSITION' : 'CLOSING_POSITION',
+          timestamp: Date.now()
+        }
+      };
       
-      console.log('Position close result:', result);
+      // Store details in memory and localStorage for debugging
+      try {
+        const positionMemory = { 
+          lastClosedPosition: position.id,
+          symbol: positionSymbol,
+          timestamp: Date.now()
+        };
+        
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('lastClosedPosition', JSON.stringify(positionMemory));
+        }
+        
+        if (typeof window !== 'undefined') {
+          window.RIPPLE_LAST_CLOSED_POSITION = positionMemory;
+        }
+      } catch (memErr) {
+        console.warn("Failed to store position memory:", memErr);
+      }
+      
+      // Pass the closeData to the tradingService
+      const result = await tradingService.closePosition(currentUser.uid, position.id, currentPrice, closeData);
+      
+      console.log(`${positionSymbol.toUpperCase()} position close result:`, result);
       
       if (!result.success) {
         throw new Error(result.error || 'Failed to close position');
@@ -2490,15 +2704,33 @@ const Trading = () => {
         // Play sound effect on successful position close
         playTradeSound();
       
-      // The position will be updated via the Firestore listener
-        console.log(`Successfully closed position. PnL: $${result.pnl.toLocaleString()}, Return Amount: $${result.returnAmount.toLocaleString()}`);
+        // Add notification
+        addNotification({
+          title: isLiquidation ? 'Position Liquidated' : 'Position Closed',
+          message: `${position.symbol} position closed at $${currentPrice.toLocaleString()}`,
+          type: isLiquidation ? 'error' : 'success',
+          playSound: !isLiquidation // Don't play sound twice for liquidations
+        });
+        
+        // Update positions
+        fetchPositions();
+        
+        // Update user balance
+        fetchUserBalances();
       }
     } catch (error) {
-      console.error('Error closing position:', error);
-      setError(error.message || 'Failed to close position');
+      console.error(`Error closing position:`, error);
+      addNotification({
+        title: 'Error',
+        message: `Failed to close position: ${error.message}`,
+        type: 'error'
+      });
     } finally {
-      setIsPending(false);
       setClosingPositionId(null);
+      setIsPending(false);
+      
+      // Clear the trading state
+      clearTradingState();
     }
   };
 
@@ -3757,7 +3989,7 @@ const Trading = () => {
                   <TableCell style={{ 
                     color: order.type === 'buy' ? '#0ECB81' : '#F6465D' 
                   }}>
-                    {(order.side || order.type)?.toUpperCase() || 'N/A'}
+                    {(order.side || order.type)?.toUpperCase() || 'N/A'} <span className="mobile-only-symbol">[{order.symbol}]</span>
         </TableCell>
                   <TableCell>{order.amount || 0} {order.symbol || ''}</TableCell>
                   <TableCell>
@@ -3861,15 +4093,17 @@ const Trading = () => {
     const numPrice = typeof price === 'string' ? parseFloat(price) : price;
     
     // Match the same formatting logic used in the order book generation
-    if (numPrice >= 10000) return numPrice.toLocaleString(undefined, {maximumFractionDigits: 0});
-    if (numPrice >= 1000) return numPrice.toLocaleString(undefined, {maximumFractionDigits: 1});
-    if (numPrice >= 100) return numPrice.toLocaleString(undefined, {maximumFractionDigits: 2});
-    if (numPrice >= 10) return numPrice.toLocaleString(undefined, {maximumFractionDigits: 3});
-    if (numPrice >= 1) return numPrice.toLocaleString(undefined, {maximumFractionDigits: 4});
-    if (numPrice >= 0.1) return numPrice.toLocaleString(undefined, {maximumFractionDigits: 5});
-    if (numPrice >= 0.01) return numPrice.toLocaleString(undefined, {maximumFractionDigits: 6});
-    if (numPrice >= 0.001) return numPrice.toLocaleString(undefined, {maximumFractionDigits: 7});
-    return numPrice.toLocaleString(undefined, {maximumFractionDigits: 8});
+    // Always use both minimumFractionDigits and maximumFractionDigits to ensure consistent display
+    // This prevents prices like "$84" temporarily showing up instead of "$84,000.00"
+    if (numPrice >= 10000) return numPrice.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0});
+    if (numPrice >= 1000) return numPrice.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1});
+    if (numPrice >= 100) return numPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    if (numPrice >= 10) return numPrice.toLocaleString(undefined, {minimumFractionDigits: 3, maximumFractionDigits: 3});
+    if (numPrice >= 1) return numPrice.toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 4});
+    if (numPrice >= 0.1) return numPrice.toLocaleString(undefined, {minimumFractionDigits: 5, maximumFractionDigits: 5});
+    if (numPrice >= 0.01) return numPrice.toLocaleString(undefined, {minimumFractionDigits: 6, maximumFractionDigits: 6});
+    if (numPrice >= 0.001) return numPrice.toLocaleString(undefined, {minimumFractionDigits: 7, maximumFractionDigits: 7});
+    return numPrice.toLocaleString(undefined, {minimumFractionDigits: 8, maximumFractionDigits: 8});
   };
 
   // Load user's positions and pending limit orders when authenticated
@@ -4094,48 +4328,230 @@ const Trading = () => {
   }
 
   // Add a function to check if positions should be liquidated based on current market price
-  const checkPositionsForLiquidation = async () => {
-    if (!currentUser || !marketPrice || positions.length === 0) return;
+  const checkPositionsForLiquidation = useCallback(() => {
+    if (!currentUser || !marketPrice || !openPositions || openPositions.length === 0) return;
+
+    // Get the current token symbol
+    const symbol = (cryptoData?.token?.symbol || 'btc').toLowerCase().replace(/usdt$/, '');
     
-    try {
-      for (const position of positions) {
-        const liquidationPrice = calculateLiquidationPrice(position);
-        
-        // Check if liquidation condition is met
-        const shouldLiquidate = position.type === 'buy' 
-          ? marketPrice <= liquidationPrice 
-          : marketPrice >= liquidationPrice;
-        
-        if (shouldLiquidate) {
-          console.log(`Position ${position.id} is being liquidated at market price ${marketPrice}`);
-          try {
-            // Close the position at current market price
-            await tradingService.closePosition(currentUser.uid, position.id, marketPrice);
-            
-            // Show notification
-            setNotification({
-              type: 'warning',
-              message: `Position ${position.symbol} has been liquidated at ${marketPrice} USDT`
-            });
-            
-            // Refresh positions
-            fetchPositions();
-          } catch (err) {
-            console.error("Error during liquidation:", err);
-          }
-        }
+    // Get a safe price for liquidation check - CRITICAL SAFETY MEASURE
+    const safePrice = getSafePrice(marketPrice, symbol);
+    
+    // Only check if price is consistent - never liquidate with inconsistent prices
+    if (!isPriceConsistent || !isOnline) {
+      console.log(`Skipping liquidation check due to ${!isPriceConsistent ? 'inconsistent price' : 'offline status'}`);
+      return;
+    }
+    
+    console.log(`Checking ${openPositions.length} positions for liquidation with SAFE price $${safePrice}`);
+    
+    // Store last check time in local storage
+    localStorage.setItem('lastLiquidationCheck', JSON.stringify({
+      timestamp: Date.now(),
+      price: safePrice,
+      symbol,
+      consistent: isPriceConsistent,
+      online: isOnline
+    }));
+    
+    // Check each position using the safe price
+    openPositions.forEach(position => {
+      // Only check positions that match the current symbol
+      if (position.symbol.toLowerCase().replace(/usdt$/, '') !== symbol) {
+        return;
       }
-    } catch (error) {
-      console.error("Error checking for liquidations:", error);
-    }
-  };
-  
-  // Monitor price changes for liquidation checks
+      
+        const liquidationPrice = calculateLiquidationPrice(position);
+      const pnl = calculatePnL(position, safePrice);
+      const pnlPercentage = (pnl / position.margin) * 100;
+      
+      console.log(`Position ${position.id}: type=${position.type}, entry=${position.entryPrice}, margin=${position.margin}, leverage=${position.leverage}`);
+      console.log(`Liquidation check: current=${safePrice}, liquidation=${liquidationPrice}, PnL=${pnl} (${pnlPercentage.toFixed(2)}%)`);
+      
+      // Check if the position is due for liquidation
+      if ((position.type === 'buy' && safePrice <= liquidationPrice) || 
+          (position.type === 'sell' && safePrice >= liquidationPrice)) {
+        
+        console.log(`⚠️ LIQUIDATION TRIGGERED for ${position.id}: ${position.type} position with ${position.symbol} - Current: $${safePrice}, Liquidation: $${liquidationPrice}`);
+        
+        // Use the handleClosePosition function with isLiquidation set to true and the safe price
+        handleClosePosition(position, true, safePrice);
+      }
+    });
+  }, [currentUser, marketPrice, openPositions, cryptoData, isPriceConsistent, isOnline, lastVerifiedPrices]);
+
+  // Add UI indication for price status
+  // Add to your JSX where appropriate
+  {!isOnline && (
+    <WarningBanner>
+      You are currently offline. Trading operations are limited and using backup price data.
+    </WarningBanner>
+  )}
+
+  {!isPriceConsistent && (
+    <WarningBanner>
+      Price data may be inaccurate. Using verified backup prices for safety.
+    </WarningBanner>
+  )}
+
+  // Create a styled component for the warning banner
+  const WarningBanner = styled.div`
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 4px;
+    font-weight: bold;
+    text-align: center;
+  `;
+
+  // Add the warnings above the main trading UI section
+  // ... existing code ...
+
+  // Fix the useEffect that uses checkPositionsForLiquidation
   useEffect(() => {
-    if (marketPrice && positions.length > 0) {
+    // Skip if no positions or price data
+    if (!openPositions || openPositions.length === 0 || !marketPrice) return;
+    
+    // Only run the check when the market price changes
+    checkPositionsForLiquidation();
+    
+    // Set up interval for continuous checking
+    const intervalId = setInterval(() => {
       checkPositionsForLiquidation();
+    }, 30000); // Check every 30 seconds
+    
+    return () => clearInterval(intervalId);
+  }, [checkPositionsForLiquidation, marketPrice, openPositions]);
+
+  // Add hardcoded fallback prices
+  const hardcodedPrices = {
+    'btc': 85000,  // Bitcoin reference price
+    'eth': 3500,   // Ethereum reference price
+    'sol': 130,    // Solana reference price
+    'bnb': 600,    // BNB reference price
+    'doge': 0.15,  // Dogecoin reference price
+    'shib': 0.00002, // Shiba reference price
+    'xrp': 0.50,   // XRP reference price
+    'ada': 0.45    // Cardano reference price
+  };
+
+  // Add tracking for validated prices
+
+  // Add a function to detect suspicious prices
+  const isSuspiciousPrice = (price, symbol) => {
+    const normalizedSymbol = (symbol || 'btc').toLowerCase().replace(/usdt$/, '');
+    
+    // Basic validation
+    if (!price || isNaN(price) || price <= 0) return true;
+    
+    // Check specific thresholds for major coins
+    const minPriceMap = {
+      'btc': 10000,   // Bitcoin shouldn't be under $10k
+      'eth': 500,     // Ethereum shouldn't be under $500
+      'sol': 20,      // Solana shouldn't be under $20
+      'bnb': 100,     // BNB shouldn't be under $100
+      'doge': 0.01,   // Dogecoin shouldn't be under $0.01
+      'shib': 0.000001 // SHIB shouldn't be under $0.000001
+    };
+    
+    // If we have a minimum price for this symbol and price is below it
+    if (minPriceMap[normalizedSymbol] && price < minPriceMap[normalizedSymbol]) {
+      console.error(`Price ${price} below minimum threshold of ${minPriceMap[normalizedSymbol]} for ${normalizedSymbol}`);
+      return true;
     }
-  }, [marketPrice, positions]);
+    
+    // Check for specific known glitches
+    if (normalizedSymbol === 'btc' && Math.abs(price - 81) < 1) {
+      console.error(`Detected known $81 glitch price for Bitcoin: ${price}`);
+      return true;
+    }
+    
+    // Check for digit count errors (decimal place errors) for high-value coins
+    if (normalizedSymbol === 'btc') {
+      const expectedDigits = 5; // BTC price is in 5 digits ($80,000+)
+      const actualDigits = Math.floor(Math.log10(price)) + 1;
+      if (actualDigits < expectedDigits) {
+        console.error(`Possible decimal point error for Bitcoin: ${price} (${actualDigits} digits instead of ${expectedDigits})`);
+        return true;
+      }
+    }
+    
+    if (normalizedSymbol === 'eth') {
+      const expectedDigits = 3; // ETH price is in 3-4 digits ($1,000+)
+      const actualDigits = Math.floor(Math.log10(price)) + 1;
+      if (actualDigits < expectedDigits) {
+        console.error(`Possible decimal point error for Ethereum: ${price} (${actualDigits} digits instead of ${expectedDigits})`);
+        return true;
+      }
+    }
+    
+    // Price consistency check with known good prices
+    if (lastVerifiedPrices[normalizedSymbol]) {
+      const lastPrice = lastVerifiedPrices[normalizedSymbol];
+      const changePercent = Math.abs((price - lastPrice) / lastPrice * 100);
+      
+      // If price changed by more than 20% from last verified, consider it suspicious
+      if (changePercent > 20) {
+        console.error(`Price change too drastic: ${normalizedSymbol} changed by ${changePercent.toFixed(2)}% from ${lastPrice} to ${price}`);
+        return true;
+      }
+    }
+    
+    return false;
+  };
+
+  // Add a function to get a safe price
+  const getSafePrice = (price, symbol) => {
+    const normalizedSymbol = (symbol || 'btc').toLowerCase().replace(/usdt$/, '');
+    
+    // If price is suspicious, use hardcoded or last verified price
+    if (isSuspiciousPrice(price, normalizedSymbol)) {
+      console.log(`🔧 Fixing suspicious price: ${price} → using fallback for ${normalizedSymbol}`);
+      
+      // Use last verified price if available
+      if (lastVerifiedPrices[normalizedSymbol]) {
+        return lastVerifiedPrices[normalizedSymbol];
+      }
+      
+      // Otherwise use hardcoded price
+      if (hardcodedPrices[normalizedSymbol]) {
+        return hardcodedPrices[normalizedSymbol];
+      }
+      
+      // Last resort fallbacks by coin type
+      if (normalizedSymbol === 'btc') return 80000;
+      if (normalizedSymbol === 'eth') return 3000;
+      
+      // Default generic fallback
+      return 100;
+    }
+    
+    // If price seems valid, record it as verified
+    const newVerifiedPrices = {...lastVerifiedPrices};
+    newVerifiedPrices[normalizedSymbol] = price;
+    setLastVerifiedPrices(newVerifiedPrices);
+    
+    // Return the original price since it's valid
+    return price;
+  };
+
+  // Add price tracking for consistency
+  const trackPrice = (price, symbol) => {
+    if (!price || isNaN(price) || price <= 0) return false;
+    
+    const normalizedSymbol = (symbol || 'btc').toLowerCase().replace(/usdt$/, '');
+    
+    // Record price in verified prices if it passes validation
+    if (!isSuspiciousPrice(price, normalizedSymbol)) {
+      const newVerifiedPrices = {...lastVerifiedPrices};
+      newVerifiedPrices[normalizedSymbol] = price;
+      setLastVerifiedPrices(newVerifiedPrices);
+      return true;
+    }
+    
+    return false;
+  };
 
   return (
     <TradingContainer>
@@ -4476,13 +4892,17 @@ const Trading = () => {
                     <TableCell style={{ 
                       color: position.side === 'sell' ? '#F6465D' : '#0ECB81' 
                     }}>
-                      {position.side?.toUpperCase() || position.type?.toUpperCase() || 'N/A'}
+                      {position.side?.toUpperCase() || position.type?.toUpperCase() || 'N/A'} <span className="mobile-only-symbol">[{position.symbol}]</span>
                     </TableCell>
                           <TableCell>{position.amount || 0} {position.symbol || ''}</TableCell>
                     <TableCell>${position.entryPrice?.toLocaleString() || '0.00'}</TableCell>
-                    <TableCell>${marketPrice >= 1000 ? marketPrice.toLocaleString() : marketPrice.toLocaleString() || '0.00'}</TableCell>
+                    <TableCell>${
+                      typeof marketPrice === 'number' 
+                        ? marketPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) 
+                        : '0.00'
+                    }</TableCell>
                     <TableCell style={{ color: '#F44336' }}>
-                      ${liquidationPrice.toLocaleString()}
+                      ${typeof liquidationPrice === 'number' ? liquidationPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00'}
                     </TableCell>
                           <TableCell>{position.leverage || 1}x</TableCell>
                     <TableCell>
@@ -4532,11 +4952,15 @@ const Trading = () => {
                         <TableCell style={{ 
                           color: position.side === 'sell' ? '#F6465D' : '#0ECB81' 
                         }}>
-                          {position.side?.toUpperCase() || position.type?.toUpperCase() || 'N/A'}
+                          {position.side?.toUpperCase() || position.type?.toUpperCase() || 'N/A'} <span className="mobile-only-symbol">[{position.symbol}]</span>
                         </TableCell>
                         <TableCell>{position.amount || 0} {position.symbol || ''}</TableCell>
                         <TableCell>${position.entryPrice?.toLocaleString() || '0.00'}</TableCell>
-                        <TableCell>${position.closePrice?.toLocaleString() || '0.00'}</TableCell>
+                        <TableCell>${
+                          typeof position.closePrice === 'number' 
+                            ? position.closePrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) 
+                            : '0.00'
+                        }</TableCell>
                         <TableCell>{position.leverage || 1}x</TableCell>
                         <TableCell>
                           <PnLValue value={position.finalPnL || 0}>

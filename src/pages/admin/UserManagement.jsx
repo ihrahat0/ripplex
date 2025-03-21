@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, NavLink, Link, useParams, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { db } from '../../firebase';
 import { 
@@ -15,10 +15,17 @@ import {
   limit, 
   startAfter,
   where,
-  addDoc
+  addDoc,
+  serverTimestamp,
+  arrayUnion,
+  increment
 } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../../firebase';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import AdminNavbar from '../../components/AdminNavbar';
+import { SUPPORTED_CHAINS } from '../../services/walletService';
+import toast, { Toaster } from 'react-hot-toast';
 
 const Container = styled.div`
   background: var(--bg1);
@@ -1214,7 +1221,7 @@ function UserManagement() {
                   {Object.entries(walletAddresses).map(([chain, address]) => (
                     <WalletFinderAddressCard key={chain}>
                       <WalletChainHeader>
-                        <h4>{chain}</h4>
+                        <h4>{typeof SUPPORTED_CHAINS[chain] === 'object' ? SUPPORTED_CHAINS[chain]?.name || chain : chain}</h4>
                         <div className="icon">
                           {chain === 'ethereum' ? 'Ξ' :
                            chain === 'solana' ? 'S' :

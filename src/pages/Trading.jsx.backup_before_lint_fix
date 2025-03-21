@@ -1,0 +1,4240 @@
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import styled, { css, keyframes, useTheme } from 'styled-components';
+import { Tab, Tabs, TabList, TabPanel } from 'react-tabs';
+import 'react-tabs/style/react-tabs.css';
+import { db } from '../firebase';
+import { 
+  collection, 
+  addDoc, 
+  getDocs, 
+  deleteDoc, 
+  doc, 
+  query, 
+  where,
+  updateDoc,
+  writeBatch,
+  getDoc,
+  runTransaction,
+  setDoc,
+  onSnapshot,
+  increment,
+  serverTimestamp
+} from 'firebase/firestore';
+import { useAuth } from '../contexts/AuthContext';
+import axios from 'axios';
+import { v4 as uuidv4 } from 'uuid';
+import TradingChartComponent from '../components/TradingChart';
+import { tradingService } from '../services/tradingService';
+import btcIcon from '../assets/images/coin/btc.png';
+import LightweightChartComponent from '../components/LightweightChartComponent';
+import soundEffect from '../assets/sound/sound-effect.wav';
+
+// Add this near the top of the file, after the imports but before any component definitions
+// Initialize global trading state tracker to prevent cross-operation contamination
+if (typeof window !== 'undefined') {
+  window.RIPPLE_TRADING_STATE = window.RIPPLE_TRADING_STATE || null;
+  
+  // CRITICAL FIX: Add a persistent operation tracker that survives refreshes
+  // This will block any attempt to close positions when opening new ones
+  if (!window.POSITION_OPERATIONS_INITIALIZED) {
+    // Create a wrapper around localStorage for tracking ongoing operations
+    window.operationTracker = {
+      // Set operation with expiration
+      setOperation: (symbol, operation, data = {}) => {
+        try {
+          const operationData = {
+            symbol: symbol.toLowerCase(),
+            operation: operation,
+            timestamp: Date.now(),
+            expiresAt: Date.now() + 30000, // 30 second expiration
+            data: data
+          };
+          localStorage.setItem('RIPPLE_CURRENT_OPERATION', JSON.stringify(operationData));
+          console.log(`[CRITICAL] Set operation tracker: ${operation} for ${symbol}`);
+          return true;
+        } catch (e) {
+          console.error('Error setting operation:', e);
+          return false;
+        }
+      },
+      // Get current operation
+      getOperation: () => {
+        try {
+          const data = localStorage.getItem('RIPPLE_CURRENT_OPERATION');
+          if (!data) return null;
+          
+          const operation = JSON.parse(data);
+          
+          // Check if operation has expired
+          if (operation.expiresAt && operation.expiresAt < Date.now()) {
+            localStorage.removeItem('RIPPLE_CURRENT_OPERATION');
+            return null;
+          }
+          
+          return operation;
+        } catch (e) {
+          console.error('Error getting operation:', e);
+          return null;
+        }
+      },
+      // Clear operation
+      clearOperation: () => {
+        try {
+          localStorage.removeItem('RIPPLE_CURRENT_OPERATION');
+          console.log('[CRITICAL] Cleared operation tracker');
+          return true;
+        } catch (e) {
+          console.error('Error clearing operation:', e);
+          return false;
+        }
+      },
+      // Check if operation is in progress for different symbol
+      isOperationInProgressForDifferentSymbol: (symbol) => {
+        const currentOp = window.operationTracker.getOperation();
+        if (!currentOp) return false;
+        
+        // Normalize symbols for comparison
+        const normalizedRequestedSymbol = (symbol || '').toLowerCase().replace(/usdt$/, '');
+        const normalizedCurrentSymbol = (currentOp.symbol || '').toLowerCase().replace(/usdt$/, '');
+        
+        // If the operation is for a different symbol, block it
+        if (normalizedCurrentSymbol && 
+            normalizedRequestedSymbol && 
+            normalizedCurrentSymbol !== normalizedRequestedSymbol) {
+          console.log(`[CRITICAL] Operation in progress for ${normalizedCurrentSymbol}, blocking operation for ${normalizedRequestedSymbol}`);
+          return true;
+        }
+        
+        return false;
+      }
+    };
+    
+    window.POSITION_OPERATIONS_INITIALIZED = true;
+    console.log('[CRITICAL] Position operations tracker initialized');
+  }
+
+  // Also add a hard lock flag that COMPLETELY disables automatic position closures
+  window.RIPPLE_PREVENT_AUTO_POSITION_CLOSURES = true;
+  console.log('[CRITICAL] Auto position closures are completely disabled');
+}
+
+// Simple notification function using console.log
+const addNotification = ({ title, message, type, playSound = false }) => {
+  console.log(`[${type || 'info'}] ${title}: ${message}`);
+  // Play sound if requested
+  if (playSound) {
+    try {
+      const audio = new Audio(soundEffect);
+      audio.play().catch(error => {
+        console.warn('Error playing notification sound:', error);
+      });
+    } catch (error) {
+      console.warn('Error initializing notification sound:', error);
+    }
+  }
+  // In a real app, we would use a proper notification library
+};
+
+const TradingContainer = styled.div`
+  padding: 20px;
+  background: var(--bg1);
+  min-height: calc(100vh - 100px);
+  margin-top: 0;
+  
+  @media (max-width: 768px) {
+    padding: 10px;
+    margin-top: 0;
+  }
+`;
+
+const TradingGrid = styled.div`
+  display: grid;
+  grid-template-columns: 65% 35%;
+  gap: 1px;
+  margin-top: 5px;
+  margin-bottom: 30px;
+  background: var(--bg);
+  
+  @media (max-width: 1200px) {
+    grid-template-columns: 60% 40%;
+  }
+  
+  @media (max-width: 992px) {
+    grid-template-columns: 1fr;
+  }
+  
+  @media (max-width: 768px) {
+    margin-top: 3px;
+    margin-bottom: 20px;
+  }
+`;
+
+const ChartSection = styled.div`
+  background: var(--bg);
+  border-right: 1px solid var(--line);
+  height: 350px;
+  
+  @media (max-width: 992px) {
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+  
+  @media (max-width: 768px) {
+    height: 300px;
+  }
+`;
+
+const RightSection = styled.div`
+  width: 100%;
+  background: var(--bg);
+  display: grid;
+  grid-template-rows: auto;
+  height: 350px;
+  
+  @media (max-width: 992px) {
+    width: 100%;
+  }
+  
+  @media (max-width: 768px) {
+    height: auto;
+  }
+`;
+
+const TradingInterface = styled.div`
+  display: grid;
+  grid-template-columns: 50% 50%;
+  width: 100%;
+  
+  @media (max-width: 992px) {
+    grid-template-columns: 1fr 1fr;
+    border-left: none;
+  }
+  
+  @media (max-width: 576px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const OrderBookSection = styled.div`
+  // height: 350px;
+  border-right: 1px solid var(--line);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #D4AF37;
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.2);
+  border-radius: 12px;
+  margin: 3px;
+  overflow: hidden;
+  
+  @media (max-width: 992px) {
+    height: 330px;
+  }
+  
+  @media (max-width: 768px) {
+    height: 300px;
+  }
+`;
+
+const OrderFormSection = styled.div`
+  padding: 6px;
+  height: 400px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #D4AF37;
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.2);
+  border-radius: 12px;
+  margin: 3px;
+  
+  @media (max-width: 992px) {
+    height: 330px;
+  }
+  
+  @media (max-width: 768px) {
+    height: 300px;
+  }
+`;
+
+const ChartCard = styled.div`
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+  
+  @media (max-width: 768px) {
+    padding: 12px;
+    border-radius: 8px;
+  }
+`;
+
+const OrderCard = styled.div`
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+  height: 100%;
+  overflow-y: auto;
+  
+  @media (max-width: 768px) {
+    padding: 12px;
+    border-radius: 8px;
+  }
+`;
+
+const CoinInfo = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  
+  @media (max-width: 768px) {
+    gap: 8px;
+    margin-bottom: 15px;
+  }
+`;
+
+const CoinIcon = styled.img`
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: contain;
+  background: ${props => props.$theme === 'dark' ? '#2A2A3C' : '#fff'};
+  padding: 2px;
+  
+  @media (max-width: 768px) {
+    width: 32px;
+    height: 32px;
+  }
+`;
+
+const CoinDetails = styled.div`
+  display: flex;
+  flex-direction: column;
+`;
+
+const CoinName = styled.h2`
+  color: #fff;
+  margin: 0;
+  font-size: 24px;
+  
+  @media (max-width: 768px) {
+    font-size: 20px;
+  }
+`;
+
+const CoinSymbol = styled.span`
+  color: #7A7A7A;
+  font-size: 16px;
+  
+  @media (max-width: 768px) {
+    font-size: 14px;
+  }
+`;
+
+const PriceInfo = styled.div`
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+  
+  @media (max-width: 768px) {
+    gap: 12px;
+    margin-bottom: 15px;
+    flex-direction: column;
+  }
+`;
+
+const Price = styled.div`
+  color: #fff;
+  font-size: 24px;
+  font-weight: 500;
+  
+  @media (max-width: 768px) {
+    font-size: 20px;
+  }
+`;
+
+const Change = styled.span`
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  background: ${props => props.$isPositive ? 'rgba(14, 203, 129, 0.2)' : 'rgba(246, 70, 93, 0.2)'};
+  color: ${props => props.$isPositive ? '#0ECB81' : '#F6465D'};
+  margin-left: 8px;
+  
+  @media (max-width: 768px) {
+    font-size: 12px;
+    padding: 1px 6px;
+  }
+`;
+
+const OrderForm = styled.form`
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+  gap: 6px;
+  height: 100%;
+  
+  @media (max-width: 768px) {
+    padding: 4px 0;
+    gap: 4px;
+  }
+`;
+
+const TabGroup = styled.div`
+  display: flex;
+  margin-bottom: 6px;
+  gap: 6px;
+  
+  @media (max-width: 768px) {
+    margin-bottom: 4px;
+    gap: 3px;
+  }
+`;
+
+const OrderTab = styled.button`
+  background: ${props => props.$active ? 'var(--primary)' : 'var(--bg2)'};
+  color: ${props => props.$active ? 'var(--text-white)' : 'var(--text)'};
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex: 1;
+  outline: none;
+  
+  &:hover {
+    background: ${props => props.$active ? 'var(--primary)' : 'var(--bg3)'};
+  }
+  
+  @media (max-width: 768px) {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+`;
+
+const AmountInput = styled.input`
+  background: var(--bg2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 8px;
+  outline: none;
+  transition: all 0.2s;
+  width: 100%;
+  margin: 2px 0;
+  
+  &:focus {
+    border-color: #D4AF37;
+    box-shadow: 0 0 4px rgba(212, 175, 55, 0.3);
+  }
+  
+  @media (max-width: 768px) {
+    padding: 5px 8px;
+    font-size: 12px;
+    margin: 1px 0;
+  }
+`;
+
+const Button = styled.button`
+  background: ${props => props.$variant === 'buy' ? 'var(--success)' : props.$variant === 'sell' ? 'var(--danger)' : 'var(--primary)'};
+  color: white;
+  border: none;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 5px;
+  border: 1px solid ${props => {
+    if (props.$variant === 'buy') return 'rgba(212, 175, 55, 0.5)';
+    if (props.$variant === 'sell') return 'rgba(212, 175, 55, 0.5)';
+    return '#D4AF37';
+  }};
+  box-shadow: 0 0 4px ${props => {
+    if (props.$variant === 'buy') return 'rgba(52, 199, 89, 0.3)';
+    if (props.$variant === 'sell') return 'rgba(255, 59, 48, 0.3)';
+    return 'rgba(212, 175, 55, 0.3)';
+  }};
+  
+  &:hover {
+    filter: brightness(1.1);
+  }
+  
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 6px;
+    font-size: 13px;
+  }
+`;
+
+// Update the TIMEFRAMES object
+const TIMEFRAMES = {
+  '1D': { label: '1D', value: '1' },
+  '1W': { label: '1W', value: '7' }
+};
+
+// Update the styled component for the chart
+const ChartEmbed = styled.iframe`
+  width: 100%;
+  height: 600px;
+  border: none;
+  border-radius: 8px;
+  background: var(--bg2);
+`;
+
+const CurrentPrice = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 16px;
+  padding: 8px 0;
+  margin: 5px 0;
+  position: relative;
+  color: ${props => props.$isUp ? '#0ECB81' : '#F6465D'};
+  background: ${props => props.$isUp ? 'rgba(14, 203, 129, 0.15)' : 'rgba(246, 70, 93, 0.15)'};
+  border-top: 1px solid ${props => props.$isUp ? 'rgba(14, 203, 129, 0.3)' : 'rgba(246, 70, 93, 0.3)'};
+  border-bottom: 1px solid ${props => props.$isUp ? 'rgba(14, 203, 129, 0.3)' : 'rgba(246, 70, 93, 0.3)'};
+  letter-spacing: 0.5px;
+`;
+
+// Replace the InternalTradingChart function
+function InternalTradingChart({ symbol, theme }) {
+  return (
+    <TradingChartComponent
+      symbol={`BINANCE:${symbol}`}
+      theme={theme}
+      container_id="tradingview_chart"
+      autosize={true}
+      timeframe="15"
+      allow_symbol_change={false}
+    />
+  );
+};
+
+// Define accurate coin IDs for CoinGecko
+const hardcodedPrices = {
+  'btc': 90812.45,
+  'bitcoin': 90812.45,
+  'eth': 3452.67,
+  'ethereum': 3452.67,
+  'sol': 142.56,
+  'bnb': 567.89,
+  'doge': 0.12
+};
+
+// Define accurate coin IDs for CoinGecko
+const COINGECKO_IDS = {
+  'btc': 'bitcoin',
+  'bitcoin': 'bitcoin',
+  'eth': 'ethereum', 
+  'ethereum': 'ethereum',
+  'sol': 'solana',
+  'bnb': 'binancecoin',
+  'doge': 'dogecoin',
+  'xrp': 'ripple',
+  'ada': 'cardano',
+  'dot': 'polkadot',
+  'matic': 'matic-network',
+  'avax': 'avalanche-2',
+  'link': 'chainlink',
+  'uni': 'uniswap',
+  'atom': 'cosmos'
+};
+
+// Add expected price ranges to prevent glitches affecting positions
+const PRICE_RANGES = {
+  'btc': { min: 20000, max: 200000 }, // Bitcoin price range
+  'eth': { min: 1000, max: 10000 },   // Ethereum price range
+  'sol': { min: 50, max: 500 },       // Solana price range
+  'bnb': { min: 200, max: 1000 },     // Binance Coin price range
+  'doge': { min: 0.05, max: 1 },      // Dogecoin price range
+  'xrp': { min: 0.2, max: 10 },       // Ripple price range
+  'ada': { min: 0.2, max: 10 },       // Cardano price range
+  'dot': { min: 5, max: 100 },        // Polkadot price range
+  'matic': { min: 0.5, max: 5 },      // Polygon price range
+  'avax': { min: 5, max: 100 },       // Avalanche price range
+  'link': { min: 5, max: 100 },       // Chainlink price range
+  'uni': { min: 5, max: 100 },        // Uniswap price range
+  'atom': { min: 5, max: 100 }        // Cosmos price range
+};
+
+// Initialize lastVerifiedPrices with hardcoded values for immediate fallback
+const lastVerifiedPrices = { ...hardcodedPrices };
+
+// Determine if a price is obviously a glitch by checking if it suddenly changed by a dramatic amount
+const isPriceGlitch = (symbol, price, previousPrice) => {
+  if (!previousPrice) return false;
+  
+  // Calculate percentage change
+  const percentChange = Math.abs((price - previousPrice) / previousPrice * 100);
+  
+  // If price changed by more than 30% suddenly, it might be a glitch
+  // Most crypto doesn't move this much in a short timeframe unless major news
+  if (percentChange > 30) {
+    console.warn(`⚠️ Potential price glitch detected for ${symbol}: ${previousPrice} → ${price} (${percentChange.toFixed(2)}% change)`);
+    return true;
+  }
+  
+  return false;
+};
+
+const fetchHistoricalData = async (coinId, days = '1', interval = 'minute') => {
+  try {
+    const response = await fetch(
+      `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}&interval=${interval}`
+    );
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+    
+    // Convert the data to candlestick format
+    const candlesticks = [];
+    const prices = data.prices;
+    
+    for (let i = 0; i < prices.length; i += 1) {
+      const candle = {
+        time: prices[i][0] / 1000, // Convert to seconds
+        open: prices[i][1],
+        high: prices[i][1],
+        low: prices[i][1],
+        close: prices[i][1]
+      };
+      
+      if (i > 0) {
+        candle.open = prices[i-1][1];
+        candle.high = Math.max(candle.open, candle.close);
+        candle.low = Math.min(candle.open, candle.close);
+      }
+      
+      candlesticks.push(candle);
+    }
+    
+    return candlesticks;
+  } catch (error) {
+    console.error('Error fetching historical data:', error);
+    return null;
+  }
+};
+
+// Add these new styled components
+const OrderTypeSelector = styled.div`
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+`;
+
+const leverageOptions = [10, 20, 25, 30, 40];  // Updated leverage options
+
+const LeverageSlider = styled.input`
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg2);
+  outline: none;
+  margin: 10px 0;
+  
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: ${props => props.$value >= 30 ? '#F6465D' : 'var(--primary)'};
+    cursor: pointer;
+  }
+  
+  &::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: ${props => props.$value >= 30 ? '#F6465D' : 'var(--primary)'};
+    cursor: pointer;
+    border: none;
+  }
+`;
+
+const LeverageDisplay = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 12px;
+`;
+
+const QuickLeverageButtons = styled.div`
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+`;
+
+const QuickLeverageButton = styled.button`
+  padding: 4px 8px;
+  margin: 0 4px;
+  border-radius: 4px;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+  background: ${props => props.$active ? 'var(--primary)' : 'var(--bg1)'};
+  color: ${props => props.$active ? '#fff' : 'var(--text)'};
+  
+  &:hover {
+    background: var(--primary);
+    color: #fff;
+  }
+`;
+
+const OrderDetails = styled.div`
+  margin-top: 5px;
+  margin-bottom: 5px;
+`;
+
+const DetailRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  color: var(--text);
+  font-size: 12px;
+`;
+
+// Add these new styled components
+const OrderBook = styled.div`
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg2);
+  border-radius: 12px;
+  border: 1px solid #D4AF37; /* Golden border color */
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.2); /* Subtle golden glow */
+  overflow: hidden;
+  
+  @media (max-width: 768px) {
+    max-height: 300px;
+    overflow-y: auto;
+  }
+`;
+
+const OrderBookHeader = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  padding: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  
+  span:first-child {
+    text-align: left;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 6px;
+    font-size: 11px;
+  }
+`;
+
+const OrderBookRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  position: relative;
+  text-align: right;
+  transition: background 0.1s;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    ${props => props.$side === 'buy' ? 'right' : 'left'}: 0;
+    height: 100%;
+    width: ${props => props.$depth || 0}%;
+    background: ${props => props.$side === 'buy' 
+      ? 'rgba(52, 199, 89, 0.1)' 
+      : 'rgba(255, 59, 48, 0.1)'};
+    z-index: 0;
+    pointer-events: none;
+  }
+  
+  span {
+    position: relative;
+    z-index: 1;
+  }
+  
+  span:first-child {
+    text-align: left;
+  }
+  
+  &.flash {
+    animation: flash 0.5s;
+  }
+  
+  @keyframes flash {
+    0% { background-color: rgba(255, 255, 255, 0.1); }
+    100% { background-color: transparent; }
+  }
+  
+  @media (max-width: 768px) {
+    padding: 3px 6px;
+    font-size: 11px;
+  }
+`;
+
+// Update OrderCard to include buy/sell colors
+const OrderButton = styled.button`
+  background: ${props => props.$orderType === 'buy' ? '#0ECB81' : '#F6465D'};
+  color: white;
+  border: none;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  width: 100%;
+  font-weight: 500;
+  font-size: 13px;
+  border: 1px solid ${props => props.$orderType === 'buy' ? 'rgba(14, 203, 129, 0.5)' : 'rgba(246, 70, 93, 0.5)'};
+  box-shadow: 0 0 4px ${props => props.$orderType === 'buy' ? 'rgba(14, 203, 129, 0.3)' : 'rgba(246, 70, 93, 0.3)'};
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  &:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+  
+  @media (max-width: 768px) {
+    padding: 6px;
+    font-size: 12px;
+  }
+`;
+
+// Add a new container for the right side
+const RightPanel = styled.div`
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 20px;
+  height: 600px; // Match chart height
+`;
+
+// Update the positions table styling
+const PositionsTable = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.4);
+  border: 1px solid #D4AF37;
+  animation: fadeIn 1s ease-in-out;
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  @media (max-width: 768px) {
+    /* Mobile-specific styles */
+    font-size: 12px;
+  }
+`;
+
+const TableHeader = styled.th`
+  background: rgba(212, 175, 55, 0.2);
+  color: #D4AF37;
+  padding: 8px;
+  font-size: 12px;
+  text-align: left;
+  
+  @media (max-width: 768px) {
+    /* Hide specific columns on mobile */
+    &:nth-child(2), /* Amount */
+    &:nth-child(3), /* Entry Price */
+    &:nth-child(4), /* Mark Price */
+    &:nth-child(5), /* Liquidation */
+    &:nth-child(6) { /* Leverage */
+      display: none;
+    }
+  }
+`;
+
+const TableCell = styled.td`
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--text);
+  border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+  
+  @media (max-width: 768px) {
+    /* Hide specific columns on mobile */
+    &:nth-child(2), /* Amount */
+    &:nth-child(3), /* Entry Price */
+    &:nth-child(4), /* Mark Price */
+    &:nth-child(5), /* Liquidation */
+    &:nth-child(6) { /* Leverage */
+      display: none;
+    }
+    
+    /* Style for the symbol that appears next to the type on mobile */
+    .mobile-only-symbol {
+      display: inline-block;
+      font-size: 12px;
+      opacity: 1;
+      margin-left: 6px;
+      color: #D4AF37; /* Gold color for better visibility */
+      font-weight: bold;
+    }
+  }
+  
+  /* Hide the symbol on desktop */
+  .mobile-only-symbol {
+    display: none;
+  }
+`;
+
+const PnLValue = styled.span`
+  color: ${props => props.value >= 0 ? '#0ECB81' : '#F6465D'};
+  font-weight: bold;
+`;
+
+// Add these styled components at the top with your other styled components
+const TradeInfo = styled.div`
+  margin-top: 5px;
+  background: rgba(30, 41, 59, 0.4);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+`;
+
+const InfoItem = styled.div`
+  display: flex;
+  justify-content: space-between;
+  color: ${props => props.$highlight ? 'var(--primary)' : 'var(--text-secondary)'};
+  margin-bottom: 3px;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+// Add this helper function before the Trading component
+const calculateRequiredMargin = (amount, price, leverage) => {
+  if (!amount || !price || !leverage) return 0;
+  return (parseFloat(amount) * price) / leverage;
+};
+
+// Update the leverage buttons handling
+const LeverageButtons = styled.div`
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+`;
+
+const LeverageInput = styled.input`
+  width: 100%;
+  padding: 8px;
+  margin-top: 8px;
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 4px;
+`;
+
+// Add these styled components
+const ChartContainer = styled.div`
+  position: relative;
+  background: var(--bg1);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border: 1px solid #D4AF37; /* Golden border color */
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.2); /* Subtle golden glow */
+`;
+
+const DexLink = styled.a`
+  display: inline-block;
+  padding: 8px 12px;
+  background: rgba(30, 34, 45, 0.8);
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-decoration: none;
+  border-radius: 4px;
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  transition: all 0.2s;
+  
+  &:hover {
+    background: var(--primary);
+    color: white;
+  }
+  
+  i {
+    margin-left: 5px;
+    font-size: 12px;
+  }
+`;
+
+const TimeframeSelector = styled.div`
+  display: flex;
+  gap: 4px;
+  padding: 8px;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  background: rgba(30, 34, 45, 0.8);
+  border-radius: 4px;
+`;
+
+const TimeButton = styled.button`
+  padding: 4px 12px;
+  background: ${props => props.$active ? 'var(--primary)' : 'transparent'};
+  color: ${props => props.$active ? 'white' : '#7a7a7a'};
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+
+  &:hover {
+    color: white;
+    background: ${props => props.$active ? 'var(--primary)' : 'rgba(71, 77, 87, 0.7)'};
+  }
+`;
+
+// Add this styled component
+const DexScreenerChart = styled.iframe`
+  width: 100%;
+  height: 500px;
+  border: none;
+  border-radius: 8px;
+  background: var(--bg2);
+`;
+
+// Add these new styled components after the existing styled components
+const TradesList = styled.div`
+  max-height: 80px;
+  overflow-y: auto;
+  padding: 4px 0;
+  background: var(--bg);
+  border-top: none;
+  border-bottom: none;
+  &::-webkit-scrollbar {
+    width: 5px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(128, 128, 128, 0.3);
+    border-radius: 4px;
+  }
+`;
+
+const TradeRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  padding: 4px 8px;
+  font-size: 12px;
+  animation: fadeIn 0.3s ease-in-out;
+  
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateX(${props => props.$isBuy ? '-10px' : '10px'});
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  & > span {
+    &:first-child {
+      color: ${props => props.$isBuy ? '#0ECB81' : '#F6465D'};
+    }
+    &:nth-child(2),
+    &:last-child {
+      text-align: right;
+    }
+  }
+`;
+
+// Add these styled components after the existing styled components
+const OrderBookContent = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: calc(100% - 32px);
+`;
+
+const AsksContainer = styled.div`
+  flex: 1;
+  overflow-y: auto;
+  /* Use more subtle background with less opacity */
+  background: var(--bg); 
+  display: flex;
+  flex-direction: column-reverse;
+  min-height: 200px;
+  &::-webkit-scrollbar {
+    width: 5px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(246, 70, 93, 0.1);
+    border-radius: 4px;
+  }
+`;
+
+const BidsContainer = styled.div`
+  flex: 1;
+  overflow-y: auto;
+  /* Use same background as AsksContainer */
+  background: var(--bg);
+  min-height: 200px;
+  &::-webkit-scrollbar {
+    width: 5px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(14, 203, 129, 0.1);
+    border-radius: 4px;
+  }
+`;
+
+// Fix the calculatePnL function
+const calculatePnL = (position, currentMarketPrice) => {
+  if (!position || !position.entryPrice || !currentMarketPrice) return 0;
+  
+  const { type, entryPrice, leverage, margin, symbol } = position;
+  
+  try {
+    // Ensure all values are proper numbers
+    const entryPriceNum = parseFloat(entryPrice);
+    let currentMarketPriceNum = parseFloat(currentMarketPrice);
+    const leverageNum = parseFloat(leverage);
+    const marginNum = parseFloat(margin);
+    
+    // Validate the current market price
+    const symbolStr = (symbol || 'btc').toLowerCase().replace(/usdt$/, '');
+    const isValidPrice = validatePrice(currentMarketPriceNum, symbolStr);
+    
+    // If price is invalid, use last verified price
+    if (!isValidPrice) {
+      console.warn(`Invalid price (${currentMarketPriceNum}) detected for PnL calculation, using fallback`);
+      currentMarketPriceNum = lastVerifiedPrices[symbolStr] || hardcodedPrices[symbolStr] || currentMarketPriceNum;
+      console.log(`Using fallback price for PnL: ${currentMarketPriceNum}`);
+    }
+    
+    // Validation
+    if (isNaN(entryPriceNum) || isNaN(currentMarketPriceNum) || isNaN(leverageNum) || isNaN(marginNum)) {
+      console.error('Invalid values for PnL calculation:', { entryPrice, currentMarketPrice, leverage, margin });
+      return 0;
+    }
+    
+    if (type === 'buy') {
+      const priceDiff = currentMarketPriceNum - entryPriceNum;
+      const percentageChange = (priceDiff / entryPriceNum) * 100;
+      return +(marginNum * (percentageChange / 100) * leverageNum).toFixed(2);
+    } else {
+      const priceDiff = entryPriceNum - currentMarketPriceNum;
+      const percentageChange = (priceDiff / entryPriceNum) * 100;
+      return +(marginNum * (percentageChange / 100) * leverageNum).toFixed(2);
+    }
+  } catch (error) {
+    console.error('Error calculating PnL:', error);
+    return 0;
+  }
+};
+
+// Generate random quantity based on price range
+const generateRandomQty = (price) => {
+  // For very low-priced tokens (< $0.01), use much larger quantities
+  if (price < 0.01) {
+    // For micro-priced tokens, quantities typically range from 10,000 to 100,000
+    return (Math.random() * 90000 + 10000).toFixed(4);
+  }
+  // For low-priced tokens ($0.01-$1), use large quantities 
+  else if (price < 1) {
+    // For very low-priced assets, quantities typically range from 1,000 to 10,000
+    return (Math.random() * 9000 + 1000).toFixed(4);
+  }
+  // For medium-low priced tokens ($1-$10)
+  else if (price < 10) {
+    // For low-priced assets, quantities typically range from 100 to 1,000
+    return (Math.random() * 900 + 100).toFixed(4);
+  }
+  // For medium-priced assets ($10-$100), use moderate quantities
+  else if (price < 100) {
+    // For medium-priced assets, quantities range from 10 to 100
+    return (Math.random() * 90 + 10).toFixed(4);
+  }
+  // For mid-high priced tokens ($100-$500) 
+  else if (price < 500) {
+    // Medium quantities between 0.1 and 5
+    return (Math.random() * 4.9 + 0.1).toFixed(4);
+  } 
+  // For high-priced assets (>$500)
+  else {
+    // Smaller quantities between 0.05 and 2
+    return (Math.random() * 1.95 + 0.05).toFixed(4);
+  }
+};
+
+// Generate realistic order book data based on current price
+const generateOrderBook = (currentPrice, bidAskSpread = 0.002) => {
+  // Ensure we have a valid price to work with
+  const validPrice = currentPrice && !isNaN(currentPrice) && currentPrice > 0 
+    ? Number(currentPrice) // Ensure it's converted to a number 
+    : 100;
+  
+  console.log('Using valid price for order book:', validPrice);
+  
+  // Adjust price step based on the current price to keep orders close to actual market price
+  let priceStep;
+  
+  if (validPrice < 0.0001) {
+    // For ultra-micro-priced tokens, use 0.2% of price as step
+    priceStep = validPrice * 0.002;
+  } else if (validPrice < 0.001) {
+    // For micro-priced tokens, use 0.3% of price as step
+    priceStep = validPrice * 0.003;
+  } else if (validPrice < 0.01) {
+    // For very low-priced tokens, use 0.4% of price as step
+    priceStep = validPrice * 0.004;
+  } else if (validPrice < 0.1) {
+    // For low-priced tokens, use 0.5% of price as step
+    priceStep = validPrice * 0.005;
+  } else if (validPrice < 1) {
+    // For medium-low priced tokens, use 0.2% step
+    priceStep = validPrice * 0.002;
+  } else {
+    // For higher-priced tokens, use 0.1% step
+    priceStep = validPrice * 0.001;
+  }
+  
+  const asks = [];
+  const bids = [];
+  const numOrders = 8; // Reduced number of asks and bids to generate to fit without scrolling
+  
+  // Calculate the spread based on the actual price to ensure it's proportional
+  const spreadAmount = Math.max(validPrice * 0.0005, Number.EPSILON); // Min 0.05% spread, ensure it's never 0
+  
+  // Calculate starting prices for asks and bids
+  const askStartPrice = validPrice + (spreadAmount / 2);
+  const bidStartPrice = validPrice - (spreadAmount / 2);
+  
+  console.log('Ask start price:', askStartPrice, 'Bid start price:', bidStartPrice, 'Step:', priceStep);
+  
+  // Generate ask prices (sells above current price)
+  for (let i = 0; i < numOrders; i++) {
+    const price = Number((askStartPrice + (i * priceStep)).toFixed(10));
+    
+    // Generate random volume based on price range
+    const quantity = parseFloat(generateRandomQty(price));
+    const total = Number((price * quantity).toFixed(10));
+    
+    asks.push({
+      price,
+      quantity,
+      total
+    });
+  }
+  
+  // Generate bid prices (buys below current price)
+  for (let i = 0; i < numOrders; i++) {
+    // Ensure price doesn't go negative for low-priced tokens
+    let price;
+    if (bidStartPrice < priceStep * (i + 1)) {
+      // If subtracting would make price negative, use a percentage of current price
+      price = Number((bidStartPrice * Math.pow(0.99, i + 1)).toFixed(10));
+    } else {
+      price = Number((bidStartPrice - (i * priceStep)).toFixed(10));
+    }
+    
+    // Ensure price is always positive
+    price = Math.max(Number.EPSILON, price);
+    
+    // Generate random volume based on price range
+    const quantity = parseFloat(generateRandomQty(price));
+    const total = Number((price * quantity).toFixed(10));
+    
+    bids.push({
+      price,
+      quantity, 
+      total
+    });
+  }
+  
+  // Sort asks in descending order (highest sell at top)
+  asks.sort((a, b) => b.price - a.price);
+  
+  // Return formatted order book data
+  return {
+    asks,
+    bids,
+    marketPrice: validPrice
+  };
+};
+
+// Export a single function for order book data that everyone will use
+const createOrderBookData = (marketPrice, symbol, buyRatio = 0.5) => {
+  if (!marketPrice || isNaN(marketPrice)) {
+    console.warn('Invalid market price for order book:', marketPrice);
+    return { asks: [], bids: [] };
+  }
+
+  // Log the actual market price used for debugging
+  console.log('Creating order book with market price:', marketPrice);
+
+  // Ensure we're working with the actual price, not an arbitrary value
+  const validPrice = parseFloat(marketPrice);
+  
+  // Use very tight spread for all assets as requested
+  const bidAskSpread = validPrice * 0.001; // 0.1% spread
+
+  // Generate consistent order book data
+  const orderBook = generateOrderBook(validPrice, bidAskSpread);
+  
+  return orderBook;
+};
+
+// Replace all existing functions with this single implementation
+const generateMockOrderBookData = createOrderBookData;
+const generateDummyOrders = createOrderBookData;
+
+// Format the price displayed in the order book
+const formatOrderPrice = (price) => {
+  if (typeof price !== 'number' && typeof price !== 'string') {
+    return '0.00';
+  }
+  
+  const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+  
+  if (isNaN(numPrice)) {
+    return '0.00';
+  }
+  
+  // Format based on price ranges
+  if (numPrice < 0.000001) {
+    // Scientific notation for extremely small prices
+    return numPrice.toExponential(6);
+  } else if (numPrice < 0.00001) {
+    return numPrice.toFixed(9);
+  } else if (numPrice < 0.0001) {
+    return numPrice.toFixed(8);
+  } else if (numPrice < 0.001) {
+    return numPrice.toFixed(7);
+  } else if (numPrice < 0.01) {
+    return numPrice.toFixed(6);
+  } else if (numPrice < 0.1) {
+    return numPrice.toFixed(5);
+  } else if (numPrice < 1) {
+    return numPrice.toFixed(4);
+  } else if (numPrice < 10) {
+    return numPrice.toFixed(3);
+  } else if (numPrice < 1000) {
+    return numPrice.toFixed(2);
+  } else {
+    return Math.floor(numPrice).toLocaleString();
+  }
+};
+
+// Helper function to safely cleanup resources
+const safelyCleanup = (resource) => {
+  if (resource && typeof resource === 'function') {
+    try {
+      resource();
+    } catch (error) {
+      console.error('Error during cleanup:', error);
+    }
+  } else if (resource && typeof resource.destroy === 'function') {
+    try {
+      resource.destroy();
+    } catch (error) {
+      console.error('Error destroying resource:', error);
+    }
+  } else if (resource && typeof resource.close === 'function') {
+    try {
+      resource.close();
+    } catch (error) {
+      console.error('Error closing resource:', error);
+    }
+  }
+};
+
+/**
+ * Generates a random updated price based on the current price with realistic volatility
+ * @param {number} currentPrice - The current market price
+ * @returns {number} - A new price with slight random variation
+ */
+const getRandomUpdatedPrice = (currentPrice) => {
+  if (!currentPrice || currentPrice <= 0) return 0.04;
+  
+  // Smaller price changes for more stable updates
+  const volatilityPercentage = 0.002; // Max 0.2% change per update
+  const changePercent = (Math.random() * 2 - 1) * volatilityPercentage;
+  
+  // Calculate new price
+  let newPrice = currentPrice * (1 + changePercent);
+  
+  // Ensure price doesn't drop below minimum values
+  if (newPrice < 0.01) {
+    newPrice = Math.max(newPrice, 0.01);
+  }
+  
+  // Round appropriately based on price magnitude
+  if (newPrice < 0.1) {
+    return Math.round(newPrice * 100000) / 100000;
+  } else if (newPrice < 1) {
+    return Math.round(newPrice * 10000) / 10000;
+  } else if (newPrice < 10) {
+    return Math.round(newPrice * 1000) / 1000;
+  } else if (newPrice < 100) {
+    return Math.round(newPrice * 100) / 100;
+  }
+  
+  return Math.round(newPrice * 10) / 10;
+};
+
+// Add a function to play sound effect
+const playTradeSound = () => {
+  try {
+    const audio = new Audio(soundEffect);
+    audio.play().catch(error => {
+      console.warn('Error playing trade sound:', error);
+    });
+  } catch (error) {
+    console.warn('Error initializing trade sound:', error);
+  }
+};
+
+// Move these styled components outside the Trading component function
+const OrderPrice = styled.div`
+  color: ${props => props.type === 'ask' ? 'var(--red)' : 'var(--green)'};
+  font-family: 'Roboto Mono', monospace;
+  
+  sub {
+    color: rgba(255, 255, 255, 0.5);
+  }
+`;
+
+const OrderBookTable = styled.div`
+  width: 100%;
+  font-size: 11px;
+  border: 1px solid #D4AF37;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.2);
+  height: 95%;
+  display: flex;
+  flex-direction: column;
+  
+  .header {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    padding: 3px 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: #666;
+    font-size: 10px;
+    position: sticky;
+    top: 0;
+    background: var(--bg2);
+    z-index: 1;
+  }
+  
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    padding: 2px 4px;
+    cursor: pointer;
+    transition: background 0.1s;
+    
+    &:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+  }
+`;
+
+// Restore the formatSmallNumber function since other parts of the code may be using it
+const formatSmallNumber = (num) => {
+  // Convert string to number if needed
+  const number = typeof num === 'string' ? parseFloat(num) : num;
+  
+  if (isNaN(number) || number === null) return '0.00';
+  
+  // For extremely small numbers (less than 0.00000001)
+  if (number < 0.00000001 && number > 0) {
+    return '<0.00000001';
+  }
+  
+  // For very small numbers (less than 0.0001)
+  if (number < 0.0001 && number > 0) {
+    // Display all significant digits for very small numbers
+    const scientificNotation = number.toExponential();
+    if (scientificNotation.includes('e-')) {
+      // Format with appropriate decimal places based on the exponent
+      const exponent = parseInt(scientificNotation.split('e-')[1], 10);
+      return number.toFixed(exponent + 2).replace(/\.?0+$/, '');
+    }
+    return number.toFixed(8);
+  }
+  
+  // For small numbers (0.0001 to 0.001)
+  if (number < 0.001) {
+    return number.toFixed(7);
+  }
+  
+  // For numbers between 0.001 and 0.01
+  if (number < 0.01) {
+    return number.toFixed(6);
+  }
+  
+  // For numbers between 0.01 and 0.1
+  if (number < 0.1) {
+    return number.toFixed(5);
+  }
+  
+  // For numbers between 0.1 and 1
+  if (number < 1) {
+    return number.toFixed(4);
+  }
+  
+  // For numbers between 1 and 100
+  if (number < 100) {
+    return number.toFixed(2);
+  }
+  
+  // For larger numbers like Bitcoin (typically > 1000)
+  // Always use toLocaleString with both minimumFractionDigits and maximumFractionDigits
+  // This ensures we have proper formatting with commas AND always show .00
+  return number.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+};
+
+// Enhanced validate price function to prevent glitches from affecting positions
+const validatePrice = (price, symbol = 'BTC') => {
+  // Normalize symbol for lookup
+  const normalizedSymbol = symbol.toLowerCase().replace(/usdt$/, '');
+  
+  // Log the validation attempt for debugging
+  console.log(`Validating price for ${normalizedSymbol}: ${price}`);
+  
+  // Basic validation - must be a positive number
+  if (!price || isNaN(price) || price <= 0) {
+    console.warn(`Invalid price format: ${price}`);
+    return false;
+  }
+  
+  // Special check for extremely low prices for major cryptos
+  // This handles the case where BTC shows as $81 instead of $81,000
+  const majorCrypto = ['btc', 'bitcoin', 'eth', 'ethereum'];
+  if (majorCrypto.includes(normalizedSymbol)) {
+    if (normalizedSymbol.startsWith('btc') && price < 10000) {
+      console.error(`⚠️ CRITICAL PRICE GLITCH DETECTED: ${symbol} price ${price} is suspiciously low for Bitcoin!`);
+      return false;
+    }
+    if (normalizedSymbol.startsWith('eth') && price < 500) {
+      console.error(`⚠️ CRITICAL PRICE GLITCH DETECTED: ${symbol} price ${price} is suspiciously low for Ethereum!`);
+      return false;
+    }
+  }
+  
+  // Get the expected price range for this cryptocurrency
+  const priceRange = PRICE_RANGES[normalizedSymbol];
+  
+  // If we have a defined range for this cryptocurrency, check it
+  if (priceRange) {
+    if (price < priceRange.min || price > priceRange.max) {
+      console.error(`⚠️ PRICE GLITCH DETECTED: ${symbol} price ${price} is outside expected range (${priceRange.min} - ${priceRange.max})`);
+      
+      // Get last verified price for this symbol if available
+      const lastPrice = lastVerifiedPrices[normalizedSymbol];
+      
+      if (lastPrice) {
+        console.log(`Using last verified price for ${normalizedSymbol}: ${lastPrice}`);
+        // Return false so the code will use the lastVerifiedPrices value
+        return false;
+      }
+      
+      // Return false if the price is outside the expected range
+      return false;
+    }
+  }
+  
+  // Check for large deviation from previous valid price
+  const previousPrice = lastVerifiedPrices[normalizedSymbol];
+  if (isPriceGlitch(normalizedSymbol, price, previousPrice)) {
+    console.error(`⚠️ PRICE GLITCH DETECTED: ${symbol} price changed dramatically from ${previousPrice} to ${price}`);
+    return false;
+  }
+  
+  // If price passes all checks, store it as a verified price
+  lastVerifiedPrices[normalizedSymbol] = price;
+  return true;
+};
+
+// Helper function to get a safe price for a symbol
+const getSafePrice = (price, symbol) => {
+  const normalizedSymbol = (symbol || 'btc').toLowerCase().replace(/usdt$/, '');
+  
+  // If price is suspicious, use hardcoded or last verified price
+  if (isSuspiciousPrice(price, normalizedSymbol)) {
+    console.log(`🔧 Fixing suspicious price: ${price} → using fallback for ${normalizedSymbol}`);
+    
+    // Use last verified price if available
+    if (lastVerifiedPrices[normalizedSymbol]) {
+      return lastVerifiedPrices[normalizedSymbol];
+    }
+    
+    // Otherwise use hardcoded price
+    if (hardcodedPrices[normalizedSymbol]) {
+      return hardcodedPrices[normalizedSymbol];
+    }
+    
+    // Last resort fallbacks by coin type
+    if (normalizedSymbol === 'btc') return 80000;
+    if (normalizedSymbol === 'eth') return 3000; 
+    if (normalizedSymbol === 'sol') return 100;
+    if (normalizedSymbol === 'bnb') return 500;
+    
+    // Generic fallback
+    return 100;
+  }
+  
+  // If price passed validation, return it
+  return price;
+};
+
+// Add this new strict validation function after isPriceGlitch
+const validateClosePrice = (entryPrice, closePrice, symbol) => {
+  // Normalize symbol
+  symbol = (symbol || 'btc').toLowerCase().replace(/usdt$/, '');
+  
+  // First ensure the price itself is valid
+  if (!closePrice || isNaN(closePrice) || closePrice <= 0) {
+    console.error(`Invalid close price: ${closePrice}`);
+    return false;
+  }
+  
+  // For Bitcoin, specifically check for the $81 glitch we've observed
+  if (symbol === 'btc' && Math.abs(closePrice - 81.00) < 0.5) {
+    console.error(`Detected known $81 glitch price for Bitcoin: ${closePrice}`);
+    return false;
+  }
+  
+  // For Bitcoin, also check for decimal point errors (e.g. $8,100 instead of $81,000)
+  if (symbol === 'btc' && closePrice > 0) {
+    // Bitcoin shouldn't suddenly be in 4-digit range if it was in 5-digit range
+    const expectedDigits = 5; // Current Bitcoin price is in 5 digits ($80,000+)
+    const actualDigits = Math.floor(Math.log10(closePrice)) + 1;
+    
+    if (actualDigits < expectedDigits) {
+      console.error(`Detected possible decimal point error for Bitcoin: ${closePrice} (${actualDigits} digits instead of ${expectedDigits})`);
+      return false;
+    }
+  }
+  
+  // Enforce minimum price thresholds for major coins
+  const minPriceMap = {
+    'btc': 10000,  // Bitcoin shouldn't be under $10k
+    'eth': 500,    // Ethereum shouldn't be under $500
+    'sol': 20,     // Solana shouldn't be under $20
+    'bnb': 100     // BNB shouldn't be under $100
+  };
+  
+  // If we have a minimum price for this symbol, enforce it
+  if (minPriceMap[symbol] && closePrice < minPriceMap[symbol]) {
+    console.error(`Close price ${closePrice} below minimum threshold of ${minPriceMap[symbol]} for ${symbol}`);
+    return false;
+  }
+  
+  // If we have an entry price, perform additional validations
+  if (entryPrice && !isNaN(entryPrice) && entryPrice > 0) {
+    // Calculate percentage change
+    const percentChange = Math.abs((closePrice - entryPrice) / entryPrice * 100);
+    
+    // Set reasonable maximum percentage changes based on volatility expectations
+    // Bitcoin wouldn't suddenly change by >15% in minutes unless extraordinary events
+    const maxAllowedChange = {
+      'btc': 15,    // Bitcoin max 15% change
+      'eth': 20,    // Ethereum max 20% change
+      'default': 30 // Others max 30% change
+    };
+    
+    const maxChange = maxAllowedChange[symbol] || maxAllowedChange.default;
+    
+    // If the change exceeds our threshold, reject it
+    if (percentChange > maxChange) {
+      console.error(`Rejecting close price ${closePrice} - ${percentChange.toFixed(2)}% change from entry price ${entryPrice} exceeds ${maxChange}% threshold for ${symbol}`);
+      return false;
+    }
+  }
+  
+  // Check for obvious decimal place errors (e.g., 9000 vs 90000)
+  if (symbol === 'btc' && entryPrice && entryPrice > 10000) {
+    const magnitude = Math.floor(Math.log10(entryPrice));
+    const closeMagnitude = Math.floor(Math.log10(closePrice));
+    
+    // If magnitudes differ significantly, it's likely a decimal place error
+    if (Math.abs(magnitude - closeMagnitude) > 1) {
+      console.error(`Decimal place error detected: entry ${entryPrice} vs close ${closePrice}`);
+      return false;
+    }
+  }
+  
+  // If all validations passed, the close price is acceptable
+  return true;
+};
+
+// Trading component function
+const Trading = () => {
+  const { cryptoId } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [theme] = useState('dark');
+  const { currentUser } = useAuth();
+  const [cryptoData, setCryptoData] = useState(location.state?.cryptoData || null);
+  const [timeframe, setTimeframe] = useState('1H');
+  const [orderType, setOrderType] = useState('buy');
+  const [amount, setAmount] = useState('');
+  const [chartKey, setChartKey] = useState(0);
+  const [orderMode, setOrderMode] = useState('market');
+  const [leverage, setLeverage] = useState(1);
+  const [limitPrice, setLimitPrice] = useState('');
+  const [positions, setPositions] = useState({
+    open: [],
+    closed: []
+  });
+  const [userPnL, setUserPnL] = useState(0);
+  const [error, setError] = useState('');
+  const [currentPrice, setCurrentPrice] = useState(0);
+  const [userBalance, setUserBalance] = useState(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isPending, setIsPending] = useState(false);
+  const [openPositions, setOpenPositions] = useState([]);
+  const [closedPositions, setClosedPositions] = useState([]);
+  const [pendingLimitOrders, setPendingLimitOrders] = useState([]);
+  const [inputKey, setInputKey] = useState(0);
+  const [lastPrice, setLastPrice] = useState(0);
+  const [marketPrice, setMarketPrice] = useState(0);
+  const [closingPositionId, setClosingPositionId] = useState(null);
+  const [isLoadingPositions, setIsLoadingPositions] = useState(true);
+  const [isLoadingBalance, setIsLoadingBalance] = useState(true);
+  const [priceData, setPriceData] = useState([]);
+  const [recentTrades, setRecentTrades] = useState([]);
+  const [showDebug, setShowDebug] = useState(false);
+  const [buyRatio, setBuyRatio] = useState(0.5); // Default 50/50 ratio
+  const [orderBookFlash, setOrderBookFlash] = useState({});
+  const [orderBook, setOrderBook] = useState({ bids: [], asks: [] });
+  // Add a state to track the last checked price to avoid too frequent checks
+  const [lastCheckedPrice, setLastCheckedPrice] = useState(0);
+  // Add a state to track orders being executed to prevent duplicates
+  const [ordersBeingExecuted, setOrdersBeingExecuted] = useState([]);
+  // Add a state variable for the order being edited
+  const [editingOrderId, setEditingOrderId] = useState(null);
+  const [editTargetPrice, setEditTargetPrice] = useState('');
+  // Add a display price state variable that's guaranteed to be valid
+  // This separates internal price tracking from what's shown to users
+  const [displayPrice, setDisplayPrice] = useState(0);
+  const [isClosingPosition, setIsClosingPosition] = useState(false);
+
+  // Refs for cleanup
+  const ws = useRef(null);
+  const priceUpdateInterval = useRef(null);
+  const orderUpdateInterval = useRef(null);
+  const unsubscribeOrders = useRef(null);
+  const unsubscribePositions = useRef(null);
+
+  // Function to fetch user balances
+  const fetchUserBalances = async () => {
+    if (!currentUser) return;
+    
+    try {
+      setIsLoadingBalance(true);
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        if (userData.balances) {
+          setUserBalance(userData.balances);
+        } else {
+          // For legacy users, check the separate balances collection
+          const balanceDoc = await getDoc(doc(db, 'balances', currentUser.uid));
+          if (balanceDoc.exists()) {
+            setUserBalance(balanceDoc.data());
+          }
+        }
+        }
+      } catch (error) {
+      console.error('Error fetching user balances:', error);
+    } finally {
+      setIsLoadingBalance(false);
+    }
+  };
+
+  // Function to fetch pending limit orders for the current symbol
+  const fetchPendingLimitOrders = useCallback(async () => {
+    if (!currentUser || !cryptoData?.token?.symbol) return;
+    
+    try {
+      console.log('Fetching pending limit orders for:', currentUser.uid, cryptoData?.token?.symbol);
+      const limitOrders = await tradingService.getLimitOrders(currentUser.uid, cryptoData?.token?.symbol);
+      console.log('Received limit orders:', limitOrders);
+      setPendingLimitOrders(limitOrders);
+        } catch (error) {
+      console.error('Error fetching limit orders:', error);
+    }
+  }, [currentUser, cryptoData?.token?.symbol]);
+
+  // Function to fetch positions
+  const fetchPositions = useCallback(async () => {
+    if (!currentUser) return;
+    
+    try {
+      setIsLoadingPositions(true);
+      
+      // Query for open positions
+      const openPositionsQuery = query(
+        collection(db, 'positions'),
+        where('userId', '==', currentUser.uid),
+        where('status', '==', 'OPEN')
+      );
+      
+      // Fetch both open positions
+      const openPositionsSnapshot = await getDocs(openPositionsQuery);
+      const openPositionsData = openPositionsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Set the positions
+      setOpenPositions(openPositionsData);
+    } catch (error) {
+      console.error('Error fetching positions:', error);
+    } finally {
+      setIsLoadingPositions(false);
+    }
+  }, [currentUser]);
+
+  // Effect to fetch positions on mount and when user changes
+  useEffect(() => {
+    if (currentUser) {
+      fetchPositions();
+      fetchPendingLimitOrders(); // Also fetch pending limit orders when user changes
+    }
+  }, [currentUser]);
+
+  // Move ensureUserBalances here, at the top level of the component
+  const ensureUserBalances = useCallback(async () => {
+    if (!currentUser) return;
+    
+    try {
+      // Check if user has balances field
+      const userRef = doc(db, 'users', currentUser.uid);
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        
+        // If balances field doesn't exist or is invalid, create it
+        if (!userData.balances || typeof userData.balances !== 'object') {
+          console.log('User missing balances field, adding default balances');
+          
+          // Try to get any existing balances from the old location
+          let existingBalances = { USDT: 1000 }; // Default to 1000 USDT
+          
+          try {
+            const oldBalanceDoc = await getDoc(doc(db, 'balances', currentUser.uid));
+            if (oldBalanceDoc.exists()) {
+              const oldBalances = oldBalanceDoc.data();
+              if (oldBalances.USDT !== undefined) {
+                existingBalances.USDT = oldBalances.USDT;
+              }
+              if (oldBalances.BTC !== undefined) {
+                existingBalances.BTC = oldBalances.BTC;
+              }
+              // Add other coins as needed
+    }
+  } catch (error) {
+            console.warn('Error fetching old balances:', error);
+          }
+          
+          // Update user document with balances
+          await updateDoc(userRef, {
+            balances: existingBalances
+          });
+          
+          console.log('Updated user with balances:', existingBalances);
+        }
+      }
+    } catch (error) {
+      console.error('Error ensuring user balances:', error);
+    }
+  }, [currentUser]);
+  
+  // Call the ensureUserBalances function when component mounts and user is available
+  useEffect(() => {
+    if (currentUser) {
+      ensureUserBalances();
+    }
+  }, [currentUser, ensureUserBalances]);
+
+  // WebSocket setup
+  const setupWebSocket = useCallback(() => {
+    if (!isOnline) return null;
+
+    try {
+      // Close existing connection if any
+      if (ws.current) {
+        ws.current.close();
+      }
+
+      const symbol = cryptoData?.token?.symbol?.toLowerCase() || 'btc';
+      const wsSymbol = `${symbol}usdt@ticker`;
+      const newWs = new WebSocket(`wss://stream.binance.com:9443/ws/${wsSymbol}`);
+      
+      newWs.onopen = () => {
+        console.log('WebSocket connected');
+      };
+
+      newWs.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          // Handle the message data
+          console.log('WebSocket message:', data);
+        } catch (error) {
+          console.error('Error processing WebSocket message:', error);
+        }
+      };
+
+      newWs.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      newWs.onclose = () => {
+        console.log('WebSocket disconnected');
+      };
+
+      ws.current = newWs;
+      return () => {
+        if (ws.current) {
+          ws.current.close();
+          ws.current = null;
+        }
+      };
+    } catch (error) {
+      console.error('Error setting up WebSocket:', error);
+      return null;
+    }
+  }, [isOnline, cryptoData?.token?.symbol]);
+
+  // Effect to handle price changes and ensure display price is always valid
+  useEffect(() => {
+    const symbol = cryptoData?.token?.symbol?.toLowerCase() || 'btc';
+    const normalizedSymbol = symbol.replace(/usdt$/, '');
+    
+    // Only update display price if we have a market price
+    if (marketPrice) {
+      // Validate and set a safe display price
+      const safePrice = getSafePrice(normalizedSymbol, marketPrice);
+      setDisplayPrice(safePrice);
+      
+      // If the original market price was invalid, update all price states with the safe price
+      if (safePrice !== marketPrice) {
+        console.log(`Correcting invalid market price ${marketPrice} to ${safePrice}`);
+        setMarketPrice(safePrice);
+        setCurrentPrice(safePrice);
+        setLastPrice(safePrice);
+        
+        // Also update order book
+        setOrderBook(generateDummyOrders(safePrice));
+      }
+    }
+  }, [marketPrice, cryptoData?.token?.symbol]);
+
+  // Run price validation immediately on component mount to prevent glitches on refresh
+  useEffect(() => {
+    const symbol = cryptoData?.token?.symbol?.toLowerCase() || 'btc';
+    const normalizedSymbol = symbol.replace(/usdt$/, '');
+    
+    // Always use a valid initial price
+    const initialPrice = hardcodedPrices[normalizedSymbol] || 
+                        (normalizedSymbol === 'btc' ? 90000 : 1000);
+    
+    // Update all price-related state with this validated initial price
+    setMarketPrice(initialPrice);
+    setCurrentPrice(initialPrice);
+    setLastPrice(initialPrice);
+    setDisplayPrice(initialPrice);
+    
+    // Store as verified price
+    lastVerifiedPrices[normalizedSymbol] = initialPrice;
+    
+    // Generate order book with safe price
+    const initialOrderBook = generateDummyOrders(initialPrice);
+    setOrderBook(initialOrderBook);
+    
+    console.log(`Initialized with safe price for ${normalizedSymbol}: ${initialPrice}`);
+    
+    // Then immediately try to get actual price from API
+    fetchAccuratePrice();
+  }, []);
+
+  // Cleanup effect
+  useEffect(() => {
+    return () => {
+      // Cleanup WebSocket
+      if (ws.current) {
+        ws.current.close();
+        ws.current = null;
+      }
+
+      // Clear intervals
+      if (priceUpdateInterval.current) {
+        clearInterval(priceUpdateInterval.current);
+        priceUpdateInterval.current = null;
+      }
+
+      // Clear any other intervals or timeouts
+      if (orderUpdateInterval.current) {
+        clearInterval(orderUpdateInterval.current);
+        orderUpdateInterval.current = null;
+      }
+
+      // Unsubscribe from any Firestore listeners
+      if (typeof unsubscribeOrders.current === 'function') {
+        unsubscribeOrders.current();
+      }
+      if (typeof unsubscribePositions.current === 'function') {
+        unsubscribePositions.current();
+      }
+    };
+  }, []);
+
+  // WebSocket connection effect
+  useEffect(() => {
+    const cleanup = setupWebSocket();
+    return () => {
+      if (cleanup && typeof cleanup === 'function') {
+        cleanup();
+      }
+    };
+  }, [setupWebSocket]);
+
+  // Price update interval effect
+  useEffect(() => {
+    const intervalId = setInterval(updatePrice, 5000);
+    priceUpdateInterval.current = intervalId;
+    
+    return () => {
+      clearInterval(intervalId);
+      priceUpdateInterval.current = null;
+    };
+  }, [updatePrice]);
+
+  // Order update interval effect
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setOrderBook(generateMockOrderBookData(currentPrice));
+    }, 3000);
+    orderUpdateInterval.current = intervalId;
+    
+    return () => {
+      clearInterval(intervalId);
+      orderUpdateInterval.current = null;
+    };
+  }, [currentPrice]);
+
+  // TradingView widget cleanup
+  useEffect(() => {
+    const tradingViewContainer = document.getElementById('tradingview_chart');
+    
+    return () => {
+      try {
+        if (tradingViewContainer) {
+          while (tradingViewContainer.firstChild) {
+            tradingViewContainer.removeChild(tradingViewContainer.firstChild);
+          }
+        }
+        
+        if (window.TradingView && typeof window.TradingView === 'object') {
+          if (window.TradingView._binders) {
+            window.TradingView._binders = [];
+          }
+        }
+      } catch (error) {
+        console.error('Error cleaning up TradingView widget:', error);
+      }
+    };
+  }, []);
+
+  // Order book interval management
+  useEffect(() => {
+    let orderBookInterval = null;
+    
+    if (isOnline) {
+      orderBookInterval = setInterval(() => {
+        try {
+          if (marketPrice) {
+            const newOrders = generateDummyOrders(marketPrice);
+            setOrderBook(newOrders);
+            
+            const newBuyRatio = Math.floor(Math.random() * 40) + 10;
+            setBuyRatio(newBuyRatio);
+            
+            const newFlash = {};
+            newOrders.asks.forEach((_, i) => {
+              if (Math.random() > 0.7) {
+                newFlash[`ask-${i}`] = true;
+              }
+            });
+            
+            newOrders.bids.forEach((_, i) => {
+              if (Math.random() > 0.7) {
+                newFlash[`bid-${i}`] = true;
+              }
+            });
+            
+            setOrderBookFlash(newFlash);
+            
+            setTimeout(() => {
+              setOrderBookFlash({});
+            }, 600);
+          }
+        } catch (error) {
+          console.error('Error updating order book:', error);
+        }
+      }, 4000);
+    }
+    
+    return () => {
+      if (orderBookInterval) {
+        clearInterval(orderBookInterval);
+      }
+    };
+  }, [marketPrice, isOnline]);
+
+  // Effect for online/offline status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Effect for price updates - replace the old useEffect for updatePrice
+  useEffect(() => {
+    if (!cryptoData) return;
+
+    let ws;
+    const updatePrice = async () => {
+      if (cryptoData?.token?.type === 'dex') {
+        // DEX price update logic
+        if (cryptoData?.token?.address && cryptoData?.token?.chainId) {
+          try {
+            const response = await axios.get(`https://api.dexscreener.com/latest/dex/pairs/${cryptoData.token.chainId}/${cryptoData.token.address}`);
+            if (response.data?.pair?.priceUsd) {
+              const price = parseFloat(response.data.pair.priceUsd);
+              console.log('Raw DEX price from API:', price);
+              if (!isNaN(price) && price > 0) {
+                // Get normalized symbol
+                const symbol = cryptoData?.token?.symbol?.toLowerCase() || 'btc';
+                const normalizedSymbol = symbol.replace(/usdt$/, '');
+                
+                // Get a safe price (either validated or fallback)
+                const safePrice = getSafePrice(normalizedSymbol, price);
+                
+                // Update all price states
+                setMarketPrice(safePrice);
+                setLastPrice(safePrice);
+                setCurrentPrice(safePrice);
+                setDisplayPrice(safePrice);
+                
+                // Generate order book with the safe price
+                console.log('Generating order book with price:', safePrice);
+                const newOrderBook = generateDummyOrders(safePrice);
+                setOrderBook(newOrderBook);
+              } else {
+                console.warn('Invalid price received from DEX API:', response.data.pair.priceUsd);
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching DEX price:', error);
+          }
+        }
+      } else {
+        // Use CoinGecko API for reliable CEX prices
+        try {
+          const symbol = cryptoData?.token?.symbol?.toLowerCase() || 'btc';
+          const normalizedSymbol = symbol.replace(/usdt$/, '');
+          let coinId;
+          
+          // Map symbols to CoinGecko IDs
+          switch (normalizedSymbol) {
+            case 'btc':
+            case 'bitcoin':
+              coinId = 'bitcoin';
+              break;
+            case 'eth':
+            case 'ethereum':
+              coinId = 'ethereum';
+              break;
+            default:
+              // Try to use symbol as coinId for other tokens
+              coinId = COINGECKO_IDS[normalizedSymbol] || normalizedSymbol;
+          }
+          
+          console.log(`Fetching price for ${coinId} from CoinGecko`);
+          const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd`);
+          
+          if (response.data[coinId] && response.data[coinId].usd) {
+            const newPrice = parseFloat(response.data[coinId].usd);
+            console.log('Raw price from CoinGecko:', newPrice);
+            if (!isNaN(newPrice) && newPrice > 0) {
+              // Get a safe price
+              const safePrice = getSafePrice(normalizedSymbol, newPrice);
+              
+              // Update all price states
+              setMarketPrice(safePrice);
+              setLastPrice(safePrice);
+              setCurrentPrice(safePrice);
+              setDisplayPrice(safePrice);
+              
+              // Generate order book with the safe price
+              console.log('Generating order book with price:', safePrice);
+              const newOrderBook = generateDummyOrders(safePrice);
+              setOrderBook(newOrderBook);
+              
+              // Also set up a WebSocket for real-time updates if available
+              setupWebSocketConnection(symbol);
+            }
+          } else {
+            console.warn('Failed to get price from CoinGecko, falling back to Binance WebSocket');
+            setupWebSocketConnection(symbol);
+          }
+        } catch (error) {
+          console.error('Error fetching price from CoinGecko:', error);
+          
+          // Fallback to Binance WebSocket
+        const symbol = cryptoData?.token?.symbol?.toLowerCase() || 'btcusdt';
+          setupWebSocketConnection(symbol);
+        }
+      }
+    };
+    
+    const setupWebSocketConnection = (symbol) => {
+      // Normalize the symbol for consistency
+      const normalizedSymbol = (symbol || 'btc').toLowerCase().replace(/usdt$/, '');
+      
+      console.log(`[ISOLATION] Setting up WebSocket for ${normalizedSymbol.toUpperCase()}`);
+      
+      // Store this as the active symbol
+      activeWebSocketSymbol = normalizedSymbol;
+      
+      let socket;
+      try {
+        // Only attempt to connect to WebSocket if online
+        if (isOnline) {
+          const wsUrl = `wss://stream.binance.com:9443/ws/${normalizedSymbol}usdt@trade`;
+          console.log(`[ISOLATION] Connecting to WebSocket: ${wsUrl}`);
+          
+          socket = new WebSocket(wsUrl);
+          
+          socket.onopen = () => {
+            console.log(`[ISOLATION] WebSocket connection opened for ${normalizedSymbol}`);
+            setIsConnected(true);
+            
+            // Re-subscribe in case our connection was restarted
+            const subscribeMsg = {
+              method: "SUBSCRIBE",
+              params: [`${normalizedSymbol}usdt@trade`],
+              id: 1
+            };
+            socket.send(JSON.stringify(subscribeMsg));
+          };
+          
+          socket.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+              
+              // CRITICAL: Cross-contamination prevention
+              // Verify this message is for our current active symbol
+              if (data && data.s) {
+                const messageSymbol = (data.s || '').toLowerCase().replace(/usdt$/, '');
+                
+                // If this message isn't for our active symbol, ignore it completely
+                if (messageSymbol !== activeWebSocketSymbol) {
+                  console.error(`[ISOLATION] BLOCKED cross-contamination: received ${messageSymbol} data while viewing ${activeWebSocketSymbol}`);
+                  return; // Completely ignore this message
+                }
+                
+                // Get the price from the message
+                let wsPrice = parseFloat(data.p);
+                
+                // CRITICAL: Price validation for major cryptocurrencies
+                // Double-check the price against expected ranges to prevent displaying glitch prices
+                if (messageSymbol === 'btc' && wsPrice < 10000) {
+                  console.error(`[ISOLATION] WebSocket BLOCKED suspicious Bitcoin price: ${wsPrice}`);
+                  
+                  // Don't update the price with this suspicious value
+                  // Instead, keep using our last known good price
+                  return;
+                }
+                if (messageSymbol === 'eth' && wsPrice < 500) {
+                  console.error(`[ISOLATION] WebSocket BLOCKED suspicious Ethereum price: ${wsPrice}`);
+                  return;
+                }
+                
+                // Additional check for known glitch prices
+                if (messageSymbol === 'btc' && (Math.abs(wsPrice - 81.00) < 0.1 || Math.abs(wsPrice - 10.90) < 0.1)) {
+                  console.error(`[ISOLATION] WebSocket BLOCKED known Bitcoin glitch price: ${wsPrice}`);
+                  return;
+                }
+                
+                console.log(`[ISOLATION] Valid WebSocket price for ${messageSymbol}: ${wsPrice}`);
+                
+                // Apply the price update since it passed all validation
+                setMarketPrice(wsPrice);
+                
+                // Also update the order book with the new price
+                if (messageSymbol === activeWebSocketSymbol) {
+                  // Only update the chart price if it's for the current symbol we're viewing
+                  randomizeAndUpdateChartPrice(wsPrice);
+                  
+                  // Update order book
+                  const updatedOrderBook = generateOrderBook(wsPrice);
+                  setOrderBook(updatedOrderBook);
+                  
+                  // Check if any limit orders should be executed with this new price
+                  checkPendingLimitOrders();
+                }
+              }
+            } catch (parseError) {
+              console.error('[ISOLATION] Error parsing WebSocket data:', parseError);
+            }
+          };
+          
+          socket.onclose = (event) => {
+            console.log(`[ISOLATION] WebSocket connection closed for ${normalizedSymbol}:`, event);
+            setIsConnected(false);
+            
+            // If this is an abnormal closure, try to reconnect
+            if (event.code !== 1000) {
+              console.log(`[ISOLATION] Attempting to reconnect WebSocket in 5 seconds...`);
+              setTimeout(() => {
+                if (cryptoData?.token?.symbol) {
+                  setupWebSocketConnection(cryptoData.token.symbol);
+                }
+              }, 5000);
+            }
+          };
+          
+          socket.onerror = (error) => {
+            console.error(`[ISOLATION] WebSocket error for ${normalizedSymbol}:`, error);
+            setIsConnected(false);
+          };
+          
+          return socket;
+        }
+      } catch (err) {
+        console.error(`[ISOLATION] Error setting up WebSocket for ${normalizedSymbol}:`, err);
+        setIsConnected(false);
+      }
+      
+      return null;
+    };
+
+    // Initialize price update
+    updatePrice();
+
+    // Set up periodic updates every 30 seconds as a fallback
+    const interval = setInterval(updatePrice, 30000);
+
+    return () => {
+      if (ws) {
+        ws.close();
+      }
+        clearInterval(interval);
+    };
+  }, [cryptoData]);
+
+  // Define fetchUserData function before it's used in any useEffect
+  const fetchUserData = useCallback(async () => {
+    if (!currentUser) return () => {};  // Return empty cleanup function
+    
+    try {
+      // Listen to user balance changes
+      const userUnsubscribe = onSnapshot(
+        doc(db, 'users', currentUser.uid),
+        {
+          includeMetadataChanges: true
+        },
+        (doc) => {
+          if (doc.exists()) {
+            const userData = doc.data();
+            console.log('Full user data:', userData);
+            
+            // Check if balances exist in the user document
+            if (userData.balances) {
+              console.log('User balances from document:', userData.balances);
+              console.log('USDT balance type:', typeof userData.balances.USDT, 'value:', userData.balances.USDT);
+              
+              // Ensure USDT exists and is a valid number
+              if (userData.balances.USDT === undefined || userData.balances.USDT === null || isNaN(userData.balances.USDT)) {
+                console.warn('Invalid USDT balance in user document, setting to 0');
+                userData.balances.USDT = 0;
+              }
+              
+              setUserBalance(userData.balances);
+            } else {
+              // No balances in user document
+              console.warn('No balances field in user document, will be fixed by ensureUserBalances');
+              setUserBalance({ USDT: 0, BTC: 0, ETH: 0 });
+            }
+            
+            setIsLoadingBalance(false);
+          }
+        },
+        (error) => console.error('User snapshot error:', error)
+      );
+
+      // Listen to positions
+      const positionsUnsubscribe = onSnapshot(
+        query(collection(db, 'positions'), where('userId', '==', currentUser.uid)),
+        {
+          includeMetadataChanges: true
+        },
+        (snapshot) => {
+          const openPos = [];
+          const closedPos = [];
+          
+          snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            const position = {
+        id: doc.id,
+              ...data,
+              openTime: data.openTime?.toDate?.() || new Date(data.openTime),
+              closeTime: data.closeTime?.toDate?.() || (data.closeTime ? new Date(data.closeTime) : null),
+              lastUpdated: data.lastUpdated?.toDate?.() || new Date(data.lastUpdated)
+            };
+
+            if (position.status === 'OPEN') {
+              openPos.push(position);
+            } else if (position.status === 'CLOSED') {
+              closedPos.push(position);
+            }
+          });
+
+          setOpenPositions(openPos.sort((a, b) => b.openTime - a.openTime));
+          setClosedPositions(closedPos.sort((a, b) => b.closeTime - a.closeTime));
+      setIsLoadingPositions(false);
+        },
+        (error) => console.error('Positions snapshot error:', error)
+      );
+
+      // Return a cleanup function that calls both unsubscribe functions
+      return () => {
+        userUnsubscribe();
+        positionsUnsubscribe();
+      };
+    } catch (error) {
+      console.error('Error in fetchUserData:', error);
+      return () => {}; // Return empty cleanup function
+    }
+  }, [currentUser]);
+
+  // Define fetchPriceData function before any useEffect that uses it
+  const fetchPriceData = useCallback(async () => {
+    if (!cryptoData?.token) {
+      console.warn('No token data available for fetchPriceData');
+      return;
+    }
+
+    try {
+      if (cryptoData.token.type === 'dex') {
+        // For DEX tokens, use DexScreener API's standard pairs endpoint
+        const chain = cryptoData.token.chainId?.toLowerCase() || 'ethereum';
+        const pairAddress = cryptoData.pairInfo?.address?.toLowerCase();
+        
+        if (!pairAddress) {
+          console.error('No pair address available for DEX token');
+          setPriceData([]);
+          return;
+        }
+        
+        console.log(`Fetching price data for ${chain}/${pairAddress}`);
+        
+        // Try both format options to ensure we get data
+        let response;
+        try {
+          // First attempt: Use pairs/{chain}/{pairAddress} format
+          response = await axios.get(
+            `https://api.dexscreener.com/latest/dex/pairs/${chain}/${pairAddress}`
+          );
+          console.log('DexScreener API response (pairs endpoint):', response.data);
+        } catch (error) {
+          console.error('Error fetching from DexScreener pairs endpoint:', error);
+          
+          // Second attempt: Use direct address endpoint
+          try {
+            response = await axios.get(
+              `https://api.dexscreener.com/latest/dex/search?q=${pairAddress}`
+            );
+            console.log('DexScreener API response (search endpoint):', response.data);
+          } catch (searchError) {
+            console.error('Error fetching from DexScreener search endpoint:', searchError);
+            throw new Error('Failed to fetch data from DexScreener');
+          }
+        }
+        
+        // Check if we have valid data from either attempt
+        const pairs = response.data?.pairs || [response.data?.pair].filter(Boolean);
+        if (pairs && pairs.length > 0) {
+          const pair = pairs[0];
+          console.log('Found pair data:', pair);
+          
+          // Update market price with the latest price
+          if (pair.priceUsd) {
+            const priceUsd = Number(parseFloat(pair.priceUsd));
+            if (!isNaN(priceUsd) && priceUsd > 0) {
+              setMarketPrice(priceUsd);
+              setCurrentPrice(priceUsd);
+            } else {
+              console.warn('Invalid price from DexScreener:', pair.priceUsd);
+            }
+          }
+          
+          // Update pairInfo with any additional data we got from DexScreener
+          if (!cryptoData.pairInfo || !cryptoData.pairInfo.dexId) {
+            const updatedCryptoData = {
+              ...cryptoData,
+              pairInfo: {
+                ...cryptoData.pairInfo,
+                address: pair.pairAddress || cryptoData.pairInfo?.address,
+                dexId: pair.dexId || cryptoData.pairInfo?.dexId || 'unknown',
+                baseToken: pair.baseToken || cryptoData.pairInfo?.baseToken,
+                quoteToken: pair.quoteToken || cryptoData.pairInfo?.quoteToken,
+                priceUsd: pair.priceUsd || cryptoData.pairInfo?.priceUsd
+              }
+            };
+            setCryptoData(updatedCryptoData);
+            console.log('Updated cryptoData with pair info:', updatedCryptoData);
+          }
+          
+          // For price history, we need to create a simple dataset
+          // DexScreener doesn't provide candlestick data through this endpoint
+          
+          // Create a minimal dataset with the current price
+          const currentTime = Math.floor(Date.now() / 1000);
+          
+          // Use priceChange data if available to estimate an "open" price
+          const priceChangeH24 = pair.priceChange?.h24 ? parseFloat(pair.priceChange.h24) : 0;
+          const closePrice = parseFloat(pair.priceUsd || 0);
+          const openPrice = closePrice / (1 + (priceChangeH24 / 100));
+          
+          // Estimate high and low based on price change
+          const priceChange = Math.abs(closePrice - openPrice);
+          const high = Math.max(openPrice, closePrice) + (priceChange * 0.1); // Add 10% buffer
+          const low = Math.min(openPrice, closePrice) - (priceChange * 0.1);  // Subtract 10% buffer
+          
+          // Create a simple dataset for the chart
+          setPriceData([{
+            time: currentTime,
+            open: openPrice,
+            high: high,
+            low: low,
+            close: closePrice,
+            volume: parseFloat(pair.volume?.h24 || 0)
+          }]);
+          
+          console.log('Created simplified price data for chart');
+        } else {
+          // No valid pair data
+          console.error('No valid pair data found for', pairAddress);
+          console.log('Full response:', response.data);
+          setPriceData([]);
+        }
+      } else {
+        // For CEX tokens, use existing Binance API
+        const interval = TIMEFRAMES[timeframe].binanceInterval;
+        const symbol = `${cryptoData.token.symbol}USDT`;
+
+        const response = await axios.get(
+          `https://api.binance.com/api/v3/klines`,
+          {
+            params: {
+              symbol: symbol,
+              interval: interval,
+              limit: 500
+            }
+          }
+        );
+
+        const formattedData = response.data.map(candle => ({
+          time: candle[0] / 1000,
+          open: parseFloat(candle[1]),
+          high: parseFloat(candle[2]),
+          low: parseFloat(candle[3]),
+          close: parseFloat(candle[4]),
+          volume: parseFloat(candle[5])
+        }));
+
+        setPriceData(formattedData);
+      }
+    } catch (error) {
+      console.error('Error fetching price data:', error);
+      setPriceData([]);
+    }
+  }, [cryptoData?.token?.id, cryptoData?.token?.type, cryptoData?.pairInfo?.address, timeframe]);
+
+  // Update user data useEffect
+  useEffect(() => {
+    if (currentUser) {
+      return fetchUserData();
+    }
+  }, [currentUser, fetchUserData]);
+
+  // Update price data useEffect
+  useEffect(() => {
+    // Always call the hook, but conditionally run the logic inside
+    if (cryptoData?.token?.id) {
+      fetchPriceData();
+    }
+  }, [cryptoData?.token?.id, fetchPriceData]);
+
+  // Improved market price update effect - always call this hook unconditionally
+  useEffect(() => {
+    // Move the conditional logic inside the effect but always call the hook
+    const updateMarketPriceFromCryptoData = () => {
+      // Get the cryptocurrency symbol
+      const symbol = cryptoData?.token?.symbol?.toLowerCase() || 'btc';
+      const normalizedSymbol = symbol.replace(/usdt$/, '');
+      
+      console.log(`Updating market price for ${normalizedSymbol.toUpperCase()} from cryptoData`);
+      
+      // Different potential price sources, in order of reliability
+      let potentialPrices = [];
+      
+      // Try to get prices from different sources
+      if (cryptoData?.chartData?.lastPrice && !isNaN(parseFloat(cryptoData.chartData.lastPrice))) {
+        const price = parseFloat(cryptoData.chartData.lastPrice);
+        potentialPrices.push({ source: 'chartData.lastPrice', price, weight: 4 });
+      }
+      
+      if (cryptoData?.token?.price && !isNaN(parseFloat(cryptoData.token.price))) {
+        const price = parseFloat(cryptoData.token.price);
+        potentialPrices.push({ source: 'token.price', price, weight: 3 });
+      }
+      
+      if (cryptoData?.pairInfo?.priceUsd && !isNaN(parseFloat(cryptoData.pairInfo.priceUsd))) {
+        const price = parseFloat(cryptoData.pairInfo.priceUsd);
+        potentialPrices.push({ source: 'pairInfo.priceUsd', price, weight: 2 });
+      }
+      
+      // Also consider current state
+      if (marketPrice && !isNaN(parseFloat(marketPrice))) {
+        const price = parseFloat(marketPrice);
+        potentialPrices.push({ source: 'current marketPrice', price, weight: 1 });
+      }
+      
+      console.log(`Found ${potentialPrices.length} potential prices:`,
+        potentialPrices.map(p => `${p.source}: $${p.price}`).join(', '));
+      
+      // Validate each price
+      potentialPrices = potentialPrices.filter(candidate => {
+        // Basic validation
+        if (!candidate.price || candidate.price <= 0) {
+          console.log(`REJECTED: Invalid price ${candidate.price} from ${candidate.source}`);
+          return false;
+        }
+        
+        // Special validation for Bitcoin
+        if (normalizedSymbol === 'btc') {
+          // Bitcoin should never be below $10,000
+          if (candidate.price < 10000) {
+            console.log(`REJECTED: Bitcoin price $${candidate.price} from ${candidate.source} is impossibly low`);
+            return false;
+          }
+          
+          // Check for specific known glitch values
+          if (Math.abs(candidate.price - 81.00) < 1.0) {
+            console.log(`REJECTED: Bitcoin price $${candidate.price} from ${candidate.source} matches known $81 glitch`);
+            return false;
+          }
+          
+          if (Math.abs(candidate.price - 10.90) < 0.5) {
+            console.log(`REJECTED: Bitcoin price $${candidate.price} from ${candidate.source} matches known cross-contamination price`);
+            return false;
+          }
+        }
+        
+        // Special validation for Ethereum
+        if (normalizedSymbol === 'eth') {
+          // Ethereum should never be below $500
+          if (candidate.price < 500) {
+            console.log(`REJECTED: Ethereum price $${candidate.price} from ${candidate.source} is impossibly low`);
+            return false;
+          }
+        }
+        
+        return true;
+      });
+      
+      // If we have valid prices, use the most reliable one
+      if (potentialPrices.length > 0) {
+        // Sort by weight (highest first)
+        potentialPrices.sort((a, b) => b.weight - a.weight);
+        
+        // Get the best price
+        const bestPrice = potentialPrices[0].price;
+        console.log(`Selected price $${bestPrice} from ${potentialPrices[0].source}`);
+        
+        // Update price states with the validated price
+        setMarketPrice(bestPrice);
+        setCurrentPrice(bestPrice);
+        setLastPrice(bestPrice);
+        setDisplayPrice(bestPrice);
+        
+        // Store as verified price
+        lastVerifiedPrices[normalizedSymbol] = bestPrice;
+        
+        // Generate order book with the validated price
+        const newOrderBook = generateOrderBook(bestPrice);
+        setOrderBook(newOrderBook);
+        
+        // Check limit orders with the updated price
+        if (pendingLimitOrders.length > 0) {
+          console.log(`Price updated to $${bestPrice}, checking ${pendingLimitOrders.length} pending orders`);
+          checkPendingLimitOrders();
+        }
+      } else {
+        // Fallback to hardcoded prices if no valid prices found
+        console.log(`No valid prices found, using hardcoded fallback`);
+        
+        const fallbackPrice = hardcodedPrices[normalizedSymbol] || 
+                             (normalizedSymbol === 'btc' ? 80000 : 
+                             (normalizedSymbol === 'eth' ? 3000 : 100));
+        
+        console.log(`Using fallback price: $${fallbackPrice}`);
+        
+        // Update all price states with the fallback
+        setMarketPrice(fallbackPrice);
+        setCurrentPrice(fallbackPrice);
+        setLastPrice(fallbackPrice);
+        setDisplayPrice(fallbackPrice);
+        
+        // Generate order book with the fallback price
+        const newOrderBook = generateOrderBook(fallbackPrice);
+        setOrderBook(newOrderBook);
+      }
+    };
+    
+    // Always call this function, whether cryptoData exists or not
+    updateMarketPriceFromCryptoData();
+    
+  }, [cryptoData, pendingLimitOrders.length]);
+
+  // Update the chart initialization useEffect
+  useEffect(() => {
+    if (!priceData.length) return;
+
+    const handleResize = () => {
+      // Handle chart resize logic
+    };
+
+    try {
+      // Create chart instance with IChartApi type
+      // const chartInstance = createChart(chartContainerRef.current, {
+      //   width: chartContainerRef.current.clientWidth,
+      //   height: chartContainerRef.current.clientHeight,
+      //   layout: {
+      //     background: { type: ColorType.Solid, color: '#1E222D' },
+      //     textColor: '#7a7a7a',
+      //   },
+      //   grid: {
+      //     vertLines: { color: 'rgba(42, 46, 57, 0.2)' },
+      //     horzLines: { color: 'rgba(42, 46, 57, 0.2)' },
+      //   },
+      //   timeScale: {
+      //     timeVisible: true,
+      //     secondsVisible: false,
+      //     borderColor: 'rgba(42, 46, 57, 0.5)',
+      //   },
+      //   rightPriceScale: {
+      //     borderColor: 'rgba(42, 46, 57, 0.5)',
+      //   },
+      //   crosshair: {
+      //     mode: 1,
+      //     vertLine: {
+      //       color: '#758696',
+      //       width: 1,
+      //       style: 3,
+      //     },
+      //     horzLine: {
+      //       color: '#758696',
+      //       width: 1,
+      //       style: 3,
+      //     },
+      //   },
+      // });
+
+      // // Create candlestick series with proper type
+      // const mainSeries = chartInstance.addCandlestickSeries({
+      //   upColor: '#0ECB81',
+      //   downColor: '#F6465D',
+      //   borderUpColor: '#0ECB81',
+      //   borderDownColor: '#F6465D',
+      //   wickUpColor: '#0ECB81',
+      //   wickDownColor: '#F6465D',
+      // });
+
+      // // Create volume series with proper type
+      // const volumeSeries = chartInstance.addHistogramSeries({
+      //   color: '#26a69a',
+      //   priceFormat: {
+      //     type: 'volume',
+      //   },
+      //   priceScaleId: '', // Set as overlay
+      //   scaleMargins: {
+      //     top: 0.8,
+      //     bottom: 0,
+      //   },
+      // });
+
+      // // Format data for candlestick series
+      // const candleData = priceData.map(d => ({
+      //   time: d.time,
+      //   open: d.open,
+      //   high: d.high,
+      //   low: d.low,
+      //   close: d.close,
+      // }));
+
+      // // Format data for volume series
+      // const volumeData = priceData.map(d => ({
+      //   time: d.time,
+      //   value: d.volume,
+      //   color: d.close > d.open ? 'rgba(14, 203, 129, 0.3)' : 'rgba(246, 70, 93, 0.3)',
+      // }));
+
+      // // Set data to series
+      // mainSeries.setData(candleData);
+      // volumeSeries.setData(volumeData);
+
+      // // Fit content
+      // chartInstance.timeScale().fitContent();
+
+      // // Save chart reference
+      // chartRef.current = chartInstance;
+
+      // // Add resize listener
+      // window.addEventListener('resize', handleResize);
+
+      // // Cleanup
+      // return () => {
+      //   window.removeEventListener('resize', handleResize);
+      //   if (chartRef.current) {
+      //     chartRef.current.remove();
+      //     chartRef.current = null;
+      //   }
+      // };
+    } catch (error) {
+      console.error('Error creating chart:', error);
+    }
+  }, [priceData]);
+
+  // Fetch data when timeframe changes
+  useEffect(() => {
+    fetchPriceData();
+  }, [timeframe, cryptoData?.token?.id, fetchPriceData]); // Add fetchPriceData as a dependency
+
+  // Function to handle canceling a limit order
+  const handleCancelLimitOrder = async (orderId) => {
+    if (isPending) return;
+    
+    try {
+    setIsPending(true);
+      await tradingService.cancelLimitOrder(currentUser.uid, orderId);
+      setIsPending(false);
+      
+      // Refresh the list of limit orders
+      fetchPendingLimitOrders();
+      
+      // Show success message
+      console.log('Limit order canceled successfully');
+    } catch (error) {
+      console.error('Error canceling limit order:', error);
+      setError(error.message || 'Failed to cancel limit order');
+      setIsPending(false);
+    }
+  };
+
+  // Update the handleSubmit function
+  const handleSubmit = async (e, forcedOrderType = null) => {
+    e.preventDefault();
+    if (isPending) return;
+
+    if (!currentUser) {
+      window.location.href = '/login';
+      return;
+    }
+
+    // Store current coin symbol for strict isolation
+    const currentSymbol = cryptoData?.token?.symbol?.toLowerCase() || 'btc';
+    const normalizedCurrentSymbol = currentSymbol.replace(/usdt$/, '');
+    
+    console.log(`[ISOLATION] Opening position for specific coin: ${normalizedCurrentSymbol.toUpperCase()} (isolation enforced)`);
+    
+    // CRITICAL: Ensure no other operations are in progress before proceeding
+    if (window.RIPPLE_TRADING_STATE) {
+      console.error(`[ISOLATION] Cannot open position - another operation is in progress:`, window.RIPPLE_TRADING_STATE);
+      setError(`Cannot open ${normalizedCurrentSymbol.toUpperCase()} position - another operation is in progress.`);
+      return;
+    }
+
+    // Use forcedOrderType if provided, otherwise use state
+    const currentOrderType = forcedOrderType || orderType;
+    console.log(`[ISOLATION] Creating position with order type: ${currentOrderType}`);
+
+    const tradeAmount = parseFloat(amount);
+    let currentMarketPrice;
+    
+    if (orderMode === 'market') {
+      try {
+        // ISOLATION: Get price specifically for this coin only
+        currentMarketPrice = await getChartPrice();
+        console.log(`[ISOLATION] Using chart price for ${normalizedCurrentSymbol} trade: ${currentMarketPrice}`);
+        
+        // For market orders, apply additional validation to prevent opening trades at glitch prices
+        // ISOLATION: Pass current symbol explicitly to ensure validation is for this coin only
+        const isValidPrice = validateClosePrice(null, currentMarketPrice, normalizedCurrentSymbol);
+        
+        if (!isValidPrice) {
+          // Price movement is suspicious compared to our reference price
+          setError(`Cannot open ${normalizedCurrentSymbol.toUpperCase()} position - current price $${currentMarketPrice} appears invalid.`);
+          console.error(`[ISOLATION] Prevented opening position with suspicious price: ${currentMarketPrice}`);
+          return;
+        }
+      } catch (error) {
+        console.error('Error getting chart price:', error);
+        
+        // Fall back to displayPrice if there's an error
+        currentMarketPrice = displayPrice || lastVerifiedPrices[normalizedCurrentSymbol] || hardcodedPrices[normalizedCurrentSymbol];
+      }
+      
+      // Extra safety check for high-value coins
+      if (normalizedCurrentSymbol === 'btc' && currentMarketPrice < 10000) {
+        setError(`Cannot open Bitcoin position - price appears too low ($${currentMarketPrice}). Please try again.`);
+        console.error('[ISOLATION] Preventing trade with suspiciously low Bitcoin price');
+        return;
+      }
+      if (normalizedCurrentSymbol === 'eth' && currentMarketPrice < 500) {
+        setError(`Cannot open Ethereum position - price appears too low ($${currentMarketPrice}). Please try again.`);
+        console.error('[ISOLATION] Preventing trade with suspiciously low Ethereum price');
+        return;
+      }
+    } else {
+      // For limit orders, use the user-entered limit price
+      currentMarketPrice = parseFloat(limitPrice);
+    }
+    
+    const requiredMargin = calculateRequiredMargin(tradeAmount, currentMarketPrice, leverage);
+
+    if (!tradeAmount || !currentMarketPrice || !leverage) {
+      setError('Please fill in all fields');
+      return;
+    }
+
+    if (userBalance?.USDT < requiredMargin) {
+      setError('Insufficient balance');
+      return;
+    }
+
+    // CRITICAL ISOLATION: Set the trading state BEFORE we do anything else
+    // This acts as a lock to prevent other operations while we're opening this position
+    try {
+      // First check if any operation is in progress that might interfere
+      const currentOperation = window.operationTracker.getOperation();
+      if (currentOperation) {
+        console.error(`[CRITICAL] Cannot open position - another operation is already in progress:`, currentOperation);
+        setError(`Cannot open ${normalizedCurrentSymbol.toUpperCase()} position - another operation is in progress.`);
+        return;
+      }
+      
+      // Set both memory state and localStorage state for redundant protection
+      window.operationTracker.setOperation(normalizedCurrentSymbol, 'OPENING_POSITION', {
+        orderType: currentOrderType,
+        amount: tradeAmount,
+        price: currentMarketPrice
+      });
+      
+      window.RIPPLE_TRADING_STATE = {
+        operationType: 'OPENING_POSITION',
+        symbol: normalizedCurrentSymbol,
+        orderType: currentOrderType,
+        amount: tradeAmount,
+        price: currentMarketPrice,
+        timestamp: Date.now()
+      };
+      
+      console.log(`[CRITICAL] Set operation state for ${normalizedCurrentSymbol} in handleSubmit`);
+    } catch (stateError) {
+      console.error('[CRITICAL] Error setting operation state:', stateError);
+      // Continue anyway, our patched tradingService will still enforce isolation
+    }
+    
+    // Show notification about opening position
+    addNotification({
+      title: `Opening ${normalizedCurrentSymbol.toUpperCase()} Position`,
+      message: `Opening ${currentOrderType} position of ${tradeAmount} ${normalizedCurrentSymbol.toUpperCase()} at $${currentMarketPrice}`,
+      type: "info",
+      playSound: false
+    });
+
+    // ISOLATION: Store current symbol explicitly in trade data
+    const tradeData = {
+      symbol: cryptoData.token.symbol,
+      symbolNormalized: normalizedCurrentSymbol, // Add normalized symbol for isolation
+      type: currentOrderType,      // Use the current order type
+      side: currentOrderType,      // Use the current order type for side 
+      amount: tradeAmount,
+      leverage: parseInt(leverage),
+      entryPrice: currentMarketPrice,
+      margin: requiredMargin,
+      orderMode: orderMode
+    };
+
+    // For limit orders, add the target price
+    if (orderMode === 'limit') {
+      tradeData.targetPrice = parseFloat(limitPrice);
+    }
+
+    try {
+      setError('');
+      setIsPending(true);
+      
+      if (orderMode === 'market') {
+        // For market orders, use the existing optimistic update approach
+        // ---------------------------
+        // Optimistic Update Start
+        // ---------------------------
+        const provisionalId = `temp-${Date.now()}`;
+        const now = new Date();
+        const provisionalPosition = {
+          id: provisionalId,
+          userId: currentUser.uid,
+          symbol: tradeData.symbol,
+          symbolNormalized: normalizedCurrentSymbol, // Add normalized symbol
+          type: tradeData.type,
+          side: tradeData.side,   // Add side field to the position
+          amount: tradeData.amount,
+          leverage: tradeData.leverage,
+          entryPrice: tradeData.entryPrice,
+          margin: tradeData.margin,
+          orderMode: tradeData.orderMode,
+          status: 'OPEN',
+          openTime: now,
+          currentPnL: 0,
+          lastUpdated: now,
+          closePrice: null,
+          closeTime: null,
+          finalPnL: null
+        };
+
+        setOpenPositions(prev => [provisionalPosition, ...prev]);
+        
+        const result = await tradingService.openPosition(currentUser.uid, tradeData);
+        
+        if (!result.success) {
+          // Roll back optimistic update in case of error
+          setOpenPositions(prev => prev.filter(p => p.id !== provisionalId));
+          throw new Error(result.error || 'Failed to create position');
+        } else {
+          // Play sound effect on successful trade execution
+          playTradeSound();
+          
+          // Show success notification for market order
+          addNotification({
+            title: `${normalizedCurrentSymbol.toUpperCase()} Position Opened`,
+            message: `${currentOrderType.toUpperCase()} position of ${tradeAmount} ${normalizedCurrentSymbol.toUpperCase()} opened at $${currentMarketPrice}`,
+            type: "success",
+            playSound: true
+          });
+        }
+      } else if (orderMode === 'limit') {
+        // For limit orders, create a provisional pending order for UI feedback
+        console.log(`[ISOLATION] Creating limit order for ${normalizedCurrentSymbol.toUpperCase()}`);
+        console.log('Order data:', tradeData);
+        
+        const provisionalId = `temp-${Date.now()}`;
+        const now = new Date();
+        
+        // Ensure we're using the right field names consistently
+        const provisionalOrder = {
+          id: provisionalId,
+          userId: currentUser.uid,
+          symbol: tradeData.symbol,
+          symbolNormalized: normalizedCurrentSymbol, // Add normalized symbol
+          // Explicitly set both type and side for consistency
+          type: tradeData.type,
+          side: tradeData.side, // Add side field with same value as type
+          amount: tradeData.amount,
+          leverage: tradeData.leverage,
+          targetPrice: tradeData.entryPrice,
+          price: tradeData.entryPrice, // Add price field with same value as targetPrice
+          margin: tradeData.margin,
+          status: 'PENDING',
+          createdAt: now,
+          lastUpdated: now,
+          isProvisional: true // Flag to identify optimistic updates
+        };
+        
+        console.log(`[ISOLATION] Provisional limit order for ${normalizedCurrentSymbol}:`, provisionalOrder);
+        
+        // Optimistically add to pending limit orders
+        setPendingLimitOrders(prev => [provisionalOrder, ...prev]);
+        
+        const result = await tradingService.createLimitOrder(currentUser.uid, tradeData);
+        console.log(`[ISOLATION] Limit order creation result for ${normalizedCurrentSymbol}:`, result);
+        
+        if (!result.success) {
+          // Remove provisional order on error
+          setPendingLimitOrders(prev => 
+            prev.filter(order => !order.isProvisional)
+          );
+          throw new Error(result.error || 'Failed to create limit order');
+        } else {
+          // Don't play sound for limit orders since they're not executed immediately
+          console.log(`[ISOLATION] Limit order created successfully for ${normalizedCurrentSymbol}`);
+          
+          // Show success notification for limit order
+          addNotification({
+            title: `${normalizedCurrentSymbol.toUpperCase()} Limit Order Created`,
+            message: `${currentOrderType.toUpperCase()} limit order of ${tradeAmount} ${normalizedCurrentSymbol.toUpperCase()} at $${limitPrice} created`,
+            type: "success",
+            playSound: false
+          });
+        }
+        
+        // Refresh the actual limit orders from the server
+        fetchPendingLimitOrders();
+      }
+    } catch (error) {
+      console.error(`[ISOLATION] Error creating ${normalizedCurrentSymbol} position/order:`, error);
+      setError(error.message || 'Failed to create position/order');
+      
+      // Show error notification
+      addNotification({
+        title: `Error Creating ${normalizedCurrentSymbol.toUpperCase()} Position`,
+        message: error.message || 'Failed to create position/order',
+        type: "error",
+        playSound: true
+      });
+    } finally {
+      setIsPending(false);
+      // Clear input fields whether success or error
+      setAmount('');
+      setLeverage(1);
+      setLimitPrice('');
+      
+      // CRITICAL: Clear BOTH state tracking systems to prevent issues
+      try {
+        window.operationTracker.clearOperation();
+        window.RIPPLE_TRADING_STATE = null;
+        console.log(`[CRITICAL] Fully cleared all operation state after ${orderMode} operation`);
+      } catch (cleanupError) {
+        console.error('[CRITICAL] Error clearing operation state:', cleanupError);
+      }
+    }
+  };
+
+  // Fix checkPendingLimitOrders with isolation
+  const checkPendingLimitOrders = async () => {
+    if (!currentUser || !marketPrice || pendingLimitOrders.length === 0) return;
+    
+    // Get current coin symbol for isolation
+    const currentSymbol = cryptoData?.token?.symbol?.toLowerCase() || 'btc';
+    const normalizedCurrentSymbol = currentSymbol.replace(/usdt$/, '');
+    
+    console.log(`[ISOLATION] Checking pending limit orders for ${normalizedCurrentSymbol} only`);
+    
+    try {
+      // Filter only orders for the current symbol we're viewing
+      const relevantOrders = pendingLimitOrders.filter(order => {
+        const orderSymbol = (order.symbol || '').toLowerCase().replace(/usdt$/, '');
+        return orderSymbol === normalizedCurrentSymbol;
+      });
+      
+      if (relevantOrders.length === 0) {
+        console.log(`[ISOLATION] No pending orders for current symbol ${normalizedCurrentSymbol}`);
+        return;
+      }
+      
+      console.log(`[ISOLATION] Found ${relevantOrders.length} orders for ${normalizedCurrentSymbol} to check against price ${marketPrice}`);
+      
+      // Only pass orders for the current coin to the service
+      const result = await tradingService.checkAndExecuteLimitOrders(currentUser.uid, currentSymbol, marketPrice);
+      
+      if (result && result.executed > 0) {
+        console.log(`[ISOLATION] Executed ${result.executed} limit orders for ${normalizedCurrentSymbol}`);
+        // Update pending orders after execution
+        fetchPendingLimitOrders();
+        // Also refresh positions
+        fetchPositions();
+        // Play sound for executed orders
+        playTradeSound();
+      }
+      } catch (error) {
+      console.error(`[ISOLATION] Error checking limit orders for ${normalizedCurrentSymbol}:`, error);
+    }
+  };
+
+  // Add the handleClosePosition function
+  const handleClosePosition = async (position) => {
+    if (!position || !position.id || !currentUser || closingPositionId) return;
+    
+    const positionSymbol = (position.symbol || '').toLowerCase().replace(/usdt$/, '');
+    console.log(`[USER ACTION] Manual position closure requested for ${positionSymbol}`);
+    
+    try {
+      setClosingPositionId(position.id);
+      
+      // Get the current price for the specific symbol
+      const currentPrice = marketPrice || displayPrice || lastVerifiedPrices[positionSymbol] || hardcodedPrices[positionSymbol];
+      
+      if (!currentPrice) {
+        throw new Error(`Cannot close position - no valid price available for ${positionSymbol}`);
+      }
+      
+      // Validate closing price
+      if (!validateClosePrice(position.entryPrice, currentPrice, positionSymbol)) {
+        throw new Error('Cannot close position - price movement is suspicious');
+      }
+      
+      // CRITICAL: Flag this as a manual user-initiated close operation
+      const closeData = {
+        entryPrice: position.entryPrice,
+        symbol: positionSymbol,
+        reason: 'manual', // Explicitly mark as manual closure
+        userInitiated: true, // Add another explicit flag
+        __userInitiated: true, // Triple protection
+        validationChecks: {
+          frontendValidated: true,
+          manualClose: true
+        }
+      };
+      
+      // Set both memory and localStorage state
+      window.operationTracker.setOperation(positionSymbol, 'CLOSING_POSITION', { 
+        positionId: position.id,
+        manual: true,
+        userInitiated: true
+      });
+      
+      // Set memory state as well for double protection
+      window.RIPPLE_TRADING_STATE = {
+        operationType: 'MANUAL_POSITION_CLOSE',
+        symbol: positionSymbol,
+        positionId: position.id,
+        timestamp: Date.now()
+      };
+      
+      console.log(`[USER ACTION] Closing ${positionSymbol} position with manual flags:`, closeData);
+      
+      // Call the service with manual flags
+      const result = await tradingService.closePosition(
+        currentUser.uid,
+        position.id,
+        currentPrice,
+        closeData
+      );
+      
+      if (result.success) {
+        console.log(`[USER ACTION] Successfully closed ${positionSymbol} position`);
+        fetchPositions();
+        
+        // Show success notification  
+        addNotification({
+          title: `${positionSymbol.toUpperCase()} Position Closed`,
+          message: `Successfully closed your ${position.type === 'buy' ? 'LONG' : 'SHORT'} position at $${currentPrice}`,
+          type: "success",
+          playSound: true
+        });
+      } else {
+        console.error(`[USER ACTION] Failed to close ${positionSymbol} position:`, result.error);
+        throw new Error(result.error || 'Failed to close position');
+      }
+        } catch (error) {
+      console.error(`[USER ACTION] Error closing position:`, error);
+      
+      // Show error notification
+      addNotification({
+        title: "Error Closing Position",
+        message: error.message || 'Failed to close position',
+        type: "error",
+        playSound: true
+      });
+    } finally {
+      setClosingPositionId(null);
+      
+      // Clear both memory and localStorage state
+      window.operationTracker.clearOperation();
+      window.RIPPLE_TRADING_STATE = null;
+    }
+  };
+
+  const renderPendingLimitOrders = () => {
+    if (pendingLimitOrders.length === 0) return null;
+        console.log(`[CRITICAL] Cleaned up after opening position for ${symbol}`);
+      }
+    };
+    
+    // COMPLETELY REPLACE the closePosition method with our absolutely protected version
+    tradingService.closePosition = async (userId, positionId, closePrice, additionalData) => {
+      // Extract the position symbol
+      const positionSymbol = (additionalData?.symbol || '').toLowerCase().replace(/usdt$/, '');
+      
+      // CRITICAL NEW: Determine if this is user-initiated
+      const closeReason = additionalData?.reason || 'unknown';
+      const isManualClose = closeReason === 'manual' || 
+                            additionalData?.userInitiated === true ||
+                            additionalData?.__userInitiated === true;
+      
+      console.log(`[ABSOLUTE PROTECTION] Position close requested for ${positionSymbol} with reason: ${closeReason}`);
+      console.log(`[ABSOLUTE PROTECTION] Is manual close: ${isManualClose}`);
+      
+      // CRITICAL: ONLY allow manual position closures unless specifically instructed otherwise
+      if (!isManualClose && window.RIPPLE_PREVENT_AUTO_POSITION_CLOSURES) {
+        const message = `[ABSOLUTE PROTECTION] Blocked non-manual position closure for ${positionSymbol}`;
+        console.error(message);
+        console.error(`Blocked closure details:`, { positionId, closeReason, additionalData });
+        
+        return { success: false, error: message, blocked: true, reason: 'AUTO_CLOSURES_DISABLED' };
+      }
+      
+      // CRITICAL CHECK: Block ANY position closure during an open operation for a different symbol
+      const memoryState = window.RIPPLE_TRADING_STATE;
+      const operationState = window.operationTracker.getOperation();
+      
+      // Check both memory and localStorage states for any opening operations
+      const hasOpeningMemoryOp = memoryState && memoryState.operationType === 'OPENING_POSITION';
+      const hasOpeningStorageOp = operationState && operationState.operation === 'OPENING_POSITION';
+      
+      // If either shows an opening operation for a different symbol, block the close
+      if (hasOpeningMemoryOp && memoryState.symbol) {
+        const openingSymbol = memoryState.symbol.toLowerCase().replace(/usdt$/, '');
+        
+        if (openingSymbol !== positionSymbol) {
+          const message = `[ABSOLUTE PROTECTION] Blocked closing ${positionSymbol} position while opening ${openingSymbol} position`;
+          console.error(message);
+          return { success: false, error: message, blocked: true, reason: 'CROSS_SYMBOL_OPERATION' };
+        }
+      }
+      
+      // Also check localStorage state (persists across page refreshes)
+      if (hasOpeningStorageOp && operationState.symbol) {
+        const openingSymbol = operationState.symbol.toLowerCase().replace(/usdt$/, '');
+        
+        if (openingSymbol !== positionSymbol) {
+          const message = `[ABSOLUTE PROTECTION] Blocked closing ${positionSymbol} position while opening ${openingSymbol} position`;
+          console.error(message);
+          return { success: false, error: message, blocked: true, reason: 'CROSS_SYMBOL_OPERATION' };
+        }
+      }
+      
+      // If ANY operation is in progress for a different symbol, block it
+      if (window.operationTracker.isOperationInProgressForDifferentSymbol(positionSymbol)) {
+        const message = `[ABSOLUTE PROTECTION] Cannot close ${positionSymbol} position - operation in progress for different coin`;
+        console.error(message);
+        return { success: false, error: message, blocked: true, reason: 'DIFFERENT_SYMBOL_OPERATION_IN_PROGRESS' };
+      }
+      
+      // Price safety checks
+      if (positionSymbol === 'btc' && closePrice < 10000) {
+        const message = `[ABSOLUTE PROTECTION] Bitcoin price ${closePrice} is suspiciously low`;
+        console.error(message);
+        return { success: false, error: message, blocked: true, reason: 'INVALID_PRICE' };
+      }
+      
+      if (positionSymbol === 'eth' && closePrice < 500) {
+        const message = `[ABSOLUTE PROTECTION] Ethereum price ${closePrice} is suspiciously low`;
+        console.error(message);
+        return { success: false, error: message, blocked: true, reason: 'INVALID_PRICE' };
+      }
+      
+      try {
+        // Set operation state for this specific close operation
+        window.operationTracker.setOperation(positionSymbol, 'CLOSING_POSITION', { 
+          positionId, 
+          closePrice,
+          isManualClose,
+          timestamp: Date.now()
+        });
+        
+        // Call the original method with enhanced metadata
+        console.log(`[ABSOLUTE PROTECTION] All validation passed. Proceeding with position close for ${positionSymbol}`);
+        
+        // Add critical metadata to prevent any confusion
+        const enhancedData = {
+          ...additionalData,
+          __protected: true,
+          __userInitiated: isManualClose,
+          __manual: isManualClose,
+          __timestamp: Date.now(),
+          __symbol: positionSymbol
+        };
+        
+        const result = await originalMethods.closePosition(userId, positionId, closePrice, enhancedData);
+        console.log(`[ABSOLUTE PROTECTION] Position close result:`, result);
+        
+        return result;
+      } catch (error) {
+        console.error(`[ABSOLUTE PROTECTION] Error closing position for ${positionSymbol}:`, error);
+        throw error;
+      } finally {
+        // Clear operation state
+        window.operationTracker.clearOperation();
+      }
+    };
+    
+    console.log('[CRITICAL] TradingService methods have been replaced with absolutely protected versions');
+    
+    // Return cleanup function
+    return () => {
+      // We don't restore the original methods on unmount, as we want isolation to persist
+      // throughout the app's lifetime
+//       console.log('[CRITICAL] Position isolation will remain active');
+    };
+  }, []);
+
+  // Disable the automatic position checking by replacing the useEffect that sets up the liquidation interval
+  useEffect(() => {
+    // DISABLED: Automatic position liquidations are disabled as requested by the user
+    // The original code has been removed to prevent any automatic closing of positions
+    console.log('[USER PREFERENCE] Automatic position liquidation has been disabled');
+    
+    // No interval is set up, so no cleanup needed
+    return () => {};
+  }, [currentUser, openPositions]);
+
+  // Disable the market price-triggered liquidation check
+  useEffect(() => {
+    // DISABLED: Market price change no longer triggers position liquidations
+    console.log('[USER PREFERENCE] Market price-triggered position checks have been disabled');
+    
+    // Uncomment the line below if you want to re-enable automatic liquidation
+    // if (marketPrice && positions.length > 0) checkPositionsForLiquidation();
+  }, [marketPrice, positions]);
+
+  // Add a button in the position row display to allow manual closing of positions
+  // Find the section that renders positions and add confirmation dialog
+  const renderPositions = () => {
+    return (
+      <PositionsContainer>
+        <PositionsHeader>
+          <span>Symbol</span>
+          <span>Type</span>
+          <span>Amount</span>
+          <span>Entry Price</span>
+          <span>Leverage</span>
+          <span>Margin</span>
+          <span>Liquidation</span>
+          <span>PNL</span>
+          <span>Action</span>
+        </PositionsHeader>
+        
+        {openPositions.length > 0 ? (
+          openPositions.map((position, i) => {
+            // Calculate PnL
+            const pnl = calculatePnL(position, marketPrice);
+            const pnlPercent = pnl ? (pnl / position.margin) * 100 : 0;
+            const liquidationPrice = calculateLiquidationPrice(position);
+            
+            // RISK VISUALIZATION: Calculate risk level for visual indicator
+            const positionSymbol = (position.symbol || '').toLowerCase().replace(/usdt$/, '');
+            const currentPrice = lastVerifiedPrices[positionSymbol] || 
+                               marketPrice || 
+                               hardcodedPrices[positionSymbol];
+            
+            let riskLevel = 'LOW';
+            if (position.type === 'buy') {
+              const priceGap = currentPrice - liquidationPrice;
+              const riskPercentage = (priceGap / currentPrice) * 100;
+              
+              if (currentPrice <= liquidationPrice) {
+                riskLevel = 'CRITICAL';
+              } else if (riskPercentage < 5) {
+                riskLevel = 'HIGH';
+              } else if (riskPercentage < 10) {
+                riskLevel = 'MEDIUM';
+              }
+            } else if (position.type === 'sell') {
+              const priceGap = liquidationPrice - currentPrice;
+              const riskPercentage = (priceGap / currentPrice) * 100;
+              
+              if (currentPrice >= liquidationPrice) {
+                riskLevel = 'CRITICAL';
+              } else if (riskPercentage < 5) {
+                riskLevel = 'HIGH';
+              } else if (riskPercentage < 10) {
+                riskLevel = 'MEDIUM';
+              }
+            }
+            
+            return (
+              <PositionRow 
+                key={position.id} 
+                $isProfitable={pnl >= 0}
+                $isClosing={position.id === closingPositionId}
+                $riskLevel={riskLevel}
+              >
+                <span>{position.symbol}</span>
+                <span className={position.type === 'buy' ? 'green' : 'red'}>
+                  {position.type === 'buy' ? 'LONG' : 'SHORT'}
+                </span>
+                <span>{position.amount}</span>
+                <span>${formatSmallNumber(position.entryPrice)}</span>
+                <span>{position.leverage}x</span>
+                <span>${formatSmallNumber(position.margin)}</span>
+                <span className={riskLevel === 'CRITICAL' ? 'red blink' : 
+                                 (riskLevel === 'HIGH' ? 'red' : 
+                                 (riskLevel === 'MEDIUM' ? 'orange' : ''))}>
+                  ${formatSmallNumber(liquidationPrice)}
+                  {riskLevel !== 'LOW' && (
+                    <RiskIndicator $level={riskLevel}>{riskLevel}</RiskIndicator>
+                  )}
+                </span>
+                <span className={pnl >= 0 ? 'green' : 'red'}>
+                  ${formatSmallNumber(pnl)} ({pnlPercent.toFixed(2)}%)
+                </span>
+                <span>
+                  <CloseButton 
+                    onClick={() => handleClosePositionWithConfirmation(position)}
+                    disabled={position.id === closingPositionId}
+                  >
+                    {position.id === closingPositionId ? 'Closing...' : 'Close'}
+                  </CloseButton>
+                </span>
+              </PositionRow>
+            );
+          })
+        ) : (
+          <EmptyState>No open positions</EmptyState>
+        )}
+      </PositionsContainer>
+    );
+  };
+
+  // Add a new confirmation function for user manual position closing
+  const handleClosePositionWithConfirmation = (position) => {
+    const positionSymbol = (position.symbol || '').toLowerCase().replace(/usdt$/, '');
+    const positionType = position.type === 'buy' ? 'LONG' : 'SHORT';
+    
+    // Get current price for the position
+    const currentPrice = lastVerifiedPrices[positionSymbol] || 
+                        marketPrice || 
+                        hardcodedPrices[positionSymbol];
+    
+    // Calculate PnL
+    const pnl = calculatePnL(position, currentPrice);
+    const pnlPercent = pnl ? (pnl / position.margin) * 100 : 0;
+    const pnlDisplay = `$${formatSmallNumber(pnl)} (${pnlPercent.toFixed(2)}%)`;
+    
+    // Create confirmation message
+    const isProfit = pnl >= 0;
+    const message = `Are you sure you want to close your ${positionSymbol.toUpperCase()} ${positionType} position?\n\n` +
+                   `Current P&L: ${pnlDisplay}\n` +
+                   `Entry Price: $${formatSmallNumber(position.entryPrice)}\n` +
+                   `Current Price: $${formatSmallNumber(currentPrice)}\n` +
+                   `Amount: ${position.amount} ${positionSymbol.toUpperCase()}\n` +
+                   `Leverage: ${position.leverage}x`;
+    
+    // Show confirmation dialog
+    if (window.confirm(message)) {
+      // User confirmed, proceed with position closing
+      handleClosePosition(position);
+      
+      // Show notification that position is being closed
+      addNotification({
+        title: `Closing ${positionSymbol.toUpperCase()} Position`,
+        message: `Manually closing ${positionType} position of ${position.amount} ${positionSymbol.toUpperCase()} with ${isProfit ? 'profit' : 'loss'} of ${pnlDisplay}`,
+        type: isProfit ? "success" : "warning",
+        playSound: true
+      });
+    }
+  };
+
+  // Add styled component for the risk indicator
+  const RiskIndicator = styled.span`
+    display: inline-block;
+    margin-left: 5px;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    color: white;
+    background-color: ${props => 
+      props.$level === 'CRITICAL' ? 'red' : 
+      props.$level === 'HIGH' ? '#ff4500' : 
+      props.$level === 'MEDIUM' ? 'orange' : 'green'
+    };
+    animation: ${props => props.$level === 'CRITICAL' ? 'blink 1s infinite' : 'none'};
+  `;
+
+  // Add a useEffect hook to patch the tradingService and implement absolute coin isolation
+  useEffect(() => {
+    // Critical direct override to prevent any cross-symbol contamination
+    console.log('🛡️ Applying critical trading service overrides to enforce position isolation');
+    
+    // Create comprehensive tradingService patching
+    const patchTradingSystem = () => {
+      console.log('🔒 Installing strict position isolation patches');
+      
+      // Create a backup of original methods
+      const originalMethods = {
+        closePosition: tradingService.closePosition,
+        openPosition: tradingService.openPosition,
+        executeLimitOrder: tradingService.executeLimitOrder
+      };
+      
+      // Override closePosition with absolute protection
+      tradingService.closePosition = async (userId, positionId, closePrice, closeData = {}) => {
+        // Extract position symbol and determine if this is user-initiated
+        const symbol = (closeData.symbol || '').toLowerCase().replace(/usdt$/, '');
+        const reason = closeData.reason || 'unknown';
+        const isUserInitiated = closeData.userInitiated || closeData.__userInitiated || 
+                               reason === 'manual';
+        
+        // Add logging
+        console.log(`[ABSOLUTE PROTECTION] Position closure for ${symbol} - ${reason}`);
+        
+        // Block any position closure during open operations for other symbols
+        const openingOperation = window.operationTracker?.getOperation?.();
+        if (openingOperation && 
+            openingOperation.operation === 'OPENING_POSITION' && 
+            openingOperation.symbol !== symbol) {
+          
+          console.error(`[ABSOLUTE PROTECTION] Blocked position closure during trade opening`);
+          return { success: false, error: 'Protected position from cross-symbol closure' };
+        }
+        
+        // No automatic liquidations
+        if (!isUserInitiated && window.RIPPLE_PREVENT_AUTO_POSITION_CLOSURES) {
+          console.error(`[ABSOLUTE PROTECTION] Blocked automatic position closure`);
+          return { success: false, error: 'Automatic position closures are disabled' };
+        }
+        
+        // User-initiated closures allowed to proceed
+        return originalMethods.closePosition(userId, positionId, closePrice, {
+          ...closeData,
+          __protected: true
+        });
+      };
+      
+      console.log('✅ Position isolation absolute protection installed');
+    };
+    
+    // Apply the patches
+    patchTradingSystem();
+    
+    // Add global hooks to expose important functions
+    window.patchTradingSystem = patchTradingSystem;
+    
+    return () => {
+      console.log('♻️ Cleaning up trading service patches');
+    };
+  }, [tradingService]);
+
+  useEffect(() => {
+    // Instead of trying to patch tradingService here, set up a global flag
+    // that will prevent automated position closures
+    if (typeof window !== 'undefined') {
+      window.RIPPLE_PREVENT_AUTO_POSITION_CLOSURES = true;
+      console.log('🔒 Automated position closures disabled per user request');
+    }
+  }, []);
+
+  return (
+    <TradingContainer>
+      {cryptoData?.token && (
+        <CoinInfo>
+          <CoinIcon 
+            src={cryptoData.token?.image || `https://coinicons-api.vercel.app/api/icon/${cryptoData.token?.symbol?.toLowerCase()}`}
+            onError={(e) => {
+              e.target.onerror = null;
+              if (e.target.src.includes('coinicons-api')) {
+                e.target.src = `https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${cryptoData.token?.symbol?.toLowerCase()}.png`;
+              } else {
+                e.target.src = `https://s2.coinmarketcap.com/static/img/coins/64x64/${cryptoData.token?.id || '1'}.png`;
+              }
+            }}
+          />
+          <CoinDetails>
+            <CoinName>{cryptoData.token?.name || "Loading..."}</CoinName>
+            <CoinSymbol>{
+              cryptoData.pairInfo?.symbol || 
+              (cryptoData.token?.symbol ? `${cryptoData.token.symbol}/USDT` : 
+              (window.location.pathname.includes('trading/') ? window.location.pathname.split('trading/')[1].toUpperCase() + '/USDT' : "ADA/USDT"))
+            }</CoinSymbol>
+          </CoinDetails>
+          <PriceInfo>
+            <CurrentPrice>${formatSmallNumber(getReliablePrice() || 0)}</CurrentPrice>
+          </PriceInfo>
+        </CoinInfo>
+      )}
+
+      <TradingGrid>
+        {renderChartSection()}
+
+        <RightSection>
+          {currentUser ? (
+            <>
+          <TradingInterface>
+            <OrderBookSection>
+              <OrderBook>
+                <OrderBookHeader>
+                  <span>Price(USDT)</span>
+                  <span>Qty({cryptoData?.token?.symbol || 'BTC'})</span>
+                  <span>Total</span>
+                </OrderBookHeader>
+                
+                    <OrderBookContent>
+                      <AsksContainer>
+                        {orderBook?.asks?.length > 0 ? (
+                          orderBook.asks.slice().reverse().map((ask, i) => (
+                    <OrderBookRow 
+                              key={`ask-${i}`}
+                      $side="sell"
+                      $depth={orderBook.asks.length ? 
+                                      (parseFloat(ask.amount) / Math.max(...orderBook.asks.map(a => parseFloat(a.amount)))) * 100 : 0}
+                        onClick={() => {
+                        setOrderMode('limit');
+                                setLimitPrice(String(ask.price));
+                                setAmount(String(ask.amount));
+                      }}
+                      className={orderBookFlash[`ask-${i}`] ? 'flash' : ''}
+                    >
+                      <span style={{ color: '#F6465D' }}>
+                                {formatOrderPrice(ask.price)}
+                      </span>
+                        <span>
+                          {isNaN(parseFloat(ask.amount)) ? 
+                            (ask.price > 500 ? (Math.random() * 1.95 + 0.05).toFixed(4) : 
+                             ask.price > 100 ? (Math.random() * 4.9 + 0.1).toFixed(4) : 
+                             (Math.random() * 20 + 1).toFixed(4)) : 
+                            (typeof ask.amount === 'number' ? 
+                              ask.amount.toFixed(4) : 
+                              parseFloat(ask.amount).toFixed(4))}
+                        </span>
+                        <span>
+                          {isNaN(parseFloat(ask.total)) ? 
+                            (parseFloat(formatOrderPrice(ask.price)) * 
+                              (isNaN(parseFloat(ask.amount)) ? 
+                                parseFloat((ask.price > 500 ? (Math.random() * 1.95 + 0.05).toFixed(4) : 
+                                 ask.price > 100 ? (Math.random() * 4.9 + 0.1).toFixed(4) : 
+                                 (Math.random() * 20 + 1).toFixed(4))) : parseFloat(ask.amount)
+                              )).toFixed(4) : 
+                            (typeof ask.total === 'number' ? 
+                              ask.total.toFixed(4) : 
+                              parseFloat(ask.total).toFixed(4))}
+                        </span>
+                    </OrderBookRow>
+                          ))
+                        ) : (
+                          // Display placeholder rows when no asks are available
+                          Array.from({ length: 7 }).map((_, index) => (
+                            <OrderBookRow key={`empty-ask-${index}`} $side="sell" $depth={0}>
+                              <span style={{ color: '#F6465D' }}>---</span>
+                              <span>---</span>
+                              <span>---</span>
+                            </OrderBookRow>
+                          ))
+                        )}
+                      </AsksContainer>
+
+                  <CurrentPrice $isUp={getReliablePrice() > lastPrice}>
+                        <OrderBookArrow $direction={getReliablePrice() > lastPrice ? 'up' : 'down'}>
+                          {getReliablePrice() > lastPrice ? '↑' : '↓'}
+                        </OrderBookArrow>
+                        {formatOrderPrice(getReliablePrice())}
+                  </CurrentPrice>
+
+                      <BidsContainer>
+                        {orderBook?.bids?.length > 0 ? (
+                          orderBook.bids.map((bid, i) => (
+                    <OrderBookRow 
+                              key={`bid-${i}`}
+                      $side="buy"
+                      $depth={orderBook.bids.length ? 
+                                      (parseFloat(bid.amount) / Math.max(...orderBook.bids.map(b => parseFloat(b.amount)))) * 100 : 0}
+                        onClick={() => {
+                        setOrderMode('limit');
+                                setLimitPrice(String(bid.price));
+                                setAmount(String(bid.amount));
+                      }}
+                      className={orderBookFlash[`bid-${i}`] ? 'flash' : ''}
+                    >
+                      <span style={{ color: '#0ECB81' }}>
+                                {formatOrderPrice(bid.price)}
+                      </span>
+                        <span>
+                          {isNaN(parseFloat(bid.amount)) ? 
+                            (bid.price > 500 ? (Math.random() * 1.95 + 0.05).toFixed(4) : 
+                             bid.price > 100 ? (Math.random() * 4.9 + 0.1).toFixed(4) : 
+                             (Math.random() * 20 + 1).toFixed(4)) : 
+                            (typeof bid.amount === 'number' ? 
+                              bid.amount.toFixed(4) : 
+                              parseFloat(bid.amount).toFixed(4))}
+                        </span>
+                        <span>
+                          {isNaN(parseFloat(bid.total)) ? 
+                            (parseFloat(formatOrderPrice(bid.price)) * 
+                              (isNaN(parseFloat(bid.amount)) ? 
+                                parseFloat((bid.price > 500 ? (Math.random() * 1.95 + 0.05).toFixed(4) : 
+                                 bid.price > 100 ? (Math.random() * 4.9 + 0.1).toFixed(4) : 
+                                 (Math.random() * 20 + 1).toFixed(4))) : parseFloat(bid.amount)
+                              )).toFixed(4) : 
+                            (typeof bid.total === 'number' ? 
+                              bid.total.toFixed(4) : 
+                              parseFloat(bid.total).toFixed(4))}
+                        </span>
+                    </OrderBookRow>
+                          ))
+                        ) : (
+                          // Display placeholder rows when no bids are available
+                          Array.from({ length: 7 }).map((_, index) => (
+                            <OrderBookRow key={`empty-bid-${index}`} $side="buy" $depth={0}>
+                              <span style={{ color: '#0ECB81' }}>---</span>
+                              <span>---</span>
+                              <span>---</span>
+                            </OrderBookRow>
+                          ))
+                        )}
+                      </BidsContainer>
+                      
+                      {/* Add Buy/Sell ratio indicator */}
+                      <OrderBookRatio $buyPercent={buyRatio}>
+                        <RatioIndicator>
+                          <span>B {buyRatio}%</span>
+                          <span>S {100 - buyRatio}%</span>
+                        </RatioIndicator>
+                      </OrderBookRatio>
+                    </OrderBookContent>
+              </OrderBook>
+            </OrderBookSection>
+
+            <OrderFormSection>
+              <OrderTypeSelector>
+                <OrderTab 
+                  active={orderMode === 'market'} 
+                  onClick={() => setOrderMode('market')}
+                >
+                  Market
+                </OrderTab>
+                <OrderTab 
+                  active={orderMode === 'limit'} 
+                  onClick={() => setOrderMode('limit')}
+                >
+                  Limit
+                </OrderTab>
+              </OrderTypeSelector>
+
+              <OrderForm onSubmit={handleSubmit}>
+                <div style={{ display: 'grid', gridTemplateColumns: orderMode === 'limit' ? '1fr 1fr' : '1fr', gap: '6px', marginBottom: '6px' }}>
+                  <AmountInput
+                    key={`amount-${inputKey}`}
+                    type="number"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder={`Amount in ${cryptoData.token.symbol}`}
+                    min="0"
+                    step="0.000001"
+                    required
+                  />
+
+                  {orderMode === 'limit' && (
+                    <AmountInput
+                      key={`limit-${inputKey}`}
+                      type="number"
+                      value={limitPrice}
+                      onChange={(e) => setLimitPrice(e.target.value)}
+                      placeholder="Limit Price (USDT)"
+                      required
+                    />
+                  )}
+                </div>
+
+                {renderLeverageControls()}
+
+                <OrderDetails>
+                  <DetailRow>
+                    <span>Entry Price</span>
+                        <span>${orderMode === 'market' ? 
+                          (getReliablePrice() ? 
+                            getReliablePrice().toLocaleString(
+                              getReliablePrice() < 0.01 ? 6 : 
+                              getReliablePrice() < 0.1 ? 5 : 
+                              getReliablePrice() < 1 ? 4 : 
+                              getReliablePrice() < 10 ? 4 : 
+                              getReliablePrice() < 100 ? 3 : 2
+                            ) : '0.00') : 
+                          (limitPrice || '0.00')}</span>
+                  </DetailRow>
+                  <DetailRow>
+                    <span>Size</span>
+                        <span>{amount || '0.00'} {cryptoData?.token?.symbol || ''}</span>
+                  </DetailRow>
+                  <DetailRow>
+                    <span>Leverage</span>
+                    <span>{leverage}x</span>
+                  </DetailRow>
+                </OrderDetails>
+
+                    <div style={{ marginTop: 'auto' }}>
+                <TradeInfo>
+                  <InfoItem>
+                    <span>Required Margin:</span>
+                    <span>${calculateRequiredMargin(amount, getReliablePrice(), leverage).toLocaleString()} USDT</span>
+                  </InfoItem>
+                  <InfoItem $highlight>
+                    <span>Available Balance:</span>
+                    <span>${typeof userBalance?.USDT === 'number' && !isNaN(userBalance.USDT) ? userBalance.USDT.toLocaleString() : '0.00'} USDT</span>
+                  </InfoItem>
+                </TradeInfo>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '30px' }}>
+                  <OrderButton 
+                    $orderType="buy"
+                    onClick={() => {
+                      setOrderType('buy');
+                      // Pass 'buy' directly to handleSubmit to avoid state timing issues
+                      handleSubmit(new Event('click'), 'buy');
+                    }}
+                    disabled={isPending}
+                  >
+                    {isPending && orderType === 'buy' ? 'Processing...' : `Buy ${cryptoData.token.symbol}`}
+                  </OrderButton>
+                  <OrderButton 
+                    $orderType="sell"
+                    onClick={() => {
+                      setOrderType('sell');
+                      // Pass 'sell' directly to handleSubmit to avoid state timing issues
+                      handleSubmit(new Event('click'), 'sell');
+                    }}
+                    disabled={isPending}
+                  >
+                    {isPending && orderType === 'sell' ? 'Processing...' : `Sell ${cryptoData.token.symbol}`}
+                  </OrderButton>
+                      </div>
+                </div>
+              </OrderForm>
+            </OrderFormSection>
+          </TradingInterface>
+            </>
+          ) : (
+            <LoginPrompt>
+              <h3>Login to Trade</h3>
+              <p>Create an account or login to start trading {cryptoData?.name || 'cryptocurrencies'}.</p>
+              <ButtonGroup>
+                <StyledButton onClick={() => window.location.href = '/login'}>Login</StyledButton>
+                <StyledButton onClick={() => window.location.href = '/register'}>Register</StyledButton>
+              </ButtonGroup>
+            </LoginPrompt>
+          )}
+        </RightSection>
+      </TradingGrid>
+
+      {renderPendingLimitOrders()}
+
+      <div style={{ 
+        marginTop: '190px', 
+        background: 'var(--bg)',
+        borderRadius: '12px',
+        border: '2px solid #D4AF37',
+        boxShadow: '0 0 20px rgba(212, 175, 55, 0.3)',
+        padding: '15px',
+        animation: 'fadeIn 0.5s ease-in-out',
+        position: 'relative',
+        zIndex: 5
+      }}>
+        <Tabs>
+          <TabList>
+            <Tab>Open Positions ({openPositions.filter(p => p.symbol === cryptoData?.token?.symbol).length})</Tab>
+            <Tab>Closed Positions ({closedPositions.filter(p => p.symbol === cryptoData?.token?.symbol).length})</Tab>
+          </TabList>
+
+          <TabPanel>
+            {isLoadingPositions ? (
+              <div style={{ textAlign: 'center', padding: '20px' }}>Loading positions...</div>
+            ) : openPositions.filter(p => p.symbol === cryptoData?.token?.symbol).length > 0 ? (
+          <PositionsTable>
+            <thead>
+              <tr>
+                <TableHeader>Type</TableHeader>
+                <TableHeader>Amount</TableHeader>
+                <TableHeader>Entry Price</TableHeader>
+                <TableHeader>Mark Price</TableHeader>
+                <TableHeader>Liquidation</TableHeader>
+                <TableHeader>Leverage</TableHeader>
+                <TableHeader>PnL (ROE %)</TableHeader>
+                <TableHeader>Actions</TableHeader>
+              </tr>
+            </thead>
+            <tbody>
+                    {openPositions
+                      .filter(position => position.symbol === cryptoData?.token?.symbol)
+                      .map(position => {
+                      const pnl = calculatePnL(position, marketPrice) || 0;
+                      const roe = position.margin ? ((pnl / position.margin) * 100).toLocaleString() : '0.00';
+                      const liquidationPrice = calculateLiquidationPrice(position);
+                
+                return (
+                  <tr key={position.id}>
+                    <TableCell style={{ 
+                      color: position.side === 'sell' ? '#F6465D' : '#0ECB81' 
+                    }}>
+                      {position.side?.toUpperCase() || position.type?.toUpperCase() || 'N/A'} <span className="mobile-only-symbol">[{position.symbol}]</span>
+                    </TableCell>
+                          <TableCell>{position.amount || 0} {position.symbol || ''}</TableCell>
+                    <TableCell>${position.entryPrice?.toLocaleString() || '0.00'}</TableCell>
+                    <TableCell>${
+                      typeof marketPrice === 'number' 
+                        ? marketPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) 
+                        : '0.00'
+                    }</TableCell>
+                    <TableCell style={{ color: '#F44336' }}>
+                      ${typeof liquidationPrice === 'number' ? liquidationPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00'}
+                    </TableCell>
+                          <TableCell>{position.leverage || 1}x</TableCell>
+                    <TableCell>
+                      <PnLValue value={pnl}>
+                        ${pnl.toLocaleString()} ({roe}%)
+                      </PnLValue>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                              onClick={() => handleClosePosition(position)}
+                              disabled={isPending && closingPositionId === position.id}
+                            >
+                              {isPending && closingPositionId === position.id ? 'Processing...' : 'Close'}
+                      </Button>
+                    </TableCell>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </PositionsTable>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '20px' }}>No open positions for {cryptoData?.token?.symbol || 'this pair'}</div>
+              )}
+            </TabPanel>
+
+            <TabPanel>
+              {isLoadingPositions ? (
+                <div style={{ textAlign: 'center', padding: '20px' }}>Loading positions...</div>
+              ) : closedPositions.filter(p => p.symbol === cryptoData?.token?.symbol).length > 0 ? (
+                <PositionsTable>
+                  <thead>
+                    <tr>
+                      <TableHeader>Type</TableHeader>
+                      <TableHeader>Amount</TableHeader>
+                      <TableHeader>Entry Price</TableHeader>
+                      <TableHeader>Close Price</TableHeader>
+                      <TableHeader>Leverage</TableHeader>
+                      <TableHeader>Final PnL</TableHeader>
+                      <TableHeader>Close Time</TableHeader>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {closedPositions
+                      .filter(position => position.symbol === cryptoData?.token?.symbol)
+                      .map(position => (
+                      <tr key={position.id}>
+                        <TableCell style={{ 
+                          color: position.side === 'sell' ? '#F6465D' : '#0ECB81' 
+                        }}>
+                          {position.side?.toUpperCase() || position.type?.toUpperCase() || 'N/A'} <span className="mobile-only-symbol">[{position.symbol}]</span>
+                        </TableCell>
+                        <TableCell>{position.amount || 0} {position.symbol || ''}</TableCell>
+                        <TableCell>${position.entryPrice?.toLocaleString() || '0.00'}</TableCell>
+                        <TableCell>${
+                          typeof position.closePrice === 'number' 
+                            ? position.closePrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) 
+                            : '0.00'
+                        }</TableCell>
+                        <TableCell>{position.leverage || 1}x</TableCell>
+                        <TableCell>
+                          <PnLValue value={position.finalPnL || 0}>
+                            ${(position.finalPnL || 0).toLocaleString()}
+                          </PnLValue>
+                        </TableCell>
+                        <TableCell>
+                          {position.closeTime ? 
+                            new Date(position.closeTime).toLocaleString() : 
+                            'N/A'
+                          }
+                        </TableCell>
+                      </tr>
+                    ))}
+                  </tbody>
+                </PositionsTable>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '20px' }}>No closed positions for {cryptoData?.token?.symbol || 'this pair'}</div>
+              )}
+            </TabPanel>
+          </Tabs>
+        </div>
+
+      {!isOnline && (
+        <StatusMessage error>
+          You are currently offline. Some features may be unavailable.
+        </StatusMessage>
+      )}
+
+      {error && (
+        <StatusMessage error>
+          {error}
+        </StatusMessage>
+      )}
+    </TradingContainer>
+  );
+};
+
+// Add new styled components
+const LoginPrompt = styled.div`
+  text-align: center;
+  padding: 40px;
+  background: var(--bg2);
+  border-radius: 8px;
+  margin: 20px 0;
+
+  h3 {
+    color: var(--text);
+    margin-bottom: 16px;
+  }
+
+  p {
+    color: var(--onsurface);
+    margin-bottom: 24px;
+  }
+`;
+
+const ButtonGroup = styled.div`
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+`;
+
+const StyledButton = styled.button`
+  padding: 12px 24px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+
+  &:first-child {
+    background: var(--primary);
+    color: white;
+
+    &:hover {
+      background: var(--primary-dark);
+    }
+  }
+
+  &:last-child {
+    background: transparent;
+    border: 1px solid var(--primary);
+    color: var(--primary);
+
+    &:hover {
+      background: var(--primary);
+      color: white;
+    }
+  }
+`;
+
+const StatusMessage = styled.div`
+  color: ${props => props.error ? '#F6465D' : '#0ECB81'};
+  padding: 8px;
+  text-align: center;
+  background: ${props => props.error ? 'rgba(246, 70, 93, 0.1)' : 'rgba(14, 203, 129, 0.1)'};
+  border-radius: 4px;
+  margin-bottom: 16px;
+`;
+
+// Add these new styled components for the professional order book
+const OrderBookArrow = styled.span`
+  color: ${props => props.$direction === 'up' ? '#0ECB81' : '#F6465D'};
+  margin-right: 4px;
+  font-size: 14px;
+`;
+
+const OrderBookFlag = styled.span`
+  color: #F0B90B;
+  margin-left: 4px;
+  font-size: 12px;
+`;
+
+const OrderBookRatio = styled.div`
+  display: flex;
+  align-items: center;
+  height: 28px;
+  background: linear-gradient(
+    to right,
+    rgba(14, 203, 129, 0.2) ${props => props.$buyPercent}%,
+    rgba(246, 70, 93, 0.2) ${props => props.$buyPercent}%
+  );
+  margin-top: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+`;
+
+const RatioIndicator = styled.div`
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  padding: 0 8px;
+  align-items: center;
+  
+  span {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 3px 6px;
+    border-radius: 4px;
+    
+    &:first-child {
+      background: rgba(14, 203, 129, 0.3);
+      color: #0ECB81;
+    }
+    
+    &:last-child {
+      background: rgba(246, 70, 93, 0.3);
+      color: #F6465D;
+    }
+  }
+`;
+
+export default Trading; 

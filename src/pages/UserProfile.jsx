@@ -19,7 +19,8 @@ import {
     getDocs, 
     updateDoc, 
     serverTimestamp,
-    setDoc
+    setDoc,
+    deleteDoc
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Link } from 'react-router-dom';
@@ -51,6 +52,9 @@ import linkLogo from '../assets/images/coin/link.png';
 import uniLogo from '../assets/images/coin/uni.png';
 import atomLogo from '../assets/images/coin/atom.png';
 import ripplexLogo from '../assets/images/logo/logo.png'; // Import Ripple Exchange logo for RIPPLEX token
+import { fetchBalances, updateTokenBalance } from '../services/balanceService';
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 UserProfile.propTypes = {
     
@@ -513,16 +517,36 @@ const StyledTabs = styled(Tabs)`
 
 function UserProfile(props) {
     const navigate = useNavigate();
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
+    const [userData, setUserData] = useState({});
+    const [balances, setBalances] = useState({});
     const [loading, setLoading] = useState(true);
-    const [userData, setUserData] = useState({
-        displayName: '',
-        email: '',
-        phoneNumber: '',
-        photoURL: '',
-    });
-
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState(''); // Added missing success state variable
+    const [displayName, setDisplayName] = useState('');
+    const [isPremium, setIsPremium] = useState(false);
+    const [userId, setUserId] = useState('');
+    const [avatar, setAvatar] = useState(img);
+    const [isAdmin, setIsAdmin] = useState(false);
+    
+    // Admin state variables
+    const [users, setUsers] = useState([]);
+    const [selectedUser, setSelectedUser] = useState('');
+    const [selectedToken, setSelectedToken] = useState('');
+    const [amount, setAmount] = useState('');
+    
+    // Define checkAdminStatusOnMount function
+    const checkAdminStatusOnMount = async () => {
+        if (auth.currentUser) {
+            try {
+                const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+                setIsAdmin(userDoc.exists() && (userDoc.data()?.role === 'admin' || userDoc.data()?.isAdmin === true));
+            } catch (error) {
+                console.error('Error checking admin status:', error);
+                setIsAdmin(false);
+            }
+        }
+    };
+    
     const [dataCoinTab] = useState([
         {
             id: 1,
@@ -556,15 +580,11 @@ function UserProfile(props) {
         },
     ]);
 
-    const [balances, setBalances] = useState({});
     const [positions, setPositions] = useState([]);
     const [totalPnL, setTotalPnL] = useState(0);
     const [tokenPrices, setTokenPrices] = useState({
         RIPPLEX: 1 // Set a fixed price of $1 for RIPPLEX token
     });
-    const [isAdmin, setIsAdmin] = useState(false);
-    const [selectedUser, setSelectedUser] = useState(null);
-    const [users, setUsers] = useState([]);
     const [editBalance, setEditBalance] = useState({ token: '', amount: '' });
     const [showConvertModal, setShowConvertModal] = useState(false);
     const [isGoogleUser, setIsGoogleUser] = useState(false);
@@ -591,109 +611,145 @@ function UserProfile(props) {
 
     // Check if user is authenticated
     useEffect(() => {
-        const fetchUserData = async () => {
-            setLoading(true);
-            setError(''); // Clear any previous errors
-            try {
-                const user = auth.currentUser;
-                
-                if (!user) {
-                    console.log("No authenticated user found");
-                    navigate('/login');
-                    return;
+        let safetyTimeout; // Declare variable at the top level of useEffect
+        
+        if (auth.currentUser) {
+            setUserId(auth.currentUser.uid);
+            
+            // Define variables to track loading process
+            let userDataLoaded = false;
+            let balancesLoaded = false;
+            
+            // Safety timeout to prevent infinite loading
+            safetyTimeout = setTimeout(() => {
+                if (loading) {
+                    console.log("Safety timeout triggered - forcing loading state to false");
+                    setLoading(false);
                 }
-                
-                console.log("Current user:", user.uid);
-                
+            }, 10000); // 10 seconds timeout
+            
+            // Check admin status and user status
+            checkAdminStatusOnMount().catch(err => {
+                console.error("Error checking admin status:", err);
+            });
+            
+            // Fetch authenticated user's data
+            const fetchUserData = async () => {
                 try {
-                    // Get Firestore user document
-                    const userDoc = await getDoc(doc(db, 'users', user.uid));
+                    const userRef = doc(db, 'users', auth.currentUser.uid);
+                    const userSnapshot = await getDoc(userRef);
                     
-                    if (userDoc.exists()) {
-                        console.log("User document exists in Firestore");
-                        const userData = userDoc.data();
+                    if (userSnapshot.exists()) {
+                        const userData = userSnapshot.data();
+                        setUserData(userData);
+                        setDisplayName(userData.displayName || '');
+                        setIsPremium(userData.isPremium || false);
                         
-                        // Check if this is a Google account (has provider data)
-                        const isGoogleAccount = userData.authProvider === 'google';
+                        const storedAvatar = userData.avatar || auth.currentUser.photoURL;
+                        if (storedAvatar) {
+                            setAvatar(storedAvatar);
+                        }
                         
-                        // Use default image for non-Google accounts
-                        const photoURL = isGoogleAccount ? user.photoURL : img;
+                        // For any information tied to 2FA
+                        await checkTwoFactorStatus(auth.currentUser.uid);
+                    }
+                    userDataLoaded = true;
+                    // If balances are already loaded, we can set loading to false
+                    if (balancesLoaded) {
+                      setLoading(false);
+                    }
+                } catch (error) {
+                    console.error('Error fetching user data:', error);
+                    setError('Failed to fetch user data');
+                    setLoading(false); // Always set loading to false on error
+                }
+            };
+            
+            fetchUserData().catch(err => {
+              console.error("Error in fetchUserData:", err);
+              setLoading(false);
+            });
+            
+            // Fetch users for admin
+            if (isAdmin) {
+                const fetchUsers = async () => {
+                    try {
+                        const usersCollection = collection(db, 'users');
+                        const usersSnapshot = await getDocs(usersCollection);
+                        const usersData = usersSnapshot.docs.map(doc => ({
+                            id: doc.id,
+                            ...doc.data()
+                        }));
+                        setUsers(usersData);
+                    } catch (error) {
+                        console.error('Error fetching users:', error);
+                    }
+                };
+                fetchUsers().catch(err => {
+                  console.error("Error in fetchUsers:", err);
+                });
+            }
+
+            // Use the imported fetchBalances function to get user balances
+            const getUserBalances = async () => {
+                try {
+                    console.log("Initializing balances for user:", auth.currentUser.uid);
+                    const userBalances = await fetchBalances(auth.currentUser.uid);
+                    setBalances(userBalances);
+                    
+                    // Also check for any airdrop claims
+                    const airdropRef = doc(db, 'airdrops', auth.currentUser.uid);
+                    const airdropDoc = await getDoc(airdropRef);
+                    
+                    if (airdropDoc.exists() && airdropDoc.data().completed) {
+                        console.log("User has completed airdrop, checking balance");
                         
-                        setUserData({
-                            displayName: user.displayName || '',
-                            email: user.email,
-                            phoneNumber: user.phoneNumber || '',
-                            photoURL: photoURL
-                        });
-                    } else {
-                        console.log("User document doesn't exist, creating default data");
-                        // No user document, use auth data with default image
-                        setUserData({
-                            displayName: user.displayName || '',
-                            email: user.email,
-                            phoneNumber: user.phoneNumber || '',
-                            photoURL: img
-                        });
-                        
-                        // Create a default user document if it doesn't exist
-                        try {
-                            await setDoc(doc(db, 'users', user.uid), {
-                                email: user.email,
-                                displayName: user.displayName || '',
-                                createdAt: serverTimestamp(),
-                                emailVerified: true
-                            });
-                            console.log("Created new user document");
-                        } catch (docCreateError) {
-                            console.error("Error creating user document:", docCreateError);
+                        // If RIPPLEX is missing or 0 but airdrop was completed, add 100 RIPPLEX
+                        if (!userBalances.RIPPLEX || userBalances.RIPPLEX === 0) {
+                            console.log("Adding missing RIPPLEX tokens from completed airdrop");
+                            const updated = await updateTokenBalance(auth.currentUser.uid, 'RIPPLEX', 100);
+                            
+                            if (updated) {
+                                // Update local state
+                                setBalances(prev => ({
+                                    ...prev,
+                                    RIPPLEX: 100
+                                }));
+                                
+                                toast.success("Added 100 RIPPLEX tokens from your completed airdrop!");
+                            }
                         }
                     }
-                } catch (firestoreError) {
-                    console.error("Error accessing Firestore:", firestoreError);
-                    setError('Error retrieving user profile data');
-                    return;
+                    balancesLoaded = true;
+                    // If user data is already loaded, we can set loading to false
+                    if (userDataLoaded) {
+                      setLoading(false);
+                    }
+                } catch (error) {
+                    console.error('Error fetching balances:', error);
+                    setError('Failed to fetch balances');
+                    setLoading(false); // Always set loading to false on error
                 }
-                
-                // Check if user is authenticated with Google
-                const isGoogleAuth = user.providerData.some(
-                    (provider) => provider.providerId === 'google.com'
-                );
-                setIsGoogleUser(isGoogleAuth);
-                
-                try {
-                    // Fetch user balances
-                    await fetchBalances();
-                } catch (balanceError) {
-                    console.error("Error fetching balances:", balanceError);
-                    // Continue even if balances fail
-                }
-                
-                try {
-                    // Fetch prices
-                    await fetchPrices();
-                } catch (priceError) {
-                    console.error("Error fetching prices:", priceError);
-                    // Continue even if prices fail
-                }
-                
-                try {
-                    // Check 2FA status
-                    await checkTwoFactorStatus(user.uid);
-                } catch (twoFAError) {
-                    console.error("Error checking 2FA status:", twoFAError);
-                    // Continue even if 2FA check fails
-                }
-                
-            } catch (error) {
-                console.error('Error in fetchUserData:', error);
-                setError('Failed to load user data: ' + (error.message || 'Unknown error'));
-            } finally {
-                setLoading(false);
+            };
+
+            getUserBalances().catch(err => {
+              console.error("Error in getUserBalances:", err);
+              setLoading(false);
+            });
+        } else {
+            // If no user is authenticated, redirect to login and set loading to false
+            console.log("No authenticated user, redirecting to login");
+            setLoading(false);
+            navigate('/login');
+        }
+        
+        // Return cleanup function to clear the timeout
+        return () => {
+            if (safetyTimeout) {
+                clearTimeout(safetyTimeout);
             }
         };
-        
-        fetchUserData();
-    }, [navigate]);
+    }, []);
 
     // Fetch all users for admin
     useEffect(() => {
@@ -939,42 +995,38 @@ function UserProfile(props) {
         // This function is kept to avoid breaking any existing code
     };
 
+    // Handle balance update for user profile
     const handleUpdateBalance = async () => {
-        if (!selectedUser || !editBalance.token || editBalance.amount === '') return;
-        
         try {
-            const userRef = doc(db, 'users', selectedUser);
-            const userDoc = await getDoc(userRef);
-            
-            if (userDoc.exists()) {
-                const currentBalances = userDoc.data().balances || {};
-                const updatedBalances = { ...currentBalances };
-                updatedBalances[editBalance.token] = Number(editBalance.amount);
-                
-                await updateDoc(userRef, {
-                    balances: updatedBalances
-                });
-                
-                // Update local state if modifying current user
-                if (selectedUser === auth.currentUser.uid) {
-                    setBalances(updatedBalances);
-                }
-                
-                // Update users list
-                setUsers(prevUsers => 
-                    prevUsers.map(user => 
-                        user.id === selectedUser 
-                            ? { ...user, balances: updatedBalances }
-                            : user
-                    )
-                );
-                
-                setEditBalance({ token: '', amount: '' });
-                alert('Balance updated successfully!');
+            if (!selectedUser || !editBalance.token || !editBalance.amount) {
+                toast.error('Please select a token and enter an amount');
+                return;
             }
+            
+            // Get current user balances
+            const userRef = doc(db, 'users', selectedUser);
+            await updateDoc(userRef, {
+                [`balances.${editBalance.token}`]: parseFloat(editBalance.amount),
+                updatedAt: serverTimestamp()
+            });
+            
+            toast.success(`Balance updated successfully`);
+            
+            // Reset form
+            setEditBalance({ token: '', amount: '' });
+            
+            // Refresh user list
+            const usersSnapshot = await getDocs(collection(db, 'users'));
+            const usersData = usersSnapshot.docs.map(doc => ({
+                id: doc.id,
+                email: doc.data().email,
+                balances: doc.data().balances || {}
+            }));
+            setUsers(usersData);
+            
         } catch (error) {
             console.error('Error updating balance:', error);
-            setError('Failed to update balance');
+            toast.error('Failed to update balance');
         }
     };
 
@@ -1238,27 +1290,91 @@ function UserProfile(props) {
         return () => clearInterval(interval);
     }, []);
          
-    // Only check admin status once when component mounts
-    useEffect(() => {
-        const checkAdminStatusOnMount = async () => {
-            if (auth.currentUser) {
-                try {
-                    const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
-                    setIsAdmin(userDoc.data()?.isAdmin || false);
-                } catch (error) {
-                    console.error('Error checking admin status:', error);
-                }
-            }
-        };
+    // Admin function to update user balances
+    const handleAdminUpdateBalance = async (action) => {
+        if (!selectedUser || !selectedToken || !amount) {
+            toast.error('Please select a user, token, and enter an amount');
+            return;
+        }
         
-        checkAdminStatusOnMount();
-    }, []);
+        try {
+            const userRef = doc(db, 'users', selectedUser);
+            const userDoc = await getDoc(userRef);
+            
+            if (!userDoc.exists()) {
+                toast.error('User document not found');
+                return;
+            }
+            
+            const userData = userDoc.data();
+            const currentBalances = userData.balances || {};
+            const currentAmount = currentBalances[selectedToken] || 0;
+            
+            let newAmount = currentAmount;
+            
+            if (action === 'add') {
+                newAmount = currentAmount + parseFloat(amount);
+            } else if (action === 'subtract') {
+                newAmount = Math.max(0, currentAmount - parseFloat(amount));
+            }
+            
+            // Update the user's balance
+            await updateDoc(userRef, {
+                [`balances.${selectedToken}`]: newAmount,
+                updatedAt: serverTimestamp()
+            });
+            
+            toast.success(`Successfully ${action === 'add' ? 'added' : 'subtracted'} ${amount} ${selectedToken} for user`);
+            
+            // Refresh user list to show updated balances
+            const usersSnapshot = await getDocs(collection(db, 'users'));
+            const usersData = usersSnapshot.docs.map(doc => ({
+                id: doc.id,
+                email: doc.data().email,
+                balances: doc.data().balances || {}
+            }));
+            setUsers(usersData);
+            
+            // Reset form
+            setAmount('');
+            
+        } catch (error) {
+            console.error('Error updating user balance:', error);
+            toast.error('Failed to update balance: ' + error.message);
+        }
+    };
 
     if (loading) {
-        return <div>Loading...</div>;
+        return (
+            <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '80vh',
+                color: 'white'
+            }}>
+                <div style={{
+                    border: '4px solid rgba(255, 255, 255, 0.1)',
+                    borderTop: '4px solid #f3c121',
+                    borderRadius: '50%',
+                    width: '40px',
+                    height: '40px',
+                    animation: 'spin 1s linear infinite',
+                    marginBottom: '20px'
+                }} />
+                <div>Loading your dashboard...</div>
+                <style jsx>{`
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                `}</style>
+            </div>
+        );
     }
 
-    // Update the admin controls JSX
+    // Define renderAdminControls function
     const renderAdminControls = () => (
         <div style={{
             marginTop: '24px',
@@ -1270,92 +1386,86 @@ function UserProfile(props) {
             <h4 style={{ marginBottom: '16px' }}>Admin Controls</h4>
             <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', flexWrap: 'wrap' }}>
                 <select 
-                    value={selectedUser} 
-                    onChange={(e) => setSelectedUser(e.target.value)}
                     style={{
-                        background: '#2A2A3C',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        padding: '8px 12px',
                         borderRadius: '8px',
-                        padding: '8px',
-                        color: '#fff',
-                        minWidth: '200px'
+                        background: '#2D2D3F',
+                        color: 'white',
+                        border: '1px solid rgba(255, 255, 255, 0.1)'
                     }}
+                    value={selectedUser || ''}
+                    onChange={(e) => setSelectedUser(e.target.value)}
                 >
                     <option value="">Select User</option>
                     {users.map(user => (
                         <option key={user.id} value={user.id}>{user.email}</option>
                     ))}
                 </select>
-                <select 
-                    value={editBalance.token}
-                    onChange={(e) => setEditBalance(prev => ({ ...prev, token: e.target.value }))}
-                    style={{
-                        background: '#2A2A3C',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        borderRadius: '8px',
-                        padding: '8px',
-                        color: '#fff',
-                        minWidth: '150px'
-                    }}
-                >
-                    <option value="">Select Token</option>
-                    {Object.entries(DEFAULT_COINS).map(([symbol, coin]) => (
-                        <option key={symbol} value={symbol}>
-                            {coin.name} ({symbol})
-                        </option>
-                    ))}
-                </select>
-                <input 
-                    type="number"
-                    value={editBalance.amount}
-                    onChange={(e) => setEditBalance(prev => ({ ...prev, amount: e.target.value }))}
-                    placeholder="Amount"
-                    style={{
-                        background: '#2A2A3C',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        borderRadius: '8px',
-                        padding: '8px',
-                        color: '#fff',
-                        minWidth: '120px'
-                    }}
-                />
-                <button 
+                
+                <button
+                    className="btn btn-primary"
                     onClick={handleUpdateBalance}
-                    className="btn-action"
-                    style={{
-                        background: '#4A6BF3',
-                        border: 'none',
-                        borderRadius: '8px',
-                        padding: '8px 16px',
-                        color: '#fff'
-                    }}
+                    disabled={!selectedUser}
                 >
                     Update Balance
                 </button>
             </div>
+            
             {selectedUser && (
                 <div style={{
                     marginTop: '16px',
                     padding: '16px',
-                    background: 'rgba(74,107,243,0.1)',
+                    background: '#2D2D3F',
                     borderRadius: '8px'
                 }}>
-                    <h5 style={{ marginBottom: '12px', color: '#fff' }}>Current Balances</h5>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
-                        {users.find(u => u.id === selectedUser)?.balances && 
-                            Object.entries(users.find(u => u.id === selectedUser).balances).map(([coin, balance]) => (
-                                <div key={coin} style={{
-                                    padding: '8px',
-                                    background: '#2A2A3C',
-                                    borderRadius: '6px',
-                                    display: 'flex',
-                                    justifyContent: 'space-between'
-                                }}>
-                                    <span>{coin}:</span>
-                                    <span>{balance}</span>
-                                </div>
-                            ))
-                        }
+                    <h5>Modify User: {users.find(u => u.id === selectedUser)?.email}</h5>
+                    <div style={{ display: 'flex', gap: '16px', marginTop: '16px', alignItems: 'center' }}>
+                        <select
+                            style={{
+                                padding: '8px 12px',
+                                borderRadius: '8px',
+                                background: '#333348',
+                                color: 'white',
+                                border: '1px solid rgba(255, 255, 255, 0.1)'
+                            }}
+                            value={selectedToken}
+                            onChange={(e) => setSelectedToken(e.target.value)}
+                        >
+                            <option value="">Select Token</option>
+                            {Object.keys(DEFAULT_COINS).map(coin => (
+                                <option key={coin} value={coin}>{coin}</option>
+                            ))}
+                        </select>
+                        
+                        <input
+                            type="number"
+                            placeholder="Amount"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            style={{
+                                padding: '8px 12px',
+                                borderRadius: '8px',
+                                background: '#333348',
+                                color: 'white',
+                                border: '1px solid rgba(255, 255, 255, 0.1)'
+                            }}
+                        />
+                        
+                        <button 
+                            className="btn btn-success"
+                            onClick={() => handleAdminUpdateBalance('add')}
+                            disabled={!selectedToken || !amount}
+                        >
+                            Add
+                        </button>
+                        
+                        <button 
+                            className="btn btn-danger"
+                            onClick={() => handleAdminUpdateBalance('subtract')}
+                            disabled={!selectedToken || !amount}
+                        >
+                            Subtract
+                        </button>
                     </div>
                 </div>
             )}
@@ -1603,105 +1713,111 @@ function UserProfile(props) {
                                                 </thead>
                                                 <tbody>
                                                     {Object.keys(balances).length > 0 ? (
-                                                        Object.entries(balances).map(([asset, balance], index) => {
-                                                            // Use a fixed price of $1 for RIPPLEX token
-                                                            const price = asset === 'RIPPLEX' ? 1 : (tokenPrices[asset] || 0);
-                                                            const usdValue = balance * price;
-                                                            const isRipplex = asset === 'RIPPLEX';
-                                                            return (
-                                                                <tr key={asset} style={{
-                                                                    transition: 'all 0.3s',
-                                                                    background: isRipplex ? 'rgba(255, 145, 0, 0.1)' : 'transparent'
-                                                                }}>
-                                                                    <td style={{
-                                                                        padding: '16px',
-                                                                        fontSize: '14px',
-                                                                        borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
-                                                                    }}>{index + 1}</td>
-                                                                    <td style={{
-                                                                        padding: '16px',
-                                                                        fontSize: '14px',
-                                                                        borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+                                                        // Sort tokens by balance value in USD, in descending order
+                                                        Object.entries(balances)
+                                                            .map(([asset, balance]) => {
+                                                                // Use a fixed price of $1 for RIPPLEX token
+                                                                const price = asset === 'RIPPLEX' ? 1 : (tokenPrices[asset] || 0);
+                                                                const usdValue = balance * price;
+                                                                return { asset, balance, usdValue };
+                                                            })
+                                                            .sort((a, b) => b.usdValue - a.usdValue) // Sort by USD value, descending
+                                                            .map(({ asset, balance, usdValue }, index) => {
+                                                                const isRipplex = asset === 'RIPPLEX';
+                                                                return (
+                                                                    <tr key={asset} style={{
+                                                                        transition: 'all 0.3s',
+                                                                        background: isRipplex ? 'rgba(255, 145, 0, 0.1)' : 'transparent'
                                                                     }}>
-                                                                        <div style={{
-                                                                            display: 'flex',
-                                                                            alignItems: 'center',
-                                                                            gap: '12px'
+                                                                        <td style={{
+                                                                            padding: '16px',
+                                                                            fontSize: '14px',
+                                                                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+                                                                        }}>{index + 1}</td>
+                                                                        <td style={{
+                                                                            padding: '16px',
+                                                                            fontSize: '14px',
+                                                                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
                                                                         }}>
-                                                                            <img 
-                                                                                src={COIN_LOGOS[asset] || `https://cryptologos.cc/logos/${asset.toLowerCase()}-${asset.toLowerCase()}-logo.png`} 
-                                                                                alt={asset}
-                                                                                style={{
-                                                                                    width: '32px',
-                                                                                    height: '32px',
-                                                                                    borderRadius: '50%',
-                                                                                    background: '#2A2A3C',
-                                                                                    boxShadow: isRipplex ? '0 0 10px rgba(255, 145, 0, 0.5)' : 'none'
-                                                                                }}
-                                                                                onError={(e) => {
-                                                                                    e.target.onerror = null;
-                                                                                    e.target.src = 'https://cryptologos.cc/logos/question-mark.png';
-                                                                                }}
-                                                                            />
-                                                                            <div>
-                                                                                <div style={{ fontWeight: 'bold', fontSize: '16px' }}>
-                                                                                    {asset}
-                                                                                    {isRipplex && (
-                                                                                        <span style={{ 
-                                                                                            marginLeft: '8px', 
-                                                                                            background: 'linear-gradient(90deg, #FF9100, #FFC400)', 
-                                                                                            padding: '2px 6px', 
-                                                                                            borderRadius: '4px',
-                                                                                            fontSize: '10px',
-                                                                                            color: 'black',
-                                                                                            fontWeight: 'bold',
-                                                                                            verticalAlign: 'middle'
-                                                                                        }}>
-                                                                                            AIRDROP
-                                                                                        </span>
-                                                                                    )}
-                                                                                </div>
-                                                                                <div style={{
-                                                                                    fontSize: '12px',
-                                                                                    color: '#7A7A7A',
-                                                                                    marginTop: '2px'
-                                                                                }}>
-                                                                                    {asset === 'USDT' ? 'Tether USD' : 
-                                                                                     asset === 'RIPPLEX' ? 'Ripple Exchange Token' : 
-                                                                                     asset}
+                                                                            <div style={{
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '12px'
+                                                                            }}>
+                                                                                <img 
+                                                                                    src={COIN_LOGOS[asset] || `https://cryptologos.cc/logos/${asset.toLowerCase()}-${asset.toLowerCase()}-logo.png`} 
+                                                                                    alt={asset}
+                                                                                    style={{
+                                                                                        width: '32px',
+                                                                                        height: '32px',
+                                                                                        borderRadius: '50%',
+                                                                                        background: '#2A2A3C',
+                                                                                        boxShadow: isRipplex ? '0 0 10px rgba(255, 145, 0, 0.5)' : 'none'
+                                                                                    }}
+                                                                                    onError={(e) => {
+                                                                                        e.target.onerror = null;
+                                                                                        e.target.src = 'https://cryptologos.cc/logos/question-mark.png';
+                                                                                    }}
+                                                                                />
+                                                                                <div>
+                                                                                    <div style={{ fontWeight: 'bold', fontSize: '16px' }}>
+                                                                                        {asset}
+                                                                                        {isRipplex && (
+                                                                                            <span style={{ 
+                                                                                                marginLeft: '8px', 
+                                                                                                background: 'linear-gradient(90deg, #FF9100, #FFC400)', 
+                                                                                                padding: '2px 6px', 
+                                                                                                borderRadius: '4px',
+                                                                                                fontSize: '10px',
+                                                                                                color: 'black',
+                                                                                                fontWeight: 'bold',
+                                                                                                verticalAlign: 'middle'
+                                                                                            }}>
+                                                                                                AIRDROP
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <div style={{
+                                                                                        fontSize: '12px',
+                                                                                        color: '#7A7A7A',
+                                                                                        marginTop: '2px'
+                                                                                    }}>
+                                                                                        {asset === 'USDT' ? 'Tether USD' : 
+                                                                                         asset === 'RIPPLEX' ? 'Ripple Exchange Token' : 
+                                                                                         asset}
+                                                                                    </div>
                                                                                 </div>
                                                                             </div>
-                                                                        </div>
-                                                                    </td>
-                                                                    <td style={{
-                                                                        padding: '16px',
-                                                                        fontSize: '14px',
-                                                                        textAlign: 'right',
-                                                                        borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
-                                                                    }}>
-                                                                        <span style={{ fontWeight: '500' }}>{balance.toFixed(8)}</span>
-                                                                        <span style={{ color: '#7A7A7A', marginLeft: '4px' }}>{asset}</span>
-                                                                    </td>
-                                                                    <td style={{
-                                                                        padding: '16px',
-                                                                        fontSize: '14px',
-                                                                        textAlign: 'right',
-                                                                        borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
-                                                                    }}>
-                                                                        <span style={{ fontWeight: '500' }}>0.00000000</span>
-                                                                        <span style={{ color: '#7A7A7A', marginLeft: '4px' }}>{asset}</span>
-                                                                    </td>
-                                                                    <td style={{
-                                                                        padding: '16px',
-                                                                        fontSize: '14px',
-                                                                        textAlign: 'right',
-                                                                        borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
-                                                                    }}>
-                                                                        <span style={{ fontWeight: '500' }}>${usdValue.toFixed(2)}</span>
-                                                                    </td>
-                                                                </tr>
-                                                            );
-                                                        })
+                                                                        </td>
+                                                                        <td style={{
+                                                                            padding: '16px',
+                                                                            fontSize: '14px',
+                                                                            textAlign: 'right',
+                                                                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+                                                                        }}>
+                                                                            <span style={{ fontWeight: '500' }}>{balance.toFixed(8)}</span>
+                                                                            <span style={{ color: '#7A7A7A', marginLeft: '4px' }}>{asset}</span>
+                                                                        </td>
+                                                                        <td style={{
+                                                                            padding: '16px',
+                                                                            fontSize: '14px',
+                                                                            textAlign: 'right',
+                                                                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+                                                                        }}>
+                                                                            <span style={{ fontWeight: '500' }}>0.00000000</span>
+                                                                            <span style={{ color: '#7A7A7A', marginLeft: '4px' }}>{asset}</span>
+                                                                        </td>
+                                                                        <td style={{
+                                                                            padding: '16px',
+                                                                            fontSize: '14px',
+                                                                            textAlign: 'right',
+                                                                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+                                                                        }}>
+                                                                            <span style={{ fontWeight: '500' }}>${usdValue.toFixed(2)}</span>
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })
                                                     ) : (
                                                         <tr>
                                                             <td colSpan="5" style={{
@@ -1877,7 +1993,7 @@ function UserProfile(props) {
                                             }}>
                                                 <h5 style={{ color: '#F7931A', marginBottom: '10px' }}>How it works</h5>
                                                 <p style={{ marginBottom: '15px' }}>
-                                                    Invite friends to Ripple Exchange and earn 10% of their deposits as commission!
+                                                    Invite friends to Ripple Exchange and get 1 RIPPLEX token as Airdrop for every referral!
                                                 </p>
                                                 
                                                 <ul style={{ listStyleType: 'none', padding: '0', margin: '0' }}>
@@ -1907,7 +2023,7 @@ function UserProfile(props) {
                                                             lineHeight: '24px', 
                                                             marginRight: '10px' 
                                                         }}>2</span>
-                                                        They sign up using your link and make deposits
+                                                        They sign up using your referral link and complete social tasks
                                                     </li>
                                                     <li style={{ display: 'flex', alignItems: 'center' }}>
                                                         <span style={{ 
@@ -1921,7 +2037,7 @@ function UserProfile(props) {
                                                             lineHeight: '24px', 
                                                             marginRight: '10px' 
                                                         }}>3</span>
-                                                        You earn 10% commission on their deposits
+                                                        You get 1 RIPPLEX token = $1 for each referral
                                                     </li>
                                                 </ul>
                                             </div>
@@ -1965,9 +2081,9 @@ function UserProfile(props) {
                                                     borderRadius: '10px',
                                                     margin: '0 0 10px 0'
                                                 }}>
-                                                    <h5 style={{ color: '#7A7A7A', fontSize: '14px', marginBottom: '5px' }}>Total Commission</h5>
-                                                    <h3 style={{ color: '#0ECB81', fontSize: '24px' }}>
-                                                        ${(referralData?.stats?.totalCommission || 0).toFixed(2)}
+                                                    <h5 style={{ color: '#7A7A7A', fontSize: '14px', marginBottom: '5px' }}>RIPPLEX Earned</h5>
+                                                    <h3 style={{ color: '#F7931A', fontSize: '24px' }}>
+                                                        {referralData?.stats?.totalReferrals || 0} <span style={{ fontSize: '16px' }}>RIPPLEX</span>
                                                     </h3>
                                                 </div>
                                             </div>
