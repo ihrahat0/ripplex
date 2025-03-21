@@ -171,14 +171,14 @@ apiRouter.post('/send-verification-code', async (req, res) => {
     if (!email) {
       return res.status(400).json({ success: false, error: 'Email is required' });
     }
-    
+
     console.log(`Server: Sending verification code to ${email}`);
     
     const result = await emailService.sendVerificationEmail(email, code || null);
     
     if (result.success) {
       return res.json({ success: true, message: 'Verification code sent successfully' });
-    } else {
+        } else {
       return res.status(500).json({ success: false, error: result.error || 'Failed to send verification code' });
     }
   } catch (error) {

@@ -1033,7 +1033,7 @@ const AllDeposits = () => {
                             }}
                           >
                             <i className="far fa-copy"></i>
-                          </CopyButton>
+                        </CopyButton>
                         </div>
                       ) : (
                         <span style={{ color: '#8b949e' }}>—</span>
@@ -1059,7 +1059,7 @@ const AllDeposits = () => {
                             }}
                           >
                             <i className="far fa-copy"></i>
-                          </CopyButton>
+                        </CopyButton>
                           {deposit.potentiallyDummy && (
                             <DummyIndicator>TEST</DummyIndicator>
                           )}
