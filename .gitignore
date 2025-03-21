@@ -21,11 +21,8 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Firebase private keys
 src/firebase/new-private-key.json
-**/serviceAccountKey.json
 
-# Logs
+# PM2 logs
 logs/
-*.log
+logs/*.log
