@@ -10,7 +10,8 @@ import 'react-tabs/style/react-tabs.css';
 import PageTitle from '../components/pagetitle';
 import { useAuth } from '../contexts/AuthContext';
 import {Link} from 'react-router-dom';
-import img from '../assets/images/icon/qrcode.png'
+import img from '../assets/images/icon/qrcode.png';
+import styled from 'styled-components';
 
 Login.propTypes = {
     
@@ -135,349 +136,630 @@ function Login(props) {
 
     return (
         <div>
-             <PageTitle heading='Login' title='Login' />
+            <PageTitle heading='Login' title='Login' />
 
-            <section className="register login">
-            <div className="container">
-                <div className="row">
-                <div className="col-md-12">
-                    <div className="block-text center">
-                    <h3 className="heading">Login To Ripple Exchange</h3>
-                    <p className="desc fs-20">
-                        Welcome back! Log In now to start trading
-                    </p>
-                    <div className="lock">
-                        <div className="icon">
-                        <svg
-                            width="16"
-                            height="20"
-                            viewBox="0 0 16 20"
-                            fill="none"
-                            xmlns="http://www.w3.org/2000/svg"
-                        >
-                            <path
-                            d="M8.00004 11.7578C7.67672 11.7578 7.41406 12.0205 7.41406 12.3438C7.41406 12.6671 7.67672 12.9298 8.00004 12.9298C8.32336 12.9298 8.58602 12.6671 8.58602 12.3438C8.58602 12.0205 8.32336 11.7578 8.00004 11.7578Z"
-                            fill="white"
-                            />
-                            <path
-                            d="M11.5162 8.24219H4.2187C2.10011 8.24219 0.382568 9.95965 0.382568 12.0783C0.382568 15.6973 2.78413 19.0605 6.32241 19.8205C11.2508 20.8791 15.618 17.0922 15.618 12.344C15.618 10.0787 13.7816 8.24219 11.5162 8.24219ZM8.58628 13.9941V17.071C8.58628 17.3949 8.32417 17.657 8.0003 17.657C7.6764 17.657 7.41433 17.3949 7.41433 17.071V13.9941C6.73374 13.7514 6.24237 13.107 6.24237 12.3441C6.24237 11.3747 7.03093 10.5861 8.0003 10.5861C8.96968 10.5861 9.75823 11.3747 9.75823 12.3441C9.75823 13.107 9.26686 13.7513 8.58628 13.9941Z"
-                            fill="white"
-                            />
-                            <path
-                            d="M8.00039 0C5.08223 0 2.72656 2.35562 2.72656 5.27383V7.3234C3.20102 7.17391 3.69582 7.07086 4.21898 7.07086H5.07051V5.27383C5.07051 3.65652 6.38309 2.34395 8.00039 2.34395C9.6177 2.34395 10.9303 3.65652 10.9303 5.27383V7.07082H11.5163C12.1356 7.07082 12.7216 7.19777 13.2742 7.3948V5.27383C13.2742 2.35844 10.9128 0 8.00039 0Z"
-                            fill="white"
-                            />
-                        </svg>
+            <LoginSection>
+                <div className="container">
+                    <div className="row justify-content-center">
+                        <div className="col-md-8 col-lg-6">
+                            <LoginCard>
+                                <LoginHeader>
+                                    <h3>Welcome to Ripple Exchange</h3>
+                                    <p>Enter your credentials to access your account</p>
+                                    <SecurityBadge>
+                                        <svg width="16" height="20" viewBox="0 0 16 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M8.00004 11.7578C7.67672 11.7578 7.41406 12.0205 7.41406 12.3438C7.41406 12.6671 7.67672 12.9298 8.00004 12.9298C8.32336 12.9298 8.58602 12.6671 8.58602 12.3438C8.58602 12.0205 8.32336 11.7578 8.00004 11.7578Z" fill="currentColor" />
+                                            <path d="M11.5162 8.24219H4.2187C2.10011 8.24219 0.382568 9.95965 0.382568 12.0783C0.382568 15.6973 2.78413 19.0605 6.32241 19.8205C11.2508 20.8791 15.618 17.0922 15.618 12.344C15.618 10.0787 13.7816 8.24219 11.5162 8.24219ZM8.58628 13.9941V17.071C8.58628 17.3949 8.32417 17.657 8.0003 17.657C7.6764 17.657 7.41433 17.3949 7.41433 17.071V13.9941C6.73374 13.7514 6.24237 13.107 6.24237 12.3441C6.24237 11.3747 7.03093 10.5861 8.0003 10.5861C8.96968 10.5861 9.75823 11.3747 9.75823 12.3441C9.75823 13.107 9.26686 13.7513 8.58628 13.9941Z" fill="currentColor" />
+                                            <path d="M8.00039 0C5.08223 0 2.72656 2.35562 2.72656 5.27383V7.3234C3.20102 7.17391 3.69582 7.07086 4.21898 7.07086H5.07051V5.27383C5.07051 3.65652 6.38309 2.34395 8.00039 2.34395C9.6177 2.34395 10.9303 3.65652 10.9303 5.27383V7.07082H11.5163C12.1356 7.07082 12.7216 7.19777 13.2742 7.3948V5.27383C13.2742 2.35844 10.9128 0 8.00039 0Z" fill="currentColor" />
+                                        </svg>
+                                        <span>rippleexchange.org/register</span>
+                                    </SecurityBadge>
+                                </LoginHeader>
+
+                                <StyledTabs>
+                                    <TabList>
+                                        <Tab>Email</Tab>
+                                        <Tab>Mobile</Tab>
+                                    </TabList>
+
+                                    <TabPanel>
+                                        <LoginForm onSubmit={handleEmailLogin}>
+                                            <FormGroup>
+                                                <FormLabel htmlFor="email">Email Address</FormLabel>
+                                                <FormInput
+                                                    type="email"
+                                                    id="email"
+                                                    placeholder="Enter your email"
+                                                    value={email}
+                                                    onChange={(e) => setEmail(e.target.value)}
+                                                    required
+                                                />
+                                            </FormGroup>
+                                            
+                                            <FormGroup>
+                                                <FormLabel>Password</FormLabel>
+                                                <FormInput
+                                                    type="password"
+                                                    placeholder="Enter your password"
+                                                    value={password}
+                                                    onChange={(e) => setPassword(e.target.value)}
+                                                    required
+                                                />
+                                            </FormGroup>
+
+                                            <LoginOptions>
+                                                <RememberMe>
+                                                    <input type="checkbox" id="remember" />
+                                                    <label htmlFor="remember">Remember Me</label>
+                                                </RememberMe>
+                                                <ForgotPassword onClick={handleForgotPassword}>
+                                                    Forgot Password?
+                                                </ForgotPassword>
+                                            </LoginOptions>
+
+                                            {error && <ErrorMessage>{error}</ErrorMessage>}
+                                            
+                                            {verificationPrompt && (
+                                                <VerificationPrompt>
+                                                    Your email is not verified. 
+                                                    <VerifyButton onClick={handleVerification}>
+                                                        Click here to verify
+                                                    </VerifyButton>
+                                                </VerificationPrompt>
+                                            )}
+
+                                            <LoginButton 
+                                                type="submit" 
+                                                disabled={loading}
+                                            >
+                                                {loading ? 'Logging in...' : 'Login to Your Account'}
+                                            </LoginButton>
+                                            
+                                            <Divider>
+                                                <span>or continue with</span>
+                                            </Divider>
+                                            
+                                            <GoogleButton 
+                                                type="button" 
+                                                onClick={handleGoogleLogin} 
+                                                disabled={loading}
+                                            >
+                                                <img 
+                                                    src="https://www.google.com/favicon.ico" 
+                                                    alt="Google" 
+                                                />
+                                                {loading ? 'Processing...' : 'Google'}
+                                            </GoogleButton>
+                                            
+                                            <SignUpPrompt>
+                                                <span>Don't have an account?</span>
+                                                <Link to="/register">Sign up now</Link>
+                                            </SignUpPrompt>
+                                        </LoginForm>
+                                    </TabPanel>
+
+                                    <TabPanel>
+                                        <LoginForm onSubmit={handlePhoneLogin}>
+                                            <FormGroup>
+                                                <FormLabel>Mobile Phone</FormLabel>
+                                                <PhoneInputGroup>
+                                                    <CountrySelect
+                                                        value={countryCode}
+                                                        onChange={(e) => setCountryCode(e.target.value)}
+                                                    >
+                                                        <option value="+1">+1</option>
+                                                        <option value="+84">+84</option>
+                                                        <option value="+82">+82</option>
+                                                        <option value="+32">+32</option>
+                                                    </CountrySelect>
+                                                    <PhoneInput
+                                                        type="text"
+                                                        placeholder="Your phone number"
+                                                        value={phone}
+                                                        onChange={(e) => setPhone(e.target.value)}
+                                                    />
+                                                </PhoneInputGroup>
+                                            </FormGroup>
+                                            
+                                            <FormGroup>
+                                                <FormLabel>Password</FormLabel>
+                                                <FormInput
+                                                    type="password"
+                                                    placeholder="Enter your password"
+                                                    value={password}
+                                                    onChange={(e) => setPassword(e.target.value)}
+                                                    required
+                                                />
+                                            </FormGroup>
+
+                                            <LoginOptions>
+                                                <RememberMe>
+                                                    <input type="checkbox" id="remember-phone" />
+                                                    <label htmlFor="remember-phone">Remember Me</label>
+                                                </RememberMe>
+                                                <ForgotPassword onClick={handleForgotPassword}>
+                                                    Forgot Password?
+                                                </ForgotPassword>
+                                            </LoginOptions>
+
+                                            {error && <ErrorMessage>{error}</ErrorMessage>}
+
+                                            <LoginButton type="submit">Login</LoginButton>
+                                            
+                                            <SignUpPrompt>
+                                                <span>Don't have an account?</span>
+                                                <Link to="/register">Sign up now</Link>
+                                            </SignUpPrompt>
+                                        </LoginForm>
+                                    </TabPanel>
+                                </StyledTabs>
+                            </LoginCard>
                         </div>
-                        <p><span>https://</span>accounts.Ripple Exchange.com/login</p>
                     </div>
-                    </div>
                 </div>
-                <div className="col-md-12">
-                <Tabs>
-                    <TabList>
-                        <Tab><h6 className="fs-16">Email</h6></Tab>
-                        <Tab><h6 className="fs-16">Mobile</h6></Tab>
-                    </TabList>
-
-                    <TabPanel>
-                        <div className="content-inner">
-                            <form onSubmit={handleEmailLogin}>
-                                <div className="form-group">
-                                <label htmlFor="exampleInputEmail1">Email/ID</label>
-                                <input
-                                    type="email"
-                                    className="form-control"
-                                    id="exampleInputEmail1"
-                                    placeholder="Please fill in the email form."
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    required
-                                />
-                                </div>
-                                <div className="form-group s1">
-                                <label>Password </label>
-                                <input
-                                    type="password"
-                                    className="form-control"
-                                    placeholder="Please enter a password."
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    required
-                                />
-                                </div>
-
-                                <div className="form-group form-check">
-                                <div>
-                                    <input type="checkbox" className="form-check-input" />
-                                    <label className="form-check-label">Remember Me</label>
-                                </div>
-                                <p 
-                                    onClick={handleForgotPassword} 
-                                    style={{ 
-                                        cursor: 'pointer', 
-                                        color: '#4A6BF3', 
-                                        textDecoration: 'underline' 
-                                    }}
-                                >
-                                    Forgot Password?
-                                </p>
-                                </div>
-
-                                {error && <div className="alert alert-danger">{error}</div>}
-                                
-                                {verificationPrompt && (
-                                    <div className="alert alert-warning">
-                                        Your email is not verified. 
-                                        <button 
-                                            onClick={handleVerification}
-                                            style={{
-                                                background: 'none',
-                                                border: 'none',
-                                                color: '#0066cc',
-                                                textDecoration: 'underline',
-                                                padding: '0 5px',
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            Click here to verify
-                                        </button>
-                                    </div>
-                                )}
-
-                                <button 
-                                    type="submit" 
-                                    className="btn-action" 
-                                    disabled={loading}
-                                >
-                                    {loading ? 'Logging in...' : 'Login'}
-                                </button>
-                                <button 
-                                    type="button" 
-                                    onClick={handleGoogleLogin} 
-                                    className="btn-action"
-                                    disabled={loading}
-                                    style={{
-                                        marginTop: '10px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        gap: '10px'
-                                    }}
-                                >
-                                    <img 
-                                        src="https://www.google.com/favicon.ico" 
-                                        alt="Google" 
-                                        style={{width: '20px', height: '20px'}}
-                                    />
-                                    {loading ? 'Processing...' : 'Continue with Google'}
-                                </button>
-                                <div className="bottom">
-                                <p>Not a member?</p>
-                                <Link to="/register">Register</Link>
-                                </div>
-                                <div className="bottom" style={{ marginTop: '10px' }}>
-                                <p>Forgot your password?</p>
-                                <Link to="/forgot-password">Reset Password</Link>
-                                </div>
-                            </form>
-                        </div>
-                    </TabPanel>
-
-                    <TabPanel>
-                        <div className="content-inner">
-                            <form onSubmit={handlePhoneLogin}>
-                                <div className="form-group">
-                                <label htmlFor="exampleInputEmail1">Mobile Phone</label>
-                                <div>
-                                    <select
-                                    className="form-control"
-                                    id="exampleFormControlSelect1"
-                                    value={countryCode}
-                                    onChange={(e) => setCountryCode(e.target.value)}
-                                    >
-                                    <option>+1</option>
-                                    <option>+84</option>
-                                    <option>+82</option>
-                                    <option>+32</option>
-                                    </select>
-                                    <input
-                                    type="text"
-                                    className="form-control"
-                                    placeholder="Your Phone number"
-                                    value={phone}
-                                    onChange={(e) => setPhone(e.target.value)}
-                                    />
-                                </div>
-                                </div>
-                                <div className="form-group s1">
-                                <label>Password </label>
-                                <input
-                                    type="password"
-                                    className="form-control"
-                                    placeholder="Please enter a password."
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                />
-                                </div>
-
-                                <div className="form-group form-check">
-                                <div>
-                                    <input type="checkbox" className="form-check-input" />
-                                    <label className="form-check-label">Remember Me</label>
-                                </div>
-                                <p>Forgot Password?</p>
-                                </div>
-
-                                {error && <div className="alert alert-danger">{error}</div>}
-
-                                <button type="submit" className="btn-action">Login</button>
-                                <div className="bottom">
-                                <p>Not a member?</p>
-                                <Link to="/register">Register</Link>
-                                </div>
-                            </form>
-                        </div>
-                    </TabPanel>
-                </Tabs> 
-
-                    {/* <div className="qr-code center">
-                    <img src={img} alt="" />
-                    <h6 className="fs-20">Login with QR code</h6>
-                    <p className="fs-14">
-                        Scan this code with the <span>Ripple Exchange mobile app</span> <br />
-                        to log in instantly.
-                    </p>
-                    </div> */}
-                </div>
-                </div>
-            </div>
-            </section>
+            </LoginSection>
 
             <Sale01 />
 
-            {/* Updated Forgot Password Modal to match the screenshot */}
             {showForgotPassword && (
-                <div style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                    zIndex: 1000,
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center'
-                }}>
-                    <div style={{
-                        backgroundColor: '#0f172a',
-                        padding: '30px',
-                        borderRadius: '12px',
-                        width: '90%',
-                        maxWidth: '500px',
-                        boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-                        border: '1px solid #1f2937'
-                    }}>
-                        <h3 style={{ 
-                            color: '#fff', 
-                            marginBottom: '25px', 
-                            textAlign: 'center',
-                            fontSize: '24px'
-                        }}>Reset Your Password</h3>
+                <ModalOverlay>
+                    <ModalContent>
+                        <ModalHeader>Reset Your Password</ModalHeader>
 
                         <form onSubmit={handleSendResetLink}>
-                            <div style={{ marginBottom: '25px' }}>
-                                <label 
-                                    htmlFor="forgotPasswordEmail" 
-                                    style={{ 
-                                        color: '#cccccc', 
-                                        display: 'block', 
-                                        marginBottom: '10px',
-                                        fontSize: '16px'
-                                    }}
-                                >
+                            <FormGroup>
+                                <FormLabel htmlFor="forgotPasswordEmail">
                                     Email Address
-                                </label>
-                                <input
+                                </FormLabel>
+                                <FormInput
                                     type="email"
                                     id="forgotPasswordEmail"
                                     value={forgotPasswordEmail}
                                     onChange={(e) => setForgotPasswordEmail(e.target.value)}
                                     required
-                                    style={{
-                                        width: '100%',
-                                        padding: '12px 15px',
-                                        backgroundColor: 'transparent',
-                                        border: '1px solid #374151',
-                                        borderRadius: '8px',
-                                        color: '#fff',
-                                        fontSize: '16px',
-                                        outline: 'none'
-                                    }}
                                     placeholder="Enter your email address"
                                 />
-                            </div>
+                            </FormGroup>
 
                             {forgotPasswordMessage && (
-                                <div style={{
-                                    padding: '12px',
-                                    marginBottom: '20px',
-                                    borderRadius: '6px',
-                                    backgroundColor: forgotPasswordMessage.includes('Error') ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
-                                    color: forgotPasswordMessage.includes('Error') ? '#ef4444' : '#10b981',
-                                    textAlign: 'center',
-                                    fontSize: '14px'
-                                }}>
+                                <ForgotPasswordMessage isError={forgotPasswordMessage.includes('Error')}>
                                     {forgotPasswordMessage}
-                                </div>
+                                </ForgotPasswordMessage>
                             )}
 
-                            <div style={{ 
-                                display: 'flex', 
-                                justifyContent: 'space-between',
-                                marginTop: '20px' 
-                            }}>
-                                <button
+                            <ModalButtonGroup>
+                                <ModalCancelButton
                                     type="button"
                                     onClick={handleCloseForgotPassword}
-                                    style={{
-                                        padding: '12px 20px',
-                                        backgroundColor: '#1f2937',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        color: '#fff',
-                                        cursor: 'pointer',
-                                        fontSize: '16px',
-                                        width: '45%'
-                                    }}
                                 >
                                     Cancel
-                                </button>
-                                <button
+                                </ModalCancelButton>
+                                <ModalSubmitButton
                                     type="submit"
                                     disabled={forgotPasswordLoading}
-                                    style={{
-                                        padding: '12px 20px',
-                                        backgroundColor: '#4f46e5',
-                                        border: 'none',
-                                        borderRadius: '8px',
-                                        color: '#fff',
-                                        cursor: forgotPasswordLoading ? 'default' : 'pointer',
-                                        fontSize: '16px',
-                                        opacity: forgotPasswordLoading ? 0.7 : 1,
-                                        width: '45%'
-                                    }}
                                 >
                                     {forgotPasswordLoading ? 'Sending...' : 'Send Reset Link'}
-                                </button>
-                            </div>
+                                </ModalSubmitButton>
+                            </ModalButtonGroup>
                         </form>
-                    </div>
-                </div>
+                    </ModalContent>
+                </ModalOverlay>
             )}
         </div>
     );
 }
+
+// Styled Components for enhanced UI
+const LoginSection = styled.section`
+    padding: 60px 0;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    min-height: 80vh;
+    display: flex;
+    align-items: center;
+`;
+
+const LoginCard = styled.div`
+    background: rgba(30, 41, 59, 0.7);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    padding: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+`;
+
+const LoginHeader = styled.div`
+    text-align: center;
+    margin-bottom: 30px;
+    
+    h3 {
+        color: #fff;
+        font-weight: 700;
+        margin-bottom: 10px;
+        font-size: 28px;
+    }
+    
+    p {
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 16px;
+        max-width: 80%;
+        margin: 0 auto 20px;
+    }
+`;
+
+const SecurityBadge = styled.div`
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 8px 15px;
+    border-radius: 8px;
+    width: fit-content;
+    margin: 0 auto;
+    color: #4ade80;
+    font-size: 14px;
+    
+    svg {
+        margin-right: 8px;
+    }
+    
+    span {
+        font-family: monospace;
+    }
+`;
+
+const StyledTabs = styled(Tabs)`
+    .react-tabs__tab-list {
+        border-bottom: none;
+        display: flex;
+        margin-bottom: 25px;
+    }
+    
+    .react-tabs__tab {
+        color: rgba(255, 255, 255, 0.6);
+        padding: 12px 20px;
+        border: none;
+        font-size: 16px;
+        font-weight: 500;
+        background: transparent;
+        margin-right: 10px;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+        
+        &:hover {
+            color: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.05);
+        }
+    }
+    
+    .react-tabs__tab--selected {
+        color: #fff;
+        background: rgba(79, 70, 229, 0.2);
+        border-color: transparent;
+        
+        &:after {
+            display: none;
+        }
+    }
+`;
+
+const LoginForm = styled.form`
+    padding: 10px 0;
+`;
+
+const FormGroup = styled.div`
+    margin-bottom: 20px;
+`;
+
+const FormLabel = styled.label`
+    display: block;
+    margin-bottom: 8px;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 500;
+    font-size: 14px;
+`;
+
+const FormInput = styled.input`
+    width: 100%;
+    padding: 15px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 16px;
+    transition: all 0.3s ease;
+    
+    &:focus {
+        outline: none;
+        border-color: #4f46e5;
+        box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+    }
+    
+    &::placeholder {
+        color: rgba(255, 255, 255, 0.4);
+    }
+`;
+
+const PhoneInputGroup = styled.div`
+    display: flex;
+`;
+
+const CountrySelect = styled.select`
+    padding: 15px;
+    border-radius: 8px 0 0 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border-right: none;
+    min-width: 80px;
+    
+    &:focus {
+        outline: none;
+        border-color: #4f46e5;
+    }
+`;
+
+const PhoneInput = styled.input`
+    flex: 1;
+    padding: 15px;
+    border-radius: 0 8px 8px 0;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    
+    &:focus {
+        outline: none;
+        border-color: #4f46e5;
+    }
+    
+    &::placeholder {
+        color: rgba(255, 255, 255, 0.4);
+    }
+`;
+
+const LoginOptions = styled.div`
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+`;
+
+const RememberMe = styled.div`
+    display: flex;
+    align-items: center;
+    
+    input {
+        margin-right: 8px;
+    }
+    
+    label {
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 14px;
+    }
+`;
+
+const ForgotPassword = styled.span`
+    color: #4f46e5;
+    font-size: 14px;
+    cursor: pointer;
+    
+    &:hover {
+        text-decoration: underline;
+    }
+`;
+
+const ErrorMessage = styled.div`
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    padding: 12px 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 14px;
+`;
+
+const VerificationPrompt = styled.div`
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+    padding: 12px 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+`;
+
+const VerifyButton = styled.button`
+    background: none;
+    border: none;
+    color: #4f46e5;
+    cursor: pointer;
+    text-decoration: underline;
+    font-size: 14px;
+    margin-left: 10px;
+`;
+
+const LoginButton = styled.button`
+    width: 100%;
+    padding: 15px;
+    background: linear-gradient(to right, #4f46e5, #7c3aed);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    
+    &:hover {
+        background: linear-gradient(to right, #4338ca, #6d28d9);
+        transform: translateY(-2px);
+    }
+    
+    &:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+        transform: none;
+    }
+`;
+
+const Divider = styled.div`
+    position: relative;
+    text-align: center;
+    margin: 25px 0;
+    
+    &:before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: rgba(255, 255, 255, 0.1);
+    }
+    
+    span {
+        position: relative;
+        background: #1e293b;
+        padding: 0 15px;
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 14px;
+    }
+`;
+
+const GoogleButton = styled.button`
+    width: 100%;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    
+    img {
+        width: 24px;
+        height: 24px;
+        margin-right: 10px;
+    }
+    
+    &:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+    
+    &:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+    }
+`;
+
+const SignUpPrompt = styled.div`
+    margin-top: 25px;
+    text-align: center;
+    font-size: 15px;
+    
+    span {
+        color: rgba(255, 255, 255, 0.6);
+        margin-right: 5px;
+    }
+    
+    a {
+        color: #4f46e5;
+        text-decoration: none;
+        font-weight: 500;
+        
+        &:hover {
+            text-decoration: underline;
+        }
+    }
+`;
+
+const ModalOverlay = styled.div`
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.8);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(5px);
+`;
+
+const ModalContent = styled.div`
+    background-color: #1e293b;
+    padding: 30px;
+    border-radius: 16px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+`;
+
+const ModalHeader = styled.h3`
+    color: #fff;
+    margin-bottom: 25px;
+    text-align: center;
+    font-size: 24px;
+    font-weight: 600;
+`;
+
+const ForgotPasswordMessage = styled.div`
+    padding: 12px;
+    margin-bottom: 20px;
+    border-radius: 8px;
+    background-color: ${props => props.isError ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)'};
+    color: ${props => props.isError ? '#ef4444' : '#10b981'};
+    text-align: center;
+    font-size: 14px;
+`;
+
+const ModalButtonGroup = styled.div`
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+`;
+
+const ModalCancelButton = styled.button`
+    padding: 12px 20px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 16px;
+    width: 45%;
+    transition: background-color 0.2s;
+    
+    &:hover {
+        background-color: rgba(255, 255, 255, 0.2);
+    }
+`;
+
+const ModalSubmitButton = styled.button`
+    padding: 12px 20px;
+    background: linear-gradient(to right, #4f46e5, #7c3aed);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 16px;
+    width: 45%;
+    transition: all 0.3s;
+    
+    &:hover {
+        background: linear-gradient(to right, #4338ca, #6d28d9);
+    }
+    
+    &:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+    }
+`;
 
 export default Login;

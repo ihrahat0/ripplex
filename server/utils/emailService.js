@@ -11,33 +11,39 @@ const createTransporter = () => {
     secure: process.env.EMAIL_SECURE === 'true'
   });
 
-  // Create a more robust transport configuration
-  const transportOptions = smtpTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.EMAIL_PORT || '587'),
-    secure: process.env.EMAIL_SECURE === 'true',
-    auth: {
-      user: process.env.EMAIL_USER || 'verify.rippleexchange@gmail.com',
-      pass: process.env.EMAIL_PASS || 'nlob twdl jmqq atux'
-    },
-    tls: {
-      rejectUnauthorized: false // To handle some certificate issues in certain environments
-    },
-    debug: true // Enable debug logging
-  });
+  try {
+    // Create a more robust transport configuration
+    const transportOptions = smtpTransport({
+      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.EMAIL_PORT || '587'),
+      secure: process.env.EMAIL_SECURE === 'true',
+      auth: {
+        user: process.env.EMAIL_USER || 'verify.rippleexchange@gmail.com',
+        pass: process.env.EMAIL_PASS || 'nlob twdl jmqq atux'
+      },
+      tls: {
+        rejectUnauthorized: false // To handle some certificate issues in certain environments
+      },
+      debug: true // Enable debug logging
+    });
 
-  const transporter = nodemailer.createTransport(transportOptions);
-  
-  // Verify the connection
-  transporter.verify(function(error, success) {
-    if (error) {
-      console.error('Email transporter error:', error);
-    } else {
-      console.log('Email server is ready to send messages');
-    }
-  });
-  
-  return transporter;
+    const transporter = nodemailer.createTransport(transportOptions);
+    
+    // Verify the connection immediately to catch any issues
+    transporter.verify(function(error, success) {
+      if (error) {
+        console.error('Email transporter verification error:', error);
+        throw new Error(`Failed to verify email transport: ${error.message}`);
+      } else {
+        console.log('✅ Email server is ready to send messages');
+      }
+    });
+    
+    return transporter;
+  } catch (err) {
+    console.error('❌ Failed to create email transporter:', err);
+    throw new Error(`Email service initialization failed: ${err.message}`);
+  }
 };
 
 // Save a copy of emails for debugging (optional for production)
@@ -59,71 +65,90 @@ const saveEmailCopy = (to, subject, html) => {
   }
 };
 
-// Send verification email for registration
-const sendRegistrationVerificationEmail = async (email, code) => {
+// Send verification email for registration with improved security and logging
+const sendVerificationEmail = async (email, code) => {
   try {
-    console.log(`Creating email transporter for ${email}...`);
-    const transporter = createTransporter();
+    console.log(`📧 Attempting to send verification email to ${email}`);
     
-    // Email HTML template
-    const html = `
-      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border-radius: 10px; background-color: #0c1021; color: #fff;">
-        <div style="text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #2a2a3c;">
-          <h1 style="color: #4A6BF3; margin: 0;">Ripple Exchange</h1>
-        </div>
-        <div style="background-color: #1a1b2a; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); border: 1px solid #2a2a3c;">
-          <h2 style="color: #fff; text-align: center; margin-bottom: 25px; font-weight: 600;">Security Verification</h2>
-          <p style="color: #cccccc; line-height: 1.6; font-size: 16px;">Hello,</p>
-          <p style="color: #cccccc; line-height: 1.6; font-size: 16px;">Your security verification code for Ripple Exchange is:</p>
-          <div style="text-align: center; margin: 30px 0;">
-            <div style="font-size: 32px; font-weight: bold; letter-spacing: 8px; padding: 20px; background: linear-gradient(135deg, #4A6BF3, #2a3c82); border-radius: 8px; display: inline-block; color: #fff; box-shadow: 0 4px 10px rgba(74, 107, 243, 0.3);">${code}</div>
+    if (!email) {
+      console.error('Missing email address');
+      return { success: false, error: 'Email address is required' };
+    }
+    
+    if (!code) {
+      console.error('Missing verification code');
+      return { success: false, error: 'Verification code is required' };
+    }
+    
+    try {
+      const transporter = createTransporter();
+      
+      // Never log the actual verification code
+      console.log(`Verification code generated for ${email} (code hidden for security)`);
+      
+      // Email HTML template
+      const html = `
+        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border-radius: 10px; background-color: #0c1021; color: #fff;">
+          <div style="text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #2a2a3c;">
+            <h1 style="color: #4A6BF3; margin: 0;">Ripple Exchange</h1>
           </div>
-          <p style="color: #cccccc; line-height: 1.6; font-size: 16px;">This code will expire in 10 minutes.</p>
-          <p style="color: #cccccc; line-height: 1.6; font-size: 16px; margin-top: 25px; background-color: rgba(74, 107, 243, 0.1); padding: 15px; border-left: 4px solid #4A6BF3; border-radius: 4px;">
-            <strong style="color: #fff;">Security Tip:</strong> Never share this code with anyone. Ripple Exchange representatives will never ask for this code.
-          </p>
-          <p style="color: #cccccc; line-height: 1.6; font-size: 16px;">If you did not request this code, please contact our security team immediately.</p>
+          <div style="background-color: #1a1b2a; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); border: 1px solid #2a2a3c;">
+            <h2 style="color: #fff; text-align: center; margin-bottom: 25px; font-weight: 600;">Security Verification</h2>
+            <p style="color: #cccccc; line-height: 1.6; font-size: 16px;">Hello,</p>
+            <p style="color: #cccccc; line-height: 1.6; font-size: 16px;">Your security verification code for Ripple Exchange is:</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <div style="font-size: 32px; font-weight: bold; letter-spacing: 8px; padding: 20px; background: linear-gradient(135deg, #4A6BF3, #2a3c82); border-radius: 8px; display: inline-block; color: #fff; box-shadow: 0 4px 10px rgba(74, 107, 243, 0.3);">${code}</div>
+            </div>
+            <p style="color: #cccccc; line-height: 1.6; font-size: 16px;">This code will expire in 10 minutes.</p>
+            <p style="color: #cccccc; line-height: 1.6; font-size: 16px; margin-top: 25px; background-color: rgba(74, 107, 243, 0.1); padding: 15px; border-left: 4px solid #4A6BF3; border-radius: 4px;">
+              <strong style="color: #fff;">Security Tip:</strong> Never share this code with anyone. Ripple Exchange representatives will never ask for this code.
+            </p>
+            <p style="color: #cccccc; line-height: 1.6; font-size: 16px;">If you did not request this code, please contact our security team immediately.</p>
+          </div>
+          <div style="margin-top: 30px; padding-top: 20px; color: #888; font-size: 13px; text-align: center; line-height: 1.5;">
+            <p>© 2024 Ripple Exchange. All rights reserved.</p>
+            <p>This is an automated message, please do not reply.</p>
+          </div>
         </div>
-        <div style="margin-top: 30px; padding-top: 20px; color: #888; font-size: 13px; text-align: center; line-height: 1.5;">
-          <p>&copy; ${new Date().getFullYear()} Ripple Exchange. All rights reserved.</p>
-          <p>This is a system-generated email. Please do not reply.</p>
-        </div>
-      </div>
-    `;
-    
-    // Save a copy (for debugging)
-    console.log('Saving email copy to file...');
-    saveEmailCopy(email, 'Verification Code', html);
-    
-    // Send email
-    console.log(`Attempting to send email to ${email}...`);
-    const mailOptions = {
-      from: process.env.EMAIL_FROM || '"Ripple Exchange" <verify.rippleexchange@gmail.com>',
-      to: email,
-      subject: 'Ripple Exchange: Your Verification Code',
-      html: html
-    };
-    
-    console.log('Mail options:', { 
-      from: mailOptions.from, 
-      to: mailOptions.to, 
-      subject: mailOptions.subject 
-    });
-    
-    const info = await transporter.sendMail(mailOptions);
-    
-    console.log(`Verification email sent to ${email} (MessageID: ${info.messageId})`);
-    console.log('Email sending response:', info);
-    
-    return {
-      success: true,
-      messageId: info.messageId
-    };
+      `;
+      
+      const mailOptions = {
+        from: process.env.EMAIL_USER || 'verify.rippleexchange@gmail.com',
+        to: email,
+        subject: 'Verification Code - Ripple Exchange',
+        html: html
+      };
+      
+      console.log('Sending email with transporter');
+      
+      // Save a copy for debugging
+      try {
+        saveEmailCopy(email, mailOptions.subject, html);
+      } catch (saveError) {
+        console.log('Warning: Could not save email copy:', saveError.message);
+        // Don't fail if we can't save a copy
+      }
+      
+      const info = await transporter.sendMail(mailOptions);
+      console.log('Email sent:', info.messageId);
+      
+      return { 
+        success: true, 
+        message: 'Verification email sent successfully', 
+        messageId: info.messageId 
+      };
+    } catch (error) {
+      console.error('Error in email sending function:', error);
+      return { 
+        success: false, 
+        error: `Failed to send email: ${error.message}`
+      };
+    }
   } catch (error) {
-    console.error('Error sending verification email:', error);
-    return {
-      success: false,
-      error: error.message
+    console.error('Critical error in email service:', error);
+    return { 
+      success: false, 
+      error: `Email service failure: ${error.message}` 
     };
   }
 };
@@ -338,7 +363,7 @@ const testEmailService = async () => {
 };
 
 module.exports = {
-  sendRegistrationVerificationEmail,
+  sendVerificationEmail,
   sendPasswordResetEmail,
   sendPasswordChangeConfirmation,
   send2FAStatusChangeEmail,

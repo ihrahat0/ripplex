@@ -15,7 +15,7 @@ import {
 } from 'chart.js';
 import { useNavigate } from 'react-router-dom';
 import 'chartjs-adapter-date-fns';
-import { collection, onSnapshot, query, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, query, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import axios from 'axios';
 import chart1 from '../assets/images/charts/1.png';
@@ -472,6 +472,8 @@ function CryptoPrices() {
   const [favorites, setFavorites] = useState(new Set());
   const [historicalData, setHistoricalData] = useState({});
   const [dataInitialized, setDataInitialized] = useState(false);
+  const [categoryTokens, setCategoryTokens] = useState({});
+  const [loadingCategories, setLoadingCategories] = useState(true);
 
   // Default data to show if API fetch fails
   const defaultCryptos = [
@@ -746,6 +748,28 @@ function CryptoPrices() {
     };
   };
 
+  // Add function to fetch category assignments from Firebase
+  const fetchCategoryAssignments = async () => {
+    try {
+      const categoriesRef = doc(db, 'settings', 'categories');
+      const categoriesDoc = await getDoc(categoriesRef);
+      
+      if (categoriesDoc.exists()) {
+        const data = categoriesDoc.data();
+        if (data.tokenCategories) {
+          console.log('Loaded category assignments from Firebase:', data.tokenCategories);
+          setCategoryTokens(data.tokenCategories);
+        }
+      } else {
+        console.log('No category assignments found in Firebase');
+      }
+    } catch (error) {
+      console.error('Error fetching category assignments:', error);
+    } finally {
+      setLoadingCategories(false);
+    }
+  };
+
   useEffect(() => {
     // Try to load cached data first
     try {
@@ -764,6 +788,9 @@ function CryptoPrices() {
     } catch (error) {
       console.error('Error loading cached data:', error);
     }
+    
+    // Fetch category assignments from Firebase
+    fetchCategoryAssignments();
     
     const fetchPrices = async () => {
       try {
@@ -969,10 +996,22 @@ function CryptoPrices() {
     fetchPrices();
   }, [dataInitialized]);
 
-  // After the useEffect declaration, add a function to filter cryptocurrencies by category
+  // Update the filterByCategory function to use Firebase category assignments
   const filterByCategory = (cryptoList, category) => {
     if (!cryptoList || cryptoList.length === 0) return [];
     
+    // Use admin-assigned categories if available
+    if (category !== 'All' && categoryTokens[category] && categoryTokens[category].length > 0) {
+      // Get the list of tokens that admin assigned to this category
+      const assignedTokens = categoryTokens[category];
+      
+      // Filter the cryptoList to only include the assigned tokens
+      return cryptoList.filter(crypto => 
+        assignedTokens.includes(crypto.symbol)
+      );
+    }
+    
+    // Fallback to automatic categorization if no assignments or on "All" category
     switch (category) {
       case 'Popular':
         // Popular coins based on market cap and volume
@@ -1016,7 +1055,7 @@ function CryptoPrices() {
         return cryptoList
           .filter(crypto => {
             // Check if it's tagged as a meme or has one of the known meme coin symbols
-            return crypto.category === 'meme' || 
+            return crypto.category === 'memes' || 
                   crypto.tags?.includes('meme') ||
                   memeCoins.includes(crypto.symbol) ||
                   crypto.name?.toLowerCase().includes('doge') ||
@@ -1050,6 +1089,17 @@ function CryptoPrices() {
             address: token.address || token.contractAddress,
             chainId: token.chainId || token.chain || 'bsc',
             icon: token.icon || token.logoUrl || token.logo, // Add fallback to logoUrl field from admin panel
+            
+            // Make sure token.category is preserved for admin-assigned categories
+            category: token.category || 
+                     (['DOGE', 'SHIB', 'PEPE', 'FLOKI', 'ELON', 'BONK', 'CULT', 'SAMO', 'BABYDOGE'].includes(token.symbol) ||
+                     token.name?.toLowerCase().includes('doge') ||
+                     token.name?.toLowerCase().includes('shib') ||
+                     token.name?.toLowerCase().includes('pepe') ||
+                     token.name?.toLowerCase().includes('floki') ||
+                     token.name?.toLowerCase().includes('inu') ||
+                     token.name?.toLowerCase().includes('cat') ||
+                     token.name?.toLowerCase().includes('meme') ? 'memes' : undefined),
             
             // Add category info based on known coins
             isMeme: ['DOGE', 'SHIB', 'PEPE', 'FLOKI', 'ELON', 'BONK', 'CULT', 'SAMO', 'BABYDOGE'].includes(token.symbol) ||
@@ -1340,6 +1390,7 @@ function CryptoPrices() {
         name: crypto.name,
         symbol: cleanSymbol,
         type: crypto.type || 'cex',
+        image: crypto.icon || crypto.logoUrl || crypto.logo,
         contractAddress: crypto.address || crypto.contractAddress, // Support both field names
         chainId: crypto.chainId || crypto.chain || 'bsc' // Support both field names
       },

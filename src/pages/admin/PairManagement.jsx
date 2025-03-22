@@ -3,6 +3,14 @@ import styled from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { collection, addDoc, serverTimestamp, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { FaEdit, FaTrash, FaCheck, FaTimes } from 'react-icons/fa';
+
+const COIN_CATEGORIES = [
+  { id: 'popular', name: 'Popular' },
+  { id: 'recently_added', name: 'Recently Added' },
+  { id: 'trending', name: 'Trending' },
+  { id: 'memes', name: 'Memes' }
+];
 
 const Container = styled.div`
   display: grid;
@@ -174,7 +182,8 @@ function CoinManagement() {
     chainId: 'ethereum',
     address: '',
     isActive: true,
-    logoUrl: ''
+    logoUrl: '',
+    category: 'popular' // Add default category
   });
   
   useEffect(() => {
@@ -253,7 +262,8 @@ function CoinManagement() {
         type: formData.type,
         createdAt: serverTimestamp(),
         isActive: true,
-        logoUrl: formData.logoUrl || null
+        logoUrl: formData.logoUrl || null,
+        category: formData.category // Add category to token data
       };
       
       // Add chain-specific data for DEX tokens
@@ -276,7 +286,8 @@ function CoinManagement() {
         chainId: 'ethereum',
         address: '',
         isActive: true,
-        logoUrl: ''
+        logoUrl: '',
+        category: 'popular'
       });
       
       // Refresh coins list
@@ -354,6 +365,21 @@ function CoinManagement() {
               placeholder="e.g. BTC"
               required
             />
+          </FormGroup>
+          
+          <FormGroup>
+            <Label>Category</Label>
+            <Select 
+              name="category" 
+              value={formData.category}
+              onChange={handleChange}
+            >
+              {COIN_CATEGORIES.map(category => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </Select>
           </FormGroup>
           
           <FormGroup>
@@ -437,6 +463,7 @@ function CoinManagement() {
               <th>Name</th>
               <th>Type</th>
               <th>Chain</th>
+              <th>Category</th>
               <th>Logo</th>
               <th>Status</th>
               <th>Actions</th>
@@ -445,7 +472,7 @@ function CoinManagement() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '20px 0' }}>
+                <td colSpan="8" style={{ textAlign: 'center', padding: '20px 0' }}>
                   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
                     <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: '2px solid rgba(255, 255, 255, 0.2)', borderTopColor: '#ff725a', animation: 'spin 1s linear infinite' }}></div>
                     Loading coins...
@@ -454,7 +481,7 @@ function CoinManagement() {
               </tr>
             ) : coins.length === 0 ? (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '20px 0' }}>
+                <td colSpan="8" style={{ textAlign: 'center', padding: '20px 0' }}>
                   No coins found. Create your first coin above.
                 </td>
               </tr>
@@ -465,6 +492,17 @@ function CoinManagement() {
                   <td>{coin.name}</td>
                   <td>{coin.type === 'cex' ? 'Centralized' : 'Decentralized'}</td>
                   <td>{coin.type === 'dex' ? coin.chainId : 'N/A'}</td>
+                  <td>
+                    <span style={{
+                      background: 'rgba(255, 114, 90, 0.1)',
+                      color: '#ff725a',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      fontSize: '12px'
+                    }}>
+                      {COIN_CATEGORIES.find(cat => cat.id === coin.category)?.name || 'Other'}
+                    </span>
+                  </td>
                   <td>
                     {coin.logoUrl ? (
                       <img 

@@ -168,22 +168,42 @@ apiRouter.post('/send-verification-code', async (req, res) => {
   try {
     const { email, code } = req.body;
     
+    console.log('Received verification request:', { 
+      email, 
+      hasCode: !!code,
+      contentType: req.headers['content-type']
+    });
+    
     if (!email) {
+      console.log('Missing email in verification request');
       return res.status(400).json({ success: false, error: 'Email is required' });
     }
 
     console.log(`Server: Sending verification code to ${email}`);
     
-    const result = await emailService.sendVerificationEmail(email, code || null);
-    
-    if (result.success) {
-      return res.json({ success: true, message: 'Verification code sent successfully' });
-        } else {
-      return res.status(500).json({ success: false, error: result.error || 'Failed to send verification code' });
+    try {
+      const result = await emailService.sendVerificationEmail(email, code || null);
+      console.log('Email sending result:', result);
+      
+      if (result.success) {
+        return res.json({ success: true, message: 'Verification code sent successfully' });
+      } else {
+        console.error('Email service error:', result.error);
+        return res.status(500).json({ success: false, error: result.error || 'Failed to send verification code' });
+      }
+    } catch (emailError) {
+      console.error('Email service exception:', emailError);
+      return res.status(500).json({ 
+        success: false, 
+        error: `Email service error: ${emailError.message}` 
+      });
     }
   } catch (error) {
-    console.error('Error sending verification code:', error);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+    console.error('Verification endpoint error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: `Internal server error: ${error.message}` 
+    });
   }
 });
 
@@ -207,6 +227,75 @@ apiRouter.post('/send-password-reset', async (req, res) => {
   } catch (error) {
     console.error('Error sending password reset:', error);
     return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// Add a new endpoint for verifying OTP codes
+apiRouter.post('/verify-otp', async (req, res) => {
+  try {
+    const { email, otp, uid } = req.body;
+    
+    if (!email || !otp) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Email and verification code are required' 
+      });
+    }
+
+    if (!uid) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'User ID is required' 
+      });
+    }
+
+    console.log(`Server: Verifying OTP for user with email: ${email}`);
+    
+    try {
+      // Get user data from Firestore
+      const userRef = db.collection('users').doc(uid);
+      const userDoc = await userRef.get();
+      
+      if (!userDoc.exists) {
+        return res.status(404).json({ 
+          success: false, 
+          error: 'User not found' 
+        });
+      }
+      
+      const userData = userDoc.data();
+      
+      // Check if OTP matches what's stored in the database
+      if (userData.otp === otp) {
+        // Update user document to mark as verified
+        await userRef.update({ 
+          emailVerified: true,
+          otp: null // Clear OTP after successful verification
+        });
+        
+        return res.json({ 
+          success: true, 
+          message: 'Email verified successfully' 
+        });
+      } else {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Invalid verification code' 
+        });
+      }
+    } catch (dbError) {
+      console.error('Database error during OTP verification:', dbError);
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Database error during verification' 
+      });
+    }
+  } catch (error) {
+    console.error('Error verifying OTP:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Internal server error' 
+    });
   }
 });
 

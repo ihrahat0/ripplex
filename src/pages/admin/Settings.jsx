@@ -211,7 +211,7 @@ function Settings() {
   const [generalSettings, setGeneralSettings] = useState({
     siteName: 'Ripple Exchange',
     siteDescription: 'Cryptocurrency trading platform',
-    supportEmail: 'support@rippleexchange.com',
+    supportEmail: 'support@rippleexchange.org',
     timezone: 'UTC',
     theme: 'dark'
   });

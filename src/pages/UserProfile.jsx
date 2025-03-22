@@ -533,6 +533,10 @@ function UserProfile(props) {
     const [selectedUser, setSelectedUser] = useState('');
     const [selectedToken, setSelectedToken] = useState('');
     const [amount, setAmount] = useState('');
+    const [categories, setCategories] = useState(['All', 'Popular', 'Recently added', 'Trending', 'Memes']);
+    const [selectedCategory, setSelectedCategory] = useState('');
+    const [categoryTokens, setCategoryTokens] = useState({});
+    const [loadingCategories, setLoadingCategories] = useState(false);
     
     // Define checkAdminStatusOnMount function
     const checkAdminStatusOnMount = async () => {
@@ -582,8 +586,28 @@ function UserProfile(props) {
 
     const [positions, setPositions] = useState([]);
     const [totalPnL, setTotalPnL] = useState(0);
-    const [tokenPrices, setTokenPrices] = useState({
-        RIPPLEX: 1 // Set a fixed price of $1 for RIPPLEX token
+    const [tokenPrices, setTokenPrices] = useState(() => {
+        // Try to load previous prices from localStorage
+        const savedPrices = localStorage.getItem('tokenPrices');
+        const defaultPrices = {
+            RIPPLEX: 1, // Fixed price for RIPPLEX
+            BTC: 60000, // Default fallback prices
+            ETH: 3000,
+            XRP: 0.5,
+            ADA: 0.4,
+            DOGE: 0.1,
+            SOL: 100,
+            BNB: 300,
+            MATIC: 1,
+            DOT: 5,
+            AVAX: 30,
+            LINK: 15,
+            UNI: 7,
+            ATOM: 10,
+            USDT: 1
+        };
+        
+        return savedPrices ? { ...defaultPrices, ...JSON.parse(savedPrices) } : defaultPrices;
     });
     const [editBalance, setEditBalance] = useState({ token: '', amount: '' });
     const [showConvertModal, setShowConvertModal] = useState(false);
@@ -650,6 +674,11 @@ function UserProfile(props) {
                             setAvatar(storedAvatar);
                         }
                         
+                        // If user has balances in their user document, use them as initial values
+                        if (userData.balances) {
+                            setBalances(userData.balances);
+                        }
+                        
                         // For any information tied to 2FA
                         await checkTwoFactorStatus(auth.currentUser.uid);
                     }
@@ -657,6 +686,10 @@ function UserProfile(props) {
                     // If balances are already loaded, we can set loading to false
                     if (balancesLoaded) {
                       setLoading(false);
+                    } else {
+                      // Set loading to false after getting user data anyway
+                      // This will allow the UI to render with partial data
+                      setTimeout(() => setLoading(false), 500);
                     }
                 } catch (error) {
                     console.error('Error fetching user data:', error);
@@ -913,21 +946,24 @@ function UserProfile(props) {
             // Create a mapping from our token symbols to prices
             const prices = {
                 ...tokenPrices, // Preserve existing prices, especially RIPPLEX
-                BTC: data.bitcoin?.usd || 0,
-                ETH: data.ethereum?.usd || 0,
-                XRP: data.ripple?.usd || 0,
-                ADA: data.cardano?.usd || 0,
-                DOGE: data.dogecoin?.usd || 0,
-                SOL: data.solana?.usd || 0,
-                BNB: data.binancecoin?.usd || 0,
-                MATIC: data['matic-network']?.usd || 0,
-                DOT: data.polkadot?.usd || 0,
-                AVAX: data['avalanche-2']?.usd || 0,
-                LINK: data.chainlink?.usd || 0,
-                UNI: data.uniswap?.usd || 0,
-                ATOM: data.cosmos?.usd || 0,
+                BTC: data.bitcoin?.usd || tokenPrices.BTC,
+                ETH: data.ethereum?.usd || tokenPrices.ETH,
+                XRP: data.ripple?.usd || tokenPrices.XRP,
+                ADA: data.cardano?.usd || tokenPrices.ADA,
+                DOGE: data.dogecoin?.usd || tokenPrices.DOGE,
+                SOL: data.solana?.usd || tokenPrices.SOL,
+                BNB: data.binancecoin?.usd || tokenPrices.BNB,
+                MATIC: data['matic-network']?.usd || tokenPrices.MATIC,
+                DOT: data.polkadot?.usd || tokenPrices.DOT,
+                AVAX: data['avalanche-2']?.usd || tokenPrices.AVAX,
+                LINK: data.chainlink?.usd || tokenPrices.LINK,
+                UNI: data.uniswap?.usd || tokenPrices.UNI,
+                ATOM: data.cosmos?.usd || tokenPrices.ATOM,
                 USDT: 1
             };
+            
+            // Save to localStorage for future use
+            localStorage.setItem('tokenPrices', JSON.stringify(prices));
             
             setTokenPrices(prices);
         } catch (error) {
@@ -1344,6 +1380,119 @@ function UserProfile(props) {
         }
     };
 
+    // Add new function for handling token category management
+    const handleAssignCategory = async () => {
+        if (!selectedToken || !selectedCategory) {
+            toast.error('Please select both a token and a category');
+            return;
+        }
+        
+        try {
+            const categoriesRef = doc(db, 'settings', 'categories');
+            
+            // First, check if the document exists
+            const categoriesDoc = await getDoc(categoriesRef);
+            
+            let updatedTokenCategories = {};
+            
+            if (categoriesDoc.exists()) {
+                const data = categoriesDoc.data();
+                updatedTokenCategories = data.tokenCategories || {};
+            }
+            
+            // Update or add the token to the selected category
+            if (!updatedTokenCategories[selectedCategory]) {
+                updatedTokenCategories[selectedCategory] = [];
+            }
+            
+            // Check if token is already in the category
+            if (!updatedTokenCategories[selectedCategory].includes(selectedToken)) {
+                updatedTokenCategories[selectedCategory].push(selectedToken);
+            }
+            
+            // Update Firestore
+            await setDoc(categoriesRef, {
+                categoryList: categories,
+                tokenCategories: updatedTokenCategories,
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+            
+            // Update local state
+            setCategoryTokens(updatedTokenCategories);
+            
+            toast.success(`Successfully added ${selectedToken} to ${selectedCategory} category`);
+            
+        } catch (error) {
+            console.error('Error managing token category:', error);
+            toast.error('Failed to update category: ' + error.message);
+        }
+    };
+
+    const handleRemoveFromCategory = async (token, category) => {
+        try {
+            const categoriesRef = doc(db, 'settings', 'categories');
+            
+            // Get current data
+            const categoriesDoc = await getDoc(categoriesRef);
+            
+            if (!categoriesDoc.exists()) {
+                toast.error('Categories document not found');
+                return;
+            }
+            
+            const data = categoriesDoc.data();
+            const updatedTokenCategories = data.tokenCategories || {};
+            
+            // Remove token from category
+            if (updatedTokenCategories[category] && updatedTokenCategories[category].includes(token)) {
+                updatedTokenCategories[category] = updatedTokenCategories[category].filter(t => t !== token);
+                
+                // Update Firestore
+                await updateDoc(categoriesRef, {
+                    tokenCategories: updatedTokenCategories,
+                    updatedAt: serverTimestamp()
+                });
+                
+                // Update local state
+                setCategoryTokens(updatedTokenCategories);
+                
+                toast.success(`Removed ${token} from ${category} category`);
+            }
+        } catch (error) {
+            console.error('Error removing token from category:', error);
+            toast.error('Failed to update category: ' + error.message);
+        }
+    };
+
+    // Add a function to fetch categories data
+    useEffect(() => {
+        if (isAdmin) {
+            const fetchCategoryData = async () => {
+                try {
+                    setLoadingCategories(true);
+                    const categoriesRef = doc(db, 'settings', 'categories');
+                    const categoriesDoc = await getDoc(categoriesRef);
+                    
+                    if (categoriesDoc.exists()) {
+                        const data = categoriesDoc.data();
+                        if (data.categoryList) {
+                            setCategories(data.categoryList);
+                        }
+                        if (data.tokenCategories) {
+                            setCategoryTokens(data.tokenCategories);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error fetching category data:', error);
+                } finally {
+                    setLoadingCategories(false);
+                }
+            };
+            
+            fetchCategoryData();
+        }
+    }, [isAdmin]);
+
     if (loading) {
         return (
             <div style={{
@@ -1469,6 +1618,145 @@ function UserProfile(props) {
                     </div>
                 </div>
             )}
+            
+            {/* Add the category management section */}
+            <div style={{
+                marginTop: '24px',
+                padding: '20px',
+                background: '#2D2D3F',
+                borderRadius: '8px'
+            }}>
+                <h5 style={{ marginBottom: '16px' }}>Landing Page Categories</h5>
+                <p style={{ marginBottom: '16px', color: 'rgba(255, 255, 255, 0.6)', fontSize: '14px' }}>
+                    Assign tokens to categories that will be displayed on the landing page market section.
+                    These assignments override the automatic categorization.
+                </p>
+                
+                <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <select
+                        style={{
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            background: '#333348',
+                            color: 'white',
+                            border: '1px solid rgba(255, 255, 255, 0.1)'
+                        }}
+                        value={selectedToken}
+                        onChange={(e) => setSelectedToken(e.target.value)}
+                    >
+                        <option value="">Select Token</option>
+                        {Object.keys(DEFAULT_COINS).map(coin => (
+                            <option key={coin} value={coin}>{coin}</option>
+                        ))}
+                    </select>
+                    
+                    <select
+                        style={{
+                            padding: '8px 12px',
+                            borderRadius: '8px',
+                            background: '#333348',
+                            color: 'white',
+                            border: '1px solid rgba(255, 255, 255, 0.1)'
+                        }}
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                    >
+                        <option value="">Select Category</option>
+                        {categories.map(category => (
+                            <option key={category} value={category}>{category}</option>
+                        ))}
+                    </select>
+                    
+                    <button 
+                        className="btn btn-primary"
+                        onClick={handleAssignCategory}
+                        disabled={!selectedToken || !selectedCategory}
+                        style={{ height: 'fit-content' }}
+                    >
+                        Assign to Category
+                    </button>
+                </div>
+                
+                {/* Display tokens in each category */}
+                <div style={{ marginTop: '20px' }}>
+                    <h6 style={{ marginBottom: '10px' }}>Market Categories</h6>
+                    
+                    {loadingCategories ? (
+                        <div style={{ textAlign: 'center', padding: '20px' }}>Loading categories...</div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                            {categories.map(category => (
+                                <div key={category} style={{ 
+                                    background: 'rgba(255, 255, 255, 0.05)',
+                                    padding: '12px',
+                                    borderRadius: '8px'
+                                }}>
+                                    <h6 style={{ marginBottom: '10px', display: 'flex', alignItems: 'center' }}>
+                                        <span style={{ 
+                                            background: category === 'Popular' ? '#FF6B00' :
+                                                        category === 'Recently added' ? '#00A3FF' :
+                                                        category === 'Trending' ? '#00CC9B' :
+                                                        category === 'Memes' ? '#FF5E84' : '#6C5DD3',
+                                            width: '10px',
+                                            height: '10px',
+                                            borderRadius: '50%',
+                                            display: 'inline-block',
+                                            marginRight: '8px'
+                                        }}></span>
+                                        {category}
+                                    </h6>
+                                    
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                                        {categoryTokens[category] && categoryTokens[category].length > 0 ? (
+                                            categoryTokens[category].map(token => (
+                                                <div key={token} style={{
+                                                    background: 'rgba(255, 255, 255, 0.1)',
+                                                    padding: '6px 12px',
+                                                    borderRadius: '20px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px'
+                                                }}>
+                                                    <img 
+                                                        src={COIN_LOGOS[token] || `https://cryptologos.cc/logos/${token.toLowerCase()}-${token.toLowerCase()}-logo.png`} 
+                                                        alt={token}
+                                                        style={{
+                                                            width: '16px',
+                                                            height: '16px',
+                                                            borderRadius: '50%',
+                                                        }}
+                                                        onError={(e) => {
+                                                            e.target.onerror = null;
+                                                            e.target.src = 'https://cryptologos.cc/logos/question-mark.png';
+                                                        }}
+                                                    />
+                                                    {token}
+                                                    <button 
+                                                        onClick={() => handleRemoveFromCategory(token, category)}
+                                                        style={{
+                                                            background: 'none',
+                                                            border: 'none',
+                                                            color: '#FF5E5E',
+                                                            cursor: 'pointer',
+                                                            fontSize: '16px',
+                                                            marginLeft: '5px',
+                                                            padding: '0 5px'
+                                                        }}
+                                                    >
+                                                        ×
+                                                    </button>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div style={{ color: '#7A7A7A', fontSize: '14px' }}>No tokens in this category</div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
         </div>
     );
 
@@ -1637,8 +1925,31 @@ function UserProfile(props) {
                                                             fontSize: '32px',
                                                             fontWeight: '600',
                                                             color: '#fff',
-                                                            marginBottom: '8px'
-                                                        }}>${calculateTotalBalance.toFixed(2)}</h3>
+                                                            marginBottom: '8px',
+                                                            transition: 'opacity 0.3s ease'
+                                                        }}>
+                                                            {Object.keys(balances).length === 0 ? (
+                                                                <div style={{ 
+                                                                    display: 'flex', 
+                                                                    alignItems: 'center', 
+                                                                    gap: '10px',
+                                                                    fontSize: '24px',
+                                                                    color: 'rgba(255, 255, 255, 0.7)'
+                                                                }}>
+                                                                    <div style={{
+                                                                        border: '2px solid rgba(255, 255, 255, 0.1)',
+                                                                        borderTop: '2px solid #f3c121',
+                                                                        borderRadius: '50%',
+                                                                        width: '20px',
+                                                                        height: '20px',
+                                                                        animation: 'spin 1s linear infinite'
+                                                                    }} />
+                                                                    Calculating...
+                                                                </div>
+                                                            ) : (
+                                                                `$${calculateTotalBalance.toFixed(2)}`
+                                                            )}
+                                                        </h3>
                                                         <p style={{
                                                             color: totalPnL >= 0 ? '#0ECB81' : '#F6465D',
                                                             fontSize: '14px',
@@ -1825,7 +2136,22 @@ function UserProfile(props) {
                                                                 padding: '20px',
                                                                 color: '#7A7A7A'
                                                             }}>
-                                                                Loading balances...
+                                                                <div style={{
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    gap: '10px'
+                                                                }}>
+                                                                    <div style={{
+                                                                        border: '2px solid rgba(255, 255, 255, 0.1)',
+                                                                        borderTop: '2px solid #f3c121',
+                                                                        borderRadius: '50%',
+                                                                        width: '20px',
+                                                                        height: '20px',
+                                                                        animation: 'spin 1s linear infinite'
+                                                                    }} />
+                                                                    Loading balances...
+                                                                </div>
                                                             </td>
                                                         </tr>
                                                     )}
@@ -1882,7 +2208,7 @@ function UserProfile(props) {
                                                                 </p>
                                                             )}
                                         </div>
-                                                        <div style={{
+                                                    <div style={{
                                                             background: 'rgba(14, 203, 129, 0.1)',
                                                             borderRadius: '8px',
                                                             padding: '15px',

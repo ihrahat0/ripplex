@@ -3555,6 +3555,7 @@ const Trading = () => {
             type: 'dex',
             chainId: params.chain,
             address: params.address,
+            image: params.imageUrl || 'https://cryptologos.cc/logos/ethereum-eth-logo.png',
             imageUrl: params.imageUrl || 'https://cryptologos.cc/logos/ethereum-eth-logo.png',
             isCustomToken: true,
             token: {
@@ -3564,6 +3565,7 @@ const Trading = () => {
               type: 'dex',
               chainId: params.chain,
               address: params.address,
+              image: params.imageUrl || 'https://cryptologos.cc/logos/ethereum-eth-logo.png',
               imageUrl: params.imageUrl || 'https://cryptologos.cc/logos/ethereum-eth-logo.png',
               isCustomToken: true
             }
@@ -5347,7 +5349,10 @@ const Trading = () => {
               if (e.target.src.includes('coinicons-api')) {
                 e.target.src = `https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${cryptoData.token?.symbol?.toLowerCase()}.png`;
               } else {
-                e.target.src = `https://s2.coinmarketcap.com/static/img/coins/64x64/${cryptoData.token?.id || '1'}.png`;
+                // Use the numeric ID format instead of the string ID
+                // Check if id is numeric, otherwise use a default value like 1 (BTC)
+                const isNumericId = /^\d+$/.test(cryptoData.token?.id);
+                e.target.src = `https://s2.coinmarketcap.com/static/img/coins/64x64/${isNumericId ? cryptoData.token?.id : '1'}.png`;
               }
             }}
           />

@@ -8,7 +8,8 @@ import {
     sendEmailVerification,
     updateProfile,
     sendSignInLinkToEmail,
-    signOut
+    signOut,
+    deleteUser
 } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -57,6 +58,9 @@ function Register(props) {
     const [success, setSuccess] = useState('');
     const [isGoogleUser, setIsGoogleUser] = useState(false);
     const [verificationSent, setVerificationSent] = useState(false);
+    const [isResending, setIsResending] = useState(false);
+    const [resendError, setResendError] = useState('');
+    const [resendSuccess, setResendSuccess] = useState('');
 
     // Check for referral code in URL params when component mounts
     React.useEffect(() => {
@@ -82,45 +86,67 @@ function Register(props) {
                 initialBalances[coin] = DEFAULT_COINS[coin].initialBalance || 0;
             });
             
-            // Setup the user document data
-            const userDocData = {
+            // Prepare the basic user data that must work
+            const basicUserData = {
                 email: user.email,
+                displayName: userData.displayName || user.email.split('@')[0],
+                emailVerified: userData.emailVerified || false,
+                otp: userData.otp || null, // Store OTP for verification
                 createdAt: serverTimestamp(),
                 role: 'user',
-                // Include balances directly in the user document
-                balances: initialBalances,
-                // Add a bonus that can only be used for liquidation protection
-                bonusAccount: {
-                    amount: 100, // $100 bonus for liquidation protection
-                    currency: 'USDT',
-                    isActive: true,
-                    canWithdraw: false,
-                    canTrade: false,
-                    purpose: 'liquidation_protection',
-                    expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days from now
-                    description: 'Welcome bonus - protects your deposits from liquidation'
-                },
-                ...userData
             };
-
-            // Try to create user document with error handling for permission issues
+            
+            // Try to create basic user data first to ensure account works
             try {
-                // Create user document with balances and bonus included
-                await setDoc(doc(db, 'users', user.uid), userDocData);
-                console.log("User document created successfully");
-            } catch (docError) {
-                console.error("Error creating user document:", docError);
-                // If we get a permission error, try again with a simpler document
-                if (docError.code === 'permission-denied') {
-                    console.log("Permission denied, trying minimal user document");
-                    // Try with minimal data
+                await setDoc(doc(db, 'users', user.uid), basicUserData);
+                console.log("Basic user document created successfully");
+                
+                // Now attempt to set additional data
+                try {
+                    // Setup more complete user document data with additional fields
+                    const fullUserData = {
+                        ...basicUserData,
+                        nickname: userData.nickname,
+                        phone: userData.phone,
+                        country: userData.country,
+                        referralCode: userData.referralCode,
+                        uidCode: userData.uidCode,
+                        authProvider: userData.authProvider,
+                        // Include balances directly in the user document
+                        balances: initialBalances,
+                        // Add a bonus that can only be used for liquidation protection
+                        bonusAccount: {
+                            amount: 100, // $100 bonus for liquidation protection
+                            currency: 'USDT',
+                            isActive: true,
+                            canWithdraw: false,
+                            canTrade: false,
+                            purpose: 'liquidation_protection',
+                            expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days from now
+                            description: 'Welcome bonus - protects your deposits from liquidation'
+                        }
+                    };
+                    
+                    // Update with full data
+                    await updateDoc(doc(db, 'users', user.uid), fullUserData);
+                    console.log("Full user data updated successfully");
+                } catch (updateError) {
+                    console.warn("Couldn't update with full user data. Registration will continue:", updateError);
+                    // Continue with basic account - we already have essential data stored
+                }
+            } catch (createError) {
+                console.error("Error creating user document:", createError);
+                if (createError.code === 'permission-denied') {
+                    console.warn("Permission denied, using minimal data structure");
+                    // Try with absolute minimal data
                     await setDoc(doc(db, 'users', user.uid), {
                         email: user.email,
                         createdAt: serverTimestamp(),
-                        emailVerified: userData.emailVerified || false
+                        emailVerified: false,
+                        otp: userData.otp || null
                     });
                 } else {
-                    throw docError; // Re-throw other errors
+                    throw createError; // Re-throw other errors
                 }
             }
 
@@ -136,9 +162,9 @@ function Register(props) {
             }
 
             // Try to process referral if provided
-            if (referralCode) {
+            if (userData.referralCode) {
                 try {
-                    await referralService.registerReferral(referralCode, user.uid);
+                    await referralService.registerReferral(userData.referralCode, user.uid);
                     console.log("Referral processed successfully");
                 } catch (referralError) {
                     console.error("Error processing referral:", referralError);
@@ -149,89 +175,104 @@ function Register(props) {
             return walletData;
         } catch (error) {
             console.error('Error storing user data:', error);
-            throw error;
+            // Don't rethrow - we want registration to continue even if this fails
+            return null;
         }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        setSuccess('');
         setLoading(true);
-
-        if (password !== confirmPassword) {
-            setError("Passwords don't match");
-            setLoading(false);
-            return;
-        }
-
+        
         try {
-            // Create user with email and password
+            // Validate form fields
+            if (!email || !password || !nickname) {
+                setError('Please fill in all required fields.');
+                setLoading(false);
+                return;
+            }
+            
+            // Validate password
+            if (password.length < 8) {
+                setError('Password must be at least 8 characters long.');
+                setLoading(false);
+                return;
+            }
+            
+            // Check if passwords match
+            if (password !== confirmPassword) {
+                setError("Passwords don't match");
+                setLoading(false);
+                return;
+            }
+            
+            // First, create the user in Firebase
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
             const user = userCredential.user;
             
-            // Generate OTP
-            const otp = generateOTP();
+            console.log('User registered:', user.uid);
             
-            // Import email service dynamically
-            const { generateVerificationCode, sendRegistrationVerificationEmail } = await import('../utils/emailService');
-            
-            // Don't log the OTP but set in state
-            setSentVerificationCode(otp);
-            
-            // Send the registration verification code via email
-            console.log('Sending verification email...');
-            let emailSent = false;
-
-            try {
-                const emailResult = await sendRegistrationVerificationEmail(email, otp);
-                
-                if (emailResult.success) {
-                    console.log('Verification email sent successfully');
-                    emailSent = true;
-                } else {
-                    console.error('Email service reported an error:', emailResult.error);
-                    // Continue with registration even if email fails
-                }
-            } catch (emailError) {
-                console.error('Error during email sending:', emailError);
-                // Continue with registration even if email fails
-            }
-            
-            // Store additional user data and generate wallet
-            const walletData = await storeUserData(user, {
-                displayName: nickname || email.split('@')[0],
-                emailVerified: false,
-                otp: otp, // Store OTP in user data
-                emailSent // Track if email was sent successfully
-            });
-
-            // Show mnemonic to user if available
-            if (walletData?.mnemonic) {
-                setMnemonic(walletData.mnemonic);
-                setShowMnemonicModal(true);
-            }
-
-            // Prepare user data for temp storage
-            const userData = {
-                email,
-                nickname: nickname || email.split('@')[0],
-                otp,
-                emailSent // Track if email was sent successfully
-            };
-            setTempUserData(userData);
-            
-            // Show OTP verification screen
-            setShowOtpVerification(true);
+            // Generate a 6-digit OTP
+            const verificationCode = generateOTP();
+            setSentVerificationCode(verificationCode);
             setRegisteredEmail(email);
             
-            // Inform the user about the email status after successful registration
-            if (!emailSent) {
-                setError('Registration successful but verification email could not be sent. Please request a new code if needed.');
+            try {
+                // Send verification email with code
+                const emailResponse = await axios.post('/send-verification-code', {
+                    email,
+                    code: verificationCode
+                });
+                
+                if (!emailResponse.data.success) {
+                    throw new Error(emailResponse.data.error || 'Failed to send verification email');
+                }
+                
+                console.log('Verification email sent successfully');
+                
+                // Store additional user data including the OTP in Firestore
+                try {
+                    await storeUserData(user, {
+                        displayName: nickname || email.split('@')[0],
+                        emailVerified: false,
+                        nickname: nickname || email.split('@')[0],
+                        phone: phone,
+                        country: country,
+                        referralCode: referralCode,
+                        uidCode: uidCode,
+                        authProvider: 'email',
+                        otp: verificationCode // Store in database for verification
+                    });
+                } catch (firestoreError) {
+                    console.error('Firestore error:', firestoreError);
+                    // Continue with verification even if we can't store all data
+                }
+                
+                // Show OTP verification screen
+                setShowOtpVerification(true);
+                setVerificationSent(true);
+                
+                setSuccess('Registration successful! Check your email for a verification code.');
+                
+            } catch (emailError) {
+                console.error('Error during email sending:', emailError);
+                // If email sending fails, we should delete the user and show an error
+                if (user) {
+                    try {
+                        await deleteUser(user);
+                    } catch (deleteError) {
+                        console.error('Error deleting user after email failure:', deleteError);
+                    }
+                }
+                throw new Error(`Error during email sending: ${emailError.response?.data?.error || emailError.message}`);
             }
             
-        } catch (error) {
-            console.error('Registration error:', error);
-            setError(error.message || 'Failed to create an account');
+        } catch (err) {
+            console.error('Registration error:', err);
+            setError(`Registration error: ${err.message}`);
+            setVerificationSent(false);
         } finally {
             setLoading(false);
         }
@@ -331,55 +372,59 @@ function Register(props) {
     };
 
     const handleOtpVerify = async (otpInput) => {
-        if (!sentVerificationCode && !tempUserData?.otp) {
-            setError('Verification code not found. Please request a new code.');
-            return;
-        }
-
         try {
             setLoading(true);
             setError('');
 
-            // Check against stored code (either from tempUserData or sentVerificationCode)
-            const correctOtp = tempUserData?.otp || sentVerificationCode;
+            // We don't have the OTP on the frontend for security
+            // We'll verify it directly with Firebase's auth
             
-            if (otpInput === correctOtp) {
-                const user = auth.currentUser;
-                if (!user) {
-                    throw new Error('No user found. Please try again.');
-                }
+            const user = auth.currentUser;
+            if (!user) {
+                throw new Error('No user found. Please try again.');
+            }
 
-                // Update user profile if needed
-                if (tempUserData?.nickname && tempUserData.nickname !== user.displayName) {
-                    await updateProfile(user, {
-                        displayName: tempUserData.nickname
-                    });
-                }
-
-                // Update Firebase auth emailVerified flag
-                // Note: In production, you can't directly update this flag, 
-                // but for this specific app we're tracking it in Firestore as well
-                
-                // Update user document to mark as verified
-                const userRef = doc(db, 'users', user.uid);
-                await updateDoc(userRef, {
-                    emailVerified: true
+            // Make an API call to verify the OTP with the server
+            try {
+                const response = await axios.post('/verify-otp', {
+                    email: registeredEmail,
+                    otp: otpInput,
+                    uid: user.uid
                 });
+                
+                if (response.data.success) {
+                    // Try to update user document to mark as verified
+                    try {
+                        const userRef = doc(db, 'users', user.uid);
+                        await updateDoc(userRef, {
+                            emailVerified: true
+                        }).catch(updateErr => {
+                            console.warn("Couldn't update emailVerified in database:", updateErr);
+                            // Continue anyway - server already verified it
+                        });
+                    } catch (dbError) {
+                        console.warn("Database update failed:", dbError);
+                        // Continue with verification even if DB update fails
+                    }
 
-                setSuccess('Account verified successfully! You can now log in.');
-                
-                // Sign out the user after verification to ensure they have to log in properly
-                await signOut(auth);
-                
-                setTimeout(() => {
-                    navigate('/login');
-                }, 2000);
-            } else {
-                setError('Invalid verification code. Please try again.');
+                    setSuccess('Account verified successfully! You can now log in.');
+                    
+                    // Sign out the user after verification to ensure they have to log in properly
+                    await signOut(auth);
+                    
+                    setTimeout(() => {
+                        navigate('/login');
+                    }, 2000);
+                } else {
+                    setError('Invalid verification code. Please try again.');
+                }
+            } catch (apiError) {
+                console.error('API error during verification:', apiError);
+                throw new Error(`Error verifying account: ${apiError.response?.data?.error || apiError.message}`);
             }
         } catch (err) {
             console.error('Verification error:', err);
-            setError(err.message);
+            setError(err.message || 'Error verifying account. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -391,33 +436,52 @@ function Register(props) {
             setError('');
             
             // Check if we have the email
-            if (!registeredEmail && !tempUserData?.email) {
+            if (!registeredEmail) {
                 setError('No email found for resending verification code');
                 return;
             }
             
-            const email = registeredEmail || tempUserData.email;
-            
-            // Import services dynamically
-            const { generateVerificationCode, sendRegistrationVerificationEmail } = await import('../utils/emailService');
+            const email = registeredEmail;
             
             // Generate a new code
-            const newOtp = generateVerificationCode();
+            const newOtp = generateOTP();
             setSentVerificationCode(newOtp);
             
-            // Only update Firestore if we have a user (otherwise we'll catch in OTP verification)
-            if (auth.currentUser) {
-                const userRef = doc(db, 'users', auth.currentUser.uid);
-                await updateDoc(userRef, { otp: newOtp });
+            // Try to update the code in Firebase first
+            try {
+                const user = auth.currentUser;
+                if (user) {
+                    const userRef = doc(db, 'users', user.uid);
+                    await updateDoc(userRef, { otp: newOtp }).catch(err => {
+                        console.warn("Couldn't update OTP in database:", err);
+                        // Continue anyway - email verification is more important
+                    });
+                }
+            } catch (dbError) {
+                console.warn("Database update failed, but continuing:", dbError);
+                // Continue with email send even if DB update fails
             }
             
-            // Send verification email
-            await sendRegistrationVerificationEmail(email, newOtp);
+            // Send verification email via server API
+            try {
+                const response = await axios.post('/send-verification-code', { 
+                    email,
+                    code: newOtp
+                });
+                
+                if (response.data.success) {
+                    setSuccess('New verification code sent. Please check your email.');
+                } else {
+                    setError(response.data.error || 'Failed to send new verification code. Please try again.');
+                }
+            } catch (apiError) {
+                console.error('API error during resend:', apiError);
+                throw new Error(`Network error while resending verification code: ${apiError.response?.data?.error || apiError.message}`);
+            }
             
-            setSuccess('New verification code sent. Please check your email.');
         } catch (err) {
             console.error('Error resending OTP:', err);
-            setError(err.message);
+            setError(err.message || 'Failed to resend verification code');
         } finally {
             setLoading(false);
         }
@@ -471,7 +535,7 @@ function Register(props) {
 
     const handleSendVerificationCode = async () => {
         try {
-            const response = await axios.post('/api/send-verification-code', { email });
+            const response = await axios.post('/send-verification-code', { email });
             if (response.data.success) {
                 // Just show a message to check email
                 setVerificationSent(true);
@@ -484,27 +548,33 @@ function Register(props) {
 
     if (showMnemonic && walletInfo) {
         return (
-            <Container>
-                <Card>
-                    <Title>🔐 Save Your Recovery Phrase</Title>
-                    <Description>
-                        This is your wallet's recovery phrase. Write it down and store it in a safe place.
-                        You will need this to recover your wallet if you lose access.
-                    </Description>
-                    
-                    <MnemonicBox>
-                        {walletInfo.mnemonic}
-                    </MnemonicBox>
-                    
-                    <WarningText>
-                        ⚠️ Never share this phrase with anyone! We will never ask for it.
-                    </WarningText>
-                    
-                    <Button onClick={handleConfirmMnemonic}>
-                        I've Saved My Recovery Phrase
-                    </Button>
-                </Card>
-            </Container>
+            <RegisterSection>
+                <div className="container">
+                    <div className="row justify-content-center">
+                        <div className="col-md-8 col-lg-6">
+                            <RegisterCard>
+                                <RegisterHeader>
+                                    <h3>🔐 Save Your Recovery Phrase</h3>
+                                    <p>This is your wallet's recovery phrase. Write it down and store it in a safe place.
+                                    You will need this to recover your wallet if you lose access.</p>
+                                </RegisterHeader>
+                                
+                                <MnemonicBox>
+                                    {walletInfo.mnemonic}
+                                </MnemonicBox>
+                                
+                                <WarningText>
+                                    ⚠️ Never share this phrase with anyone! We will never ask for it.
+                                </WarningText>
+                                
+                                <RegisterButton onClick={handleConfirmMnemonic}>
+                                    I've Saved My Recovery Phrase
+                                </RegisterButton>
+                            </RegisterCard>
+                        </div>
+                    </div>
+                </div>
+            </RegisterSection>
         );
     }
 
@@ -516,486 +586,264 @@ function Register(props) {
     return (
         <div>
             <PageTitle heading='Register' title='Register' />
-            <section className="register">
+            <RegisterSection>
                 <div className="container">
-                    <div className="row">
-                        <div className="col-md-12">
-                            <div className="block-text center">
-                                <h3 className="heading">Register To Ripple Exchange</h3>
-                                <p className="desc fs-20">
-                                    Register in advance and enjoy the event benefits
-                                </p>
-                            </div>
-                        </div>
-                        <div className="col-md-12">
+                    <div className="row justify-content-center">
+                        <div className="col-md-8 col-lg-6">
                             {showOtpVerification ? (
-                                <OtpVerification
-                                    email={registeredEmail || email}
-                                    onVerify={handleOtpVerify}
-                                    onResendOtp={handleResendOtp}
-                                    error={error}
-                                    success={success}
-                                />
+                                <RegisterCard>
+                                    <OtpVerification
+                                        email={registeredEmail || email}
+                                        onVerify={handleOtpVerify}
+                                        onResendOtp={handleResendOtp}
+                                        error={error}
+                                        success={success}
+                                    />
+                                </RegisterCard>
                             ) : (
-                                <Tabs>
-                                    <TabList>
-                                        <Tab><h6 className="fs-16">Email</h6></Tab>
-                                        <Tab><h6 className="fs-16">Mobile</h6></Tab>
-                                    </TabList>
+                                <RegisterCard>
+                                    <RegisterHeader>
+                                        <h3>Create Your Account</h3>
+                                        <p>Join Ripple Exchange and start trading today</p>
+                                    </RegisterHeader>
+                                    
+                                    <StyledTabs>
+                                        <TabList>
+                                            <Tab>Email</Tab>
+                                            <Tab>Mobile</Tab>
+                                        </TabList>
 
-                                    <TabPanel>
-                                        <div className="content-inner">
-                                            {error && <div className="alert alert-danger">{error}</div>}
-                                            {success && <div className="alert alert-success">{success}</div>}
-                                            
-                                            <form onSubmit={handleSubmit}>
-                                                <div className="form-group">
-                                                    <label htmlFor="exampleInputEmail1">Email/ID</label>
-                                                    <input
+                                        <TabPanel>
+                                            <RegisterForm onSubmit={handleSubmit}>
+                                                {error && <ErrorMessage>{error}</ErrorMessage>}
+                                                {success && <SuccessMessage>{success}</SuccessMessage>}
+                                                
+                                                <FormGroup>
+                                                    <FormLabel htmlFor="email">Email Address</FormLabel>
+                                                    <FormInput
                                                         type="email"
-                                                        className="form-control"
-                                                        id="exampleInputEmail1"
-                                                        placeholder="Please fill in the email form."
+                                                        id="email"
+                                                        placeholder="Enter your email"
                                                         value={email}
                                                         onChange={(e) => setEmail(e.target.value)}
                                                         required
                                                     />
-                                                </div>
-                                                <div className="form-group">
-                                                    <label>Password <span>(8 or more characters, including numbers and special characters)</span></label>
-                                                    <input
+                                                </FormGroup>
+                                                
+                                                <PasswordGroup>
+                                                    <FormLabel>Password <HelperText>(8+ characters, include numbers & special characters)</HelperText></FormLabel>
+                                                    <FormInput
                                                         type="password"
-                                                        className="form-control mb-10"
-                                                        placeholder="Please enter a password."
+                                                        placeholder="Create a password"
                                                         value={password}
                                                         onChange={(e) => setPassword(e.target.value)}
                                                         required
+                                                        className="mb-2"
                                                     />
-                                                    <input
+                                                    <FormInput
                                                         type="password"
-                                                        className="form-control"
-                                                        placeholder="Please re-enter your password."
+                                                        placeholder="Confirm your password"
                                                         value={confirmPassword}
                                                         onChange={(e) => setConfirmPassword(e.target.value)}
                                                         required
                                                     />
-                                                </div>
+                                                </PasswordGroup>
 
-                                                <div className="form-group">
-                                                    <label>NickName <span className="fs-14">(Excluding special characters)</span></label>
-                                                    <input
+                                                <FormGroup>
+                                                    <FormLabel>Nickname <HelperText>(No special characters)</HelperText></FormLabel>
+                                                    <FormInput
                                                         type="text"
-                                                        className="form-control"
-                                                        placeholder="Enter Nickname"
+                                                        placeholder="Choose a nickname"
                                                         value={nickname}
                                                         onChange={(e) => setNickname(e.target.value)}
                                                         required
                                                     />
-                                                </div>
-                                                <div className="form-group">
-                                                    <label>Country </label>
-                                                    <select 
-                                                        className="form-control"
+                                                </FormGroup>
+                                                
+                                                <FormGroup>
+                                                    <FormLabel>Country</FormLabel>
+                                                    <FormSelect
                                                         value={country}
                                                         onChange={(e) => setCountry(e.target.value)}
                                                     >
-                                                        <option value="Afghanistan">Afghanistan</option>
-                <option value="Åland Islands">Åland Islands</option>
-                <option value="Albania">Albania</option>
-                <option value="Algeria">Algeria</option>
-                <option value="American Samoa">American Samoa</option>
-                <option value="Andorra">Andorra</option>
-                <option value="Angola">Angola</option>
-                <option value="Anguilla">Anguilla</option>
-                <option value="Antarctica">Antarctica</option>
-                <option value="Antigua and Barbuda">Antigua and Barbuda</option>
-                <option value="Argentina">Argentina</option>
-                <option value="Armenia">Armenia</option>
-                <option value="Aruba">Aruba</option>
-                <option value="Australia">Australia</option>
-                <option value="Austria">Austria</option>
-                <option value="Azerbaijan">Azerbaijan</option>
-                <option value="Bahamas">Bahamas</option>
-                <option value="Bahrain">Bahrain</option>
-                <option value="Bangladesh">Bangladesh</option>
-                <option value="Barbados">Barbados</option>
-                <option value="Belarus">Belarus</option>
-                <option value="Belgium">Belgium</option>
-                <option value="Belize">Belize</option>
-                <option value="Benin">Benin</option>
-                <option value="Bermuda">Bermuda</option>
-                <option value="Bhutan">Bhutan</option>
-                <option value="Bolivia">Bolivia</option>
-                <option value="Bosnia and Herzegovina">Bosnia and Herzegovina</option>
-                <option value="Botswana">Botswana</option>
-                <option value="Bouvet Island">Bouvet Island</option>
-                <option value="Brazil">Brazil</option>
-                <option value="British Indian Ocean Territory">British Indian Ocean Territory</option>
-                <option value="Brunei Darussalam">Brunei Darussalam</option>
-                <option value="Bulgaria">Bulgaria</option>
-                <option value="Burkina Faso">Burkina Faso</option>
-                <option value="Burundi">Burundi</option>
-                <option value="Cambodia">Cambodia</option>
-                <option value="Cameroon">Cameroon</option>
-                <option value="Canada">Canada</option>
-                <option value="Cape Verde">Cape Verde</option>
-                <option value="Cayman Islands">Cayman Islands</option>
-                <option value="Central African Republic">Central African Republic</option>
-                <option value="Chad">Chad</option>
-                <option value="Chile">Chile</option>
-                <option value="China">China</option>
-                <option value="Christmas Island">Christmas Island</option>
-                <option value="Cocos (Keeling) Islands">Cocos (Keeling) Islands</option>
-                <option value="Colombia">Colombia</option>
-                <option value="Comoros">Comoros</option>
-                <option value="Congo">Congo</option>
-                <option value="Congo, The Democratic Republic of The">Congo, The Democratic Republic of The</option>
-                <option value="Cook Islands">Cook Islands</option>
-                <option value="Costa Rica">Costa Rica</option>
-                <option value="Cote D'ivoire">Cote D'ivoire</option>
-                <option value="Croatia">Croatia</option>
-                <option value="Cuba">Cuba</option>
-                <option value="Cyprus">Cyprus</option>
-                <option value="Czech Republic">Czech Republic</option>
-                <option value="Denmark">Denmark</option>
-                <option value="Djibouti">Djibouti</option>
-                <option value="Dominica">Dominica</option>
-                <option value="Dominican Republic">Dominican Republic</option>
-                <option value="Ecuador">Ecuador</option>
-                <option value="Egypt">Egypt</option>
-                <option value="El Salvador">El Salvador</option>
-                <option value="Equatorial Guinea">Equatorial Guinea</option>
-                <option value="Eritrea">Eritrea</option>
-                <option value="Estonia">Estonia</option>
-                <option value="Ethiopia">Ethiopia</option>
-                <option value="Falkland Islands (Malvinas)">Falkland Islands (Malvinas)</option>
-                <option value="Faroe Islands">Faroe Islands</option>
-                <option value="Fiji">Fiji</option>
-                <option value="Finland">Finland</option>
-                <option value="France">France</option>
-                <option value="French Guiana">French Guiana</option>
-                <option value="French Polynesia">French Polynesia</option>
-                <option value="French Southern Territories">French Southern Territories</option>
-                <option value="Gabon">Gabon</option>
-                <option value="Gambia">Gambia</option>
-                <option value="Georgia">Georgia</option>
-                <option value="Germany">Germany</option>
-                <option value="Ghana">Ghana</option>
-                <option value="Gibraltar">Gibraltar</option>
-                <option value="Greece">Greece</option>
-                <option value="Greenland">Greenland</option>
-                <option value="Grenada">Grenada</option>
-                <option value="Guadeloupe">Guadeloupe</option>
-                <option value="Guam">Guam</option>
-                <option value="Guatemala">Guatemala</option>
-                <option value="Guernsey">Guernsey</option>
-                <option value="Guinea">Guinea</option>
-                <option value="Guinea-bissau">Guinea-bissau</option>
-                <option value="Guyana">Guyana</option>
-                <option value="Haiti">Haiti</option>
-                <option value="Heard Island and Mcdonald Islands">Heard Island and Mcdonald Islands</option>
-                <option value="Holy See (Vatican City State)">Holy See (Vatican City State)</option>
-                <option value="Honduras">Honduras</option>
-                <option value="Hong Kong">Hong Kong</option>
-                <option value="Hungary">Hungary</option>
-                <option value="Iceland">Iceland</option>
-                <option value="India">India</option>
-                <option value="Indonesia">Indonesia</option>
-                <option value="Iran, Islamic Republic of">Iran, Islamic Republic of</option>
-                <option value="Iraq">Iraq</option>
-                <option value="Ireland">Ireland</option>
-                <option value="Isle of Man">Isle of Man</option>
-                <option value="Italy">Italy</option>
-                <option value="Jamaica">Jamaica</option>
-                <option value="Japan">Japan</option>
-                <option value="Jersey">Jersey</option>
-                <option value="Jordan">Jordan</option>
-                <option value="Kazakhstan">Kazakhstan</option>
-                <option value="Kenya">Kenya</option>
-                <option value="Kiribati">Kiribati</option>
-                <option value="Korea, Democratic People's Republic of">Korea, Democratic People's Republic of</option>
-                <option value="Korea, Republic of">Korea, Republic of</option>
-                <option value="Kuwait">Kuwait</option>
-                <option value="Kyrgyzstan">Kyrgyzstan</option>
-                <option value="Lao People's Democratic Republic">Lao People's Democratic Republic</option>
-                <option value="Latvia">Latvia</option>
-                <option value="Lebanon">Lebanon</option>
-                <option value="Lesotho">Lesotho</option>
-                <option value="Liberia">Liberia</option>
-                <option value="Libyan Arab Jamahiriya">Libyan Arab Jamahiriya</option>
-                <option value="Liechtenstein">Liechtenstein</option>
-                <option value="Lithuania">Lithuania</option>
-                <option value="Luxembourg">Luxembourg</option>
-                <option value="Macao">Macao</option>
-                <option value="Macedonia, The Former Yugoslav Republic of">Macedonia, The Former Yugoslav Republic of</option>
-                <option value="Madagascar">Madagascar</option>
-                <option value="Malawi">Malawi</option>
-                <option value="Malaysia">Malaysia</option>
-                <option value="Maldives">Maldives</option>
-                <option value="Mali">Mali</option>
-                <option value="Malta">Malta</option>
-                <option value="Marshall Islands">Marshall Islands</option>
-                <option value="Martinique">Martinique</option>
-                <option value="Mauritania">Mauritania</option>
-                <option value="Mauritius">Mauritius</option>
-                <option value="Mayotte">Mayotte</option>
-                <option value="Mexico">Mexico</option>
-                <option value="Micronesia, Federated States of">Micronesia, Federated States of</option>
-                <option value="Moldova, Republic of">Moldova, Republic of</option>
-                <option value="Monaco">Monaco</option>
-                <option value="Mongolia">Mongolia</option>
-                <option value="Montenegro">Montenegro</option>
-                <option value="Montserrat">Montserrat</option>
-                <option value="Morocco">Morocco</option>
-                <option value="Mozambique">Mozambique</option>
-                <option value="Myanmar">Myanmar</option>
-                <option value="Namibia">Namibia</option>
-                <option value="Nauru">Nauru</option>
-                <option value="Nepal">Nepal</option>
-                <option value="Netherlands">Netherlands</option>
-                <option value="Netherlands Antilles">Netherlands Antilles</option>
-                <option value="New Caledonia">New Caledonia</option>
-                <option value="New Zealand">New Zealand</option>
-                <option value="Nicaragua">Nicaragua</option>
-                <option value="Niger">Niger</option>
-                <option value="Nigeria">Nigeria</option>
-                <option value="Niue">Niue</option>
-                <option value="Norfolk Island">Norfolk Island</option>
-                <option value="Northern Mariana Islands">Northern Mariana Islands</option>
-                <option value="Norway">Norway</option>
-                <option value="Oman">Oman</option>
-                <option value="Pakistan">Pakistan</option>
-                <option value="Palau">Palau</option>
-                <option value="Palestinian Territory, Occupied">Palestinian Territory, Occupied</option>
-                <option value="Panama">Panama</option>
-                <option value="Papua New Guinea">Papua New Guinea</option>
-                <option value="Paraguay">Paraguay</option>
-                <option value="Peru">Peru</option>
-                <option value="Philippines">Philippines</option>
-                <option value="Pitcairn">Pitcairn</option>
-                <option value="Poland">Poland</option>
-                <option value="Portugal">Portugal</option>
-                <option value="Puerto Rico">Puerto Rico</option>
-                <option value="Qatar">Qatar</option>
-                <option value="Reunion">Reunion</option>
-                <option value="Romania">Romania</option>
-                <option value="Russian Federation">Russian Federation</option>
-                <option value="Rwanda">Rwanda</option>
-                <option value="Saint Helena">Saint Helena</option>
-                <option value="Saint Kitts and Nevis">Saint Kitts and Nevis</option>
-                <option value="Saint Lucia">Saint Lucia</option>
-                <option value="Saint Pierre and Miquelon">Saint Pierre and Miquelon</option>
-                <option value="Saint Vincent and The Grenadines">Saint Vincent and The Grenadines</option>
-                <option value="Samoa">Samoa</option>
-                <option value="San Marino">San Marino</option>
-                <option value="Sao Tome and Principe">Sao Tome and Principe</option>
-                <option value="Saudi Arabia">Saudi Arabia</option>
-                <option value="Senegal">Senegal</option>
-                <option value="Serbia">Serbia</option>
-                <option value="Seychelles">Seychelles</option>
-                <option value="Sierra Leone">Sierra Leone</option>
-                <option value="Singapore">Singapore</option>
-                <option value="Slovakia">Slovakia</option>
-                <option value="Slovenia">Slovenia</option>
-                <option value="Solomon Islands">Solomon Islands</option>
-                <option value="Somalia">Somalia</option>
-                <option value="South Africa">South Africa</option>
-                <option value="South Georgia and The South Sandwich Islands">South Georgia and The South Sandwich Islands</option>
-                <option value="Spain">Spain</option>
-                <option value="Sri Lanka">Sri Lanka</option>
-                <option value="Sudan">Sudan</option>
-                <option value="Suriname">Suriname</option>
-                <option value="Svalbard and Jan Mayen">Svalbard and Jan Mayen</option>
-                <option value="Swaziland">Swaziland</option>
-                <option value="Sweden">Sweden</option>
-                <option value="Switzerland">Switzerland</option>
-                <option value="Syrian Arab Republic">Syrian Arab Republic</option>
-                <option value="Taiwan">Taiwan</option>
-                <option value="Tajikistan">Tajikistan</option>
-                <option value="Tanzania, United Republic of">Tanzania, United Republic of</option>
-                <option value="Thailand">Thailand</option>
-                <option value="Timor-leste">Timor-leste</option>
-                <option value="Togo">Togo</option>
-                <option value="Tokelau">Tokelau</option>
-                <option value="Tonga">Tonga</option>
-                <option value="Trinidad and Tobago">Trinidad and Tobago</option>
-                <option value="Tunisia">Tunisia</option>
-                <option value="Turkey">Turkey</option>
-                <option value="Turkmenistan">Turkmenistan</option>
-                <option value="Turks and Caicos Islands">Turks and Caicos Islands</option>
-                <option value="Tuvalu">Tuvalu</option>
-                <option value="Uganda">Uganda</option>
-                <option value="Ukraine">Ukraine</option>
-                <option value="United Arab Emirates">United Arab Emirates</option>
-                <option value="United Kingdom">United Kingdom</option>
-                <option value="United States">United States</option>
-                <option value="United States Minor Outlying Islands">United States Minor Outlying Islands</option>
-                <option value="Uruguay">Uruguay</option>
-                <option value="Uzbekistan">Uzbekistan</option>
-                <option value="Vanuatu">Vanuatu</option>
-                <option value="Venezuela">Venezuela</option>
-                <option value="Viet Nam">Viet Nam</option>
-                <option value="Virgin Islands, British">Virgin Islands, British</option>
-                <option value="Virgin Islands, U.S.">Virgin Islands, U.S.</option>
-                <option value="Wallis and Futuna">Wallis and Futuna</option>
-                <option value="Western Sahara">Western Sahara</option>
-                <option value="Yemen">Yemen</option>
-                <option value="Zambia">Zambia</option>
-                <option value="Zimbabwe">Zimbabwe</option>
-                                                    </select>
-                                                </div>
-                                                <div className="form-group">
-                                                    <label>Phone <span className="fs-14">(Enter numbers only)</span></label>
-                                                    <input
+                                                        <option value="United States">United States</option>
+                                                        <option value="United Kingdom">United Kingdom</option>
+                                                        <option value="Canada">Canada</option>
+                                                        <option value="Australia">Australia</option>
+                                                        <option value="Germany">Germany</option>
+                                                        <option value="France">France</option>
+                                                        <option value="Japan">Japan</option>
+                                                        <option value="South Korea">South Korea</option>
+                                                        <option value="China">China</option>
+                                                        <option value="India">India</option>
+                                                        <option value="Brazil">Brazil</option>
+                                                        <option value="Mexico">Mexico</option>
+                                                        <option value="Singapore">Singapore</option>
+                                                        <option value="Hong Kong">Hong Kong</option>
+                                                        {/* Additional countries can be added as needed */}
+                                                    </FormSelect>
+                                                </FormGroup>
+                                                
+                                                <FormGroup>
+                                                    <FormLabel>Phone Number <HelperText>(Numbers only)</HelperText></FormLabel>
+                                                    <FormInput
                                                         type="text"
-                                                        className="form-control"
-                                                        placeholder="ex) 01012345678 (without '-')"
+                                                        placeholder="e.g., 5551234567 (no dashes or spaces)"
                                                         value={phone}
                                                         onChange={(e) => setPhone(e.target.value)}
                                                         required
                                                     />
-                                                </div>
+                                                </FormGroup>
 
-                                                <div className="form-group">
-                                                    <label>Referral Code <span className="fs-14">(Optional)</span></label>
-                                                    <input
+                                                <FormGroup>
+                                                    <FormLabel>Referral Code <HelperText>(Optional)</HelperText></FormLabel>
+                                                    <FormInput
                                                         type="text"
-                                                        className="form-control"
                                                         placeholder="Enter referral code if you have one"
                                                         value={referralCode}
                                                         onChange={(e) => setReferralCode(e.target.value)}
                                                     />
-                                                </div>
-                                                <button 
+                                                </FormGroup>
+                                                
+                                                <RegisterButton 
                                                     type="submit" 
-                                                    className="btn-action" 
                                                     disabled={loading}
                                                 >
                                                     {loading ? 'Creating Account...' : 'Create Account'}
-                                                </button>
-                                                <button 
+                                                </RegisterButton>
+                                                
+                                                <Divider>
+                                                    <span>or continue with</span>
+                                                </Divider>
+                                                
+                                                <GoogleButton 
                                                     type="button" 
                                                     onClick={handleGoogleSignup} 
-                                                    className="btn-action"
-                                                    style={{marginTop: '10px'}}
                                                     disabled={loading}
                                                 >
-                                                    {loading ? 'Processing...' : 'Sign up with Google'}
-                                                </button>
-                                                <div className="bottom">
-                                                    <p>Already have an account?</p>
+                                                    <img 
+                                                        src="https://www.google.com/favicon.ico" 
+                                                        alt="Google" 
+                                                    />
+                                                    {loading ? 'Processing...' : 'Google'}
+                                                </GoogleButton>
+                                                
+                                                <LoginPrompt>
+                                                    <span>Already have an account?</span>
                                                     <Link to="/login">Login</Link>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    </TabPanel>
+                                                </LoginPrompt>
+                                            </RegisterForm>
+                                        </TabPanel>
 
-                                    <TabPanel>
-                                        <div className="content-inner">
-                                            <form onSubmit={handlePhoneSignup}>
-                                                <div className="form-group">
-                                                    <label htmlFor="exampleInputEmail1">Mobile Phone</label>
-                                                    <div>
-                                                        <select
-                                                            className="form-control"
+                                        <TabPanel>
+                                            <RegisterForm onSubmit={handlePhoneSignup}>
+                                                <FormGroup>
+                                                    <FormLabel>Mobile Phone</FormLabel>
+                                                    <PhoneInputGroup>
+                                                        <CountrySelect
                                                             value={countryCode}
                                                             onChange={(e) => setCountryCode(e.target.value)}
                                                         >
-                                                            <option>+1</option>
-                                                            <option>+84</option>
-                                                            <option>+82</option>
-                                                            <option>+32</option>
-                                                        </select>
-                                                        <input
+                                                            <option value="+1">+1</option>
+                                                            <option value="+44">+44</option>
+                                                            <option value="+61">+61</option>
+                                                            <option value="+81">+81</option>
+                                                            <option value="+82">+82</option>
+                                                            <option value="+86">+86</option>
+                                                            <option value="+91">+91</option>
+                                                        </CountrySelect>
+                                                        <PhoneInput
                                                             type="text"
-                                                            className="form-control"
-                                                            placeholder="Your Phone number"
+                                                            placeholder="Your phone number"
                                                             value={phone}
                                                             onChange={(e) => setPhone(e.target.value)}
                                                         />
-                                                    </div>
-                                                </div>
-                                                <div className="form-group">
-                                                    <label>Password <span>(8 or more characters, including numbers and special characters)</span></label>
-                                                    <input
+                                                    </PhoneInputGroup>
+                                                </FormGroup>
+                                                
+                                                <PasswordGroup>
+                                                    <FormLabel>Password <HelperText>(8+ characters, include numbers & special characters)</HelperText></FormLabel>
+                                                    <FormInput
                                                         type="password"
-                                                        className="form-control mb-10"
-                                                        placeholder="Please enter a password."
+                                                        placeholder="Create a password"
                                                         value={password}
                                                         onChange={(e) => setPassword(e.target.value)}
+                                                        required
+                                                        className="mb-2"
                                                     />
-                                                    <input
+                                                    <FormInput
                                                         type="password"
-                                                        className="form-control"
-                                                        placeholder="Please re-enter your password."
+                                                        placeholder="Confirm your password"
                                                         value={confirmPassword}
                                                         onChange={(e) => setConfirmPassword(e.target.value)}
+                                                        required
                                                     />
-                                                </div>
-                                                <div className="form-group">
-                                                    <label>NickName <span className="fs-14">(Excluding special characters)</span></label>
-                                                    <input
+                                                </PasswordGroup>
+
+                                                <FormGroup>
+                                                    <FormLabel>Nickname <HelperText>(No special characters)</HelperText></FormLabel>
+                                                    <FormInput
                                                         type="text"
-                                                        className="form-control"
-                                                        placeholder="Enter Nickname"
+                                                        placeholder="Choose a nickname"
                                                         value={nickname}
                                                         onChange={(e) => setNickname(e.target.value)}
+                                                        required
                                                     />
-                                                </div>
-                                                <div className="form-group">
-                                                    <label>Country </label>
-                                                    <select 
-                                                        className="form-control"
+                                                </FormGroup>
+                                                
+                                                <FormGroup>
+                                                    <FormLabel>Country</FormLabel>
+                                                    <FormSelect
                                                         value={country}
                                                         onChange={(e) => setCountry(e.target.value)}
                                                     >
-                                                        <option>South Korea (+82)</option>
-                                                        <option>Vietnamese (+84)</option>
-                                                        <option>United States (+1)</option>
-                                                        <option>Belgium (+32)</option>
-                                                    </select>
-                                                </div>
+                                                        <option value="United States">United States</option>
+                                                        <option value="United Kingdom">United Kingdom</option>
+                                                        <option value="Canada">Canada</option>
+                                                        <option value="Australia">Australia</option>
+                                                        <option value="South Korea">South Korea</option>
+                                                    </FormSelect>
+                                                </FormGroup>
 
-                                                <div className="form-group">
-                                                    <label>Referral Code <span className="fs-14">(Optional)</span></label>
-                                                    <input
+                                                <FormGroup>
+                                                    <FormLabel>Referral Code <HelperText>(Optional)</HelperText></FormLabel>
+                                                    <FormInput
                                                         type="text"
-                                                        className="form-control"
                                                         placeholder="Enter referral code if you have one"
                                                         value={referralCode}
                                                         onChange={(e) => setReferralCode(e.target.value)}
                                                     />
-                                                </div>
+                                                </FormGroup>
 
-                                                <div className="form-group">
-                                                    <label>UID Code </label>
-                                                    <input
+                                                <FormGroup>
+                                                    <FormLabel>UID Code</FormLabel>
+                                                    <FormInput
                                                         type="text"
-                                                        className="form-control"
-                                                        placeholder="Please enter your invitation code."
+                                                        placeholder="Enter your invitation code"
                                                         value={uidCode}
                                                         onChange={(e) => setUidCode(e.target.value)}
                                                     />
-                                                </div>
+                                                </FormGroup>
 
-                                                {error && <div className="alert alert-danger">{error}</div>}
+                                                {error && <ErrorMessage>{error}</ErrorMessage>}
 
-                                                <button type="submit" className="btn-action">
-                                                    Pre-Registration
-                                                </button>
-                                                <div className="bottom">
-                                                    <p>Already have an account?</p>
+                                                <RegisterButton type="submit" disabled={loading}>
+                                                    {loading ? 'Processing...' : 'Create Account'}
+                                                </RegisterButton>
+                                                
+                                                <LoginPrompt>
+                                                    <span>Already have an account?</span>
                                                     <Link to="/login">Login</Link>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    </TabPanel>
-                                </Tabs> 
+                                                </LoginPrompt>
+                                            </RegisterForm>
+                                        </TabPanel>
+                                    </StyledTabs>
+                                </RegisterCard>
                             )}
                         </div>
                     </div>
                 </div>
-            </section>
+            </RegisterSection>
             <Sale01 />
         </div>
     );
@@ -1092,6 +940,314 @@ const Input = styled.input`
     padding: 10px;
     border: 1px solid #ccc;
     border-radius: 4px;
+`;
+
+const RegisterSection = styled.section`
+    padding: 60px 0;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    min-height: 80vh;
+`;
+
+const RegisterCard = styled.div`
+    background: rgba(30, 41, 59, 0.7);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    padding: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 30px;
+`;
+
+const RegisterHeader = styled.div`
+    text-align: center;
+    margin-bottom: 30px;
+    
+    h3 {
+        color: #fff;
+        font-weight: 700;
+        margin-bottom: 10px;
+        font-size: 28px;
+    }
+    
+    p {
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 16px;
+        max-width: 80%;
+        margin: 0 auto;
+    }
+`;
+
+const StyledTabs = styled(Tabs)`
+    .react-tabs__tab-list {
+        border-bottom: none;
+        display: flex;
+        margin-bottom: 25px;
+    }
+    
+    .react-tabs__tab {
+        color: rgba(255, 255, 255, 0.6);
+        padding: 12px 20px;
+        border: none;
+        font-size: 16px;
+        font-weight: 500;
+        background: transparent;
+        margin-right: 10px;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+        
+        &:hover {
+            color: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.05);
+        }
+    }
+    
+    .react-tabs__tab--selected {
+        color: #fff;
+        background: rgba(79, 70, 229, 0.2);
+        border-color: transparent;
+        
+        &:after {
+            display: none;
+        }
+    }
+`;
+
+const RegisterForm = styled.form`
+    padding: 10px 0;
+`;
+
+const FormLabel = styled.label`
+    display: block;
+    margin-bottom: 8px;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 500;
+    font-size: 14px;
+`;
+
+const FormInput = styled.input`
+    width: 100%;
+    padding: 15px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 16px;
+    transition: all 0.3s ease;
+    
+    &:focus {
+        outline: none;
+        border-color: #4f46e5;
+        box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+    }
+    
+    &::placeholder {
+        color: rgba(255, 255, 255, 0.4);
+    }
+    
+    &.mb-2 {
+        margin-bottom: 10px;
+    }
+`;
+
+const PasswordGroup = styled(FormGroup)`
+    margin-bottom: 20px;
+    
+    input:first-of-type {
+        margin-bottom: 10px;
+        border-radius: 8px;
+    }
+    
+    input:last-of-type {
+        border-radius: 8px;
+    }
+`;
+
+const HelperText = styled.span`
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+    font-weight: 400;
+    margin-left: 6px;
+`;
+
+const FormSelect = styled.select`
+    width: 100%;
+    padding: 15px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 16px;
+    transition: all 0.3s ease;
+    
+    &:focus {
+        outline: none;
+        border-color: #4f46e5;
+        box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+    }
+    
+    option {
+        background: #1e293b;
+        color: #fff;
+    }
+`;
+
+const PhoneInputGroup = styled.div`
+    display: flex;
+`;
+
+const CountrySelect = styled.select`
+    padding: 15px;
+    border-radius: 8px 0 0 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border-right: none;
+    min-width: 80px;
+    
+    &:focus {
+        outline: none;
+        border-color: #4f46e5;
+    }
+    
+    option {
+        background: #1e293b;
+        color: #fff;
+    }
+`;
+
+const PhoneInput = styled.input`
+    flex: 1;
+    padding: 15px;
+    border-radius: 0 8px 8px 0;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    
+    &:focus {
+        outline: none;
+        border-color: #4f46e5;
+    }
+    
+    &::placeholder {
+        color: rgba(255, 255, 255, 0.4);
+    }
+`;
+
+const RegisterButton = styled.button`
+    width: 100%;
+    padding: 15px;
+    background: linear-gradient(to right, #4f46e5, #7c3aed);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    
+    &:hover {
+        background: linear-gradient(to right, #4338ca, #6d28d9);
+        transform: translateY(-2px);
+    }
+    
+    &:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+        transform: none;
+    }
+`;
+
+const Divider = styled.div`
+    position: relative;
+    text-align: center;
+    margin: 25px 0;
+    
+    &:before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: rgba(255, 255, 255, 0.1);
+    }
+    
+    span {
+        position: relative;
+        background: #1e293b;
+        padding: 0 15px;
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 14px;
+    }
+`;
+
+const GoogleButton = styled.button`
+    width: 100%;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    
+    img {
+        width: 24px;
+        height: 24px;
+        margin-right: 10px;
+    }
+    
+    &:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+    
+    &:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+    }
+`;
+
+const LoginPrompt = styled.div`
+    margin-top: 25px;
+    text-align: center;
+    font-size: 15px;
+    
+    span {
+        color: rgba(255, 255, 255, 0.6);
+        margin-right: 5px;
+    }
+    
+    a {
+        color: #4f46e5;
+        text-decoration: none;
+        font-weight: 500;
+        
+        &:hover {
+            text-decoration: underline;
+        }
+    }
+`;
+
+const ErrorMessage = styled.div`
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    padding: 12px 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 14px;
+`;
+
+const SuccessMessage = styled.div`
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+    padding: 12px 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 14px;
 `;
 
 export default Register;

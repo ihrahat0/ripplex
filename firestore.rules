@@ -32,6 +32,11 @@ service cloud.firestore {
           .hasOnly(['referrals', 'referralStats', 'referredBy', 'joinedViaReferral', 'balances', 'referralCode', 'referralLink']));
     }
     
+    // Allow users to read notification counts
+    match /notificationCounts/{userId} {
+      allow read, write: if isAuthenticated() && (isOwner(userId) || isAdmin());
+    }
+    
     // Allow users to manage custom tokens in their list
     match /userTokens/{docId} {
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
