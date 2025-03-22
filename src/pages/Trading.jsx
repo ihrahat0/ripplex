@@ -1213,7 +1213,7 @@ const createOrderBookData = (marketPrice, symbol, buyRatio = 0.5) => {
 
 // Replace all existing functions with this single implementation
 const generateMockOrderBookData = createOrderBookData;
-const generateDummyOrders = createOrderBookData;
+const generateDummyOrders = generateOrderBook;
 
 // Format the price displayed in the order book
 const formatOrderPrice = (price) => {
@@ -1618,54 +1618,73 @@ const Trading = () => {
     }
   }, [currentUser, ensureUserBalances]);
 
-  // WebSocket setup
-  const setupWebSocket = useCallback(() => {
-    if (!isOnline) return null;
-
+  // Define setupWebSocketConnection at component level so it's available to all useEffect hooks
+  const setupWebSocketConnection = (symbol) => {
+    if (!isOnline) {
+      console.log('Offline, skipping WebSocket setup');
+      return () => {};
+    }
+    
+    // Skip WebSocket for custom tokens
+    if (cryptoData?.isCustomToken) {
+      console.log('Custom token detected, skipping WebSocket connection');
+      return () => {};
+    }
+    
     try {
-      // Close existing connection if any
+      // Close any existing WebSocket
       if (ws.current) {
         ws.current.close();
+        ws.current = null;
       }
-
-      const symbol = cryptoData?.token?.symbol?.toLowerCase() || 'btc';
-      const wsSymbol = `${symbol}usdt@ticker`;
-      const newWs = new WebSocket(`wss://stream.binance.com:9443/ws/${wsSymbol}`);
       
-      newWs.onopen = () => {
-        console.log('WebSocket connected');
+      // Set up a new WebSocket connection
+      const formattedSymbol = symbol?.toLowerCase() || 'btcusdt';
+      const wsUrl = `wss://stream.binance.com:9443/ws/${formattedSymbol}@ticker`;
+      console.log('Connecting to WebSocket:', wsUrl);
+      
+      ws.current = new WebSocket(wsUrl);
+      
+      ws.current.onopen = () => {
+        console.log('WebSocket connected:', wsUrl);
       };
-
-      newWs.onmessage = (event) => {
+      
+      ws.current.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          // Handle the message data
-          console.log('WebSocket message:', data);
+          if (data && data.c) {
+            const newPrice = parseFloat(data.c);
+            if (!isNaN(newPrice) && newPrice > 0) {
+              setMarketPrice(newPrice);
+              trackPrice(newPrice, symbol);
+            }
+          }
         } catch (error) {
-          console.error('Error processing WebSocket message:', error);
+          console.error('Error parsing WebSocket message:', error);
         }
       };
-
-      newWs.onerror = (error) => {
+      
+      ws.current.onerror = (error) => {
         console.error('WebSocket error:', error);
       };
-
-      newWs.onclose = () => {
+      
+      ws.current.onclose = () => {
         console.log('WebSocket disconnected');
       };
-
-      ws.current = newWs;
+      
+      // Return cleanup function
       return () => {
         if (ws.current) {
+          console.log('Closing WebSocket from cleanup');
           ws.current.close();
           ws.current = null;
         }
       };
     } catch (error) {
       console.error('Error setting up WebSocket:', error);
-      return null;
+      return () => {};
     }
-  }, [isOnline, cryptoData?.token?.symbol]);
+  };
 
   // Price update function
   const updatePrice = useCallback(async () => {
@@ -1721,13 +1740,13 @@ const Trading = () => {
 
   // WebSocket connection effect
   useEffect(() => {
-    const cleanup = setupWebSocket();
+    const cleanup = setupWebSocketConnection(cryptoData?.token?.symbol);
     return () => {
       if (cleanup && typeof cleanup === 'function') {
         cleanup();
       }
     };
-  }, [setupWebSocket]);
+  }, [setupWebSocketConnection, cryptoData?.token?.symbol]);
 
   // Price update interval effect
   useEffect(() => {
@@ -1846,23 +1865,51 @@ const Trading = () => {
         // DEX price update logic
         if (cryptoData?.token?.address && cryptoData?.token?.chainId) {
           try {
+            console.log(`Fetching DEX price for ${cryptoData.token.symbol} on ${cryptoData.token.chainId}`);
             const response = await axios.get(`https://api.dexscreener.com/latest/dex/pairs/${cryptoData.token.chainId}/${cryptoData.token.address}`);
-            if (response.data?.pair?.priceUsd) {
-              const price = parseFloat(response.data.pair.priceUsd);
+            
+            // Check if we have pairs data
+            if (response.data?.pairs && response.data.pairs.length > 0) {
+              const pair = response.data.pairs[0];
+              const price = parseFloat(pair.priceUsd);
               console.log('Raw DEX price from API:', price);
+              
               if (!isNaN(price) && price > 0) {
-                // Store the exact price from the API
+                // Store the exact price from the API in all price-related states
                 setMarketPrice(price);
                 setLastPrice(price);
                 setCurrentPrice(price);
                 
+                // Update the chartData in cryptoData to ensure consistency
+                if (cryptoData?.isCustomToken) {
+                  setCryptoData(prevData => ({
+                    ...prevData,
+                    chartData: {
+                      ...prevData.chartData,
+                      lastPrice: price,
+                      price: price,
+                    },
+                    pairInfo: {
+                      ...prevData.pairInfo,
+                      priceUsd: price.toString(),
+                    }
+                  }));
+                }
+                
                 // Generate order book with exactly the same price
                 console.log('Generating order book with exact DEX price:', price);
-                const newOrderBook = generateDummyOrders(price);
+                const newOrderBook = generateOrderBook(price);
                 setOrderBook(newOrderBook);
+                
+                // If we have price change data, update it too
+                if (pair.priceChange) {
+                  setPriceChange(parseFloat(pair.priceChange.h24) || 0);
+                }
               } else {
-                console.warn('Invalid price received from DEX API:', response.data.pair.priceUsd);
+                console.warn('Invalid price received from DEX API:', pair.priceUsd);
               }
+            } else {
+              console.warn('No pairs data found in DEX API response');
             }
           } catch (error) {
             console.error('Error fetching DEX price:', error);
@@ -1924,61 +1971,29 @@ const Trading = () => {
     };
     
     const setupWebSocketConnection = (symbol) => {
-      // Ensure symbol has usdt suffix
-      const formattedSymbol = symbol.endsWith('usdt') ? symbol : `${symbol}usdt`;
-      
-      console.log('Setting up WebSocket for symbol:', formattedSymbol);
-      
-      // Close existing connection
-      if (ws) {
-        ws.close();
+      if (!isOnline) {
+        console.log('Offline, skipping WebSocket setup');
+        return null;
       }
       
-      // Create new connection
-      ws = new WebSocket(`wss://stream.binance.com:9443/ws/${formattedSymbol}@trade`);
+      // Skip WebSocket for custom tokens
+      if (cryptoData?.isCustomToken) {
+        console.log('Custom token detected, skipping WebSocket connection');
+        return null;
+      }
+      
+      try {
+        // Close any existing WebSocket
+        if (ws.current) {
+          ws.current.close();
+          ws.current = null;
+        }
         
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.p) {
-              const newPrice = parseFloat(data.p);
-              if (!isNaN(newPrice) && newPrice > 0) {
-                console.log(`Received WebSocket price update for ${formattedSymbol}:`, newPrice);
-                
-                // Validate the price and update consistency state
-                const isValid = trackPrice(newPrice, formattedSymbol);
-                setIsPriceConsistent(isValid);
-                
-                // Get safe price (either the original or a fallback if suspicious)
-                const safePrice = getSafePrice(newPrice, formattedSymbol);
-                
-                // Use safe price for all state updates
-                setMarketPrice(safePrice);
-                setLastPrice(safePrice);
-                setCurrentPrice(safePrice);
-                
-                // Generate order book with the safe price
-                console.log('Generating order book with WebSocket price:', safePrice);
-                const newOrderBook = generateDummyOrders(safePrice);
-                setOrderBook(newOrderBook);
-              } else {
-                console.warn('Invalid price received from WebSocket:', data.p);
-                setIsPriceConsistent(false);
-              }
+        // ... rest of the WebSocket setup code ...
+      } catch (error) {
+        console.error('Error setting up WebSocket:', error);
+        return null;
       }
-    } catch (error) {
-            console.error('Error processing WebSocket message:', error);
-            setIsPriceConsistent(false);
-          }
-        };
-
-        ws.onerror = (error) => {
-          console.error('WebSocket error:', error);
-        };
-      
-      ws.onclose = () => {
-        console.log('WebSocket connection closed');
-      };
     };
 
     // Initialize price update
@@ -2245,35 +2260,110 @@ const Trading = () => {
     const updateMarketPriceFromCryptoData = () => {
       let priceToUse = null;
       
-      // Try to get price from different sources in priority order
-      if (cryptoData?.token?.price && !isNaN(parseFloat(cryptoData.token.price))) {
-        priceToUse = parseFloat(cryptoData.token.price);
-        console.log('📊 Using token price:', priceToUse);
-      } else if (cryptoData?.chartData?.price && !isNaN(parseFloat(cryptoData.chartData.price))) {
-        priceToUse = parseFloat(cryptoData.chartData.price);
-        console.log('📊 Using chart price:', priceToUse);
-      } else if (cryptoData?.lastPrice && !isNaN(parseFloat(cryptoData.lastPrice))) {
-        priceToUse = parseFloat(cryptoData.lastPrice);
-        console.log('📊 Using last price:', priceToUse);
+      // For custom tokens, fetch the latest price directly from DexScreener when called
+      const fetchLatestCustomTokenPrice = async () => {
+        if (cryptoData?.isCustomToken && cryptoData?.token?.address && cryptoData?.token?.chainId) {
+          try {
+            console.log(`🔍 Fetching latest price for custom token ${cryptoData.token.symbol}`);
+            const response = await axios.get(`https://api.dexscreener.com/latest/dex/pairs/${cryptoData.token.chainId}/${cryptoData.token.address}`);
+            
+            if (response.data?.pairs && response.data.pairs.length > 0) {
+              const pair = response.data.pairs[0];
+              const price = parseFloat(pair.priceUsd);
+              
+              if (!isNaN(price) && price > 0) {
+                console.log('📊 Got updated price for custom token:', price);
+                priceToUse = price;
+                
+                // Immediately update all price states
+                setMarketPrice(price);
+                setLastPrice(price);
+                setCurrentPrice(price);
+                
+                // Generate a new order book with the updated price
+                const newOrderBook = generateOrderBook(price);
+                setOrderBook(newOrderBook);
+                
+                // Also update cryptoData for consistency
+                setCryptoData(prevData => ({
+                  ...prevData,
+                  chartData: {
+                    ...prevData.chartData,
+                    lastPrice: price,
+                    price: price,
+                  },
+                  pairInfo: {
+                    ...prevData.pairInfo,
+                    priceUsd: price.toString(),
+                  }
+                }));
+                
+                return true; // Successfully updated price
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching latest custom token price:', error);
+          }
+        }
+        return false; // Continue with normal price detection
+      };
+      
+      // For custom tokens, try direct fetch first
+      if (cryptoData?.isCustomToken && cryptoData?.token?.address) {
+        fetchLatestCustomTokenPrice().then(updated => {
+          if (!updated) {
+            // If direct fetch fails, fall back to stored values
+            fallbackPriceDetection();
+          }
+        });
+        return; // Return early as fetching is async
+      } else {
+        // For regular tokens, proceed with normal price detection
+        fallbackPriceDetection();
       }
       
-      // If we found a valid price, update market price and order book
-      if (priceToUse !== null && priceToUse > 0) {
-        // Ensure the price is a valid number
-        priceToUse = Number(priceToUse);
-        setMarketPrice(priceToUse);
-        
-        // Generate a new order book with the updated price
-        const newOrderBook = generateOrderBook(priceToUse);
-        setOrderBook(newOrderBook);
-        
-        // Check limit orders immediately whenever price updates
-        if (pendingLimitOrders.length > 0) {
-          console.log('📊 Price updated, checking pending orders...');
-          checkPendingLimitOrders();
+      // Fallback price detection from stored values
+      function fallbackPriceDetection() {
+        // Try to get price from different sources in priority order
+        if (cryptoData?.isCustomToken && cryptoData?.chartData?.lastPrice && !isNaN(parseFloat(cryptoData.chartData.lastPrice))) {
+          // For custom tokens, prioritize chartData.lastPrice which comes from DexScreener
+          priceToUse = parseFloat(cryptoData.chartData.lastPrice);
+          console.log('📊 Using custom token lastPrice:', priceToUse);
+        } else if (cryptoData?.pairInfo?.priceUsd && !isNaN(parseFloat(cryptoData.pairInfo.priceUsd))) {
+          // Next try pairInfo.priceUsd which might also be available
+          priceToUse = parseFloat(cryptoData.pairInfo.priceUsd);
+          console.log('📊 Using pairInfo price:', priceToUse);
+        } else if (cryptoData?.token?.price && !isNaN(parseFloat(cryptoData.token.price))) {
+          priceToUse = parseFloat(cryptoData.token.price);
+          console.log('📊 Using token price:', priceToUse);
+        } else if (cryptoData?.chartData?.price && !isNaN(parseFloat(cryptoData.chartData.price))) {
+          priceToUse = parseFloat(cryptoData.chartData.price);
+          console.log('📊 Using chart price:', priceToUse);
+        } else if (cryptoData?.lastPrice && !isNaN(parseFloat(cryptoData.lastPrice))) {
+          priceToUse = parseFloat(cryptoData.lastPrice);
+          console.log('📊 Using last price:', priceToUse);
         }
-      } else {
-        console.warn('No valid price found in crypto data:', cryptoData);
+        
+        // If we found a valid price, update market price and order book
+        if (priceToUse !== null && priceToUse > 0) {
+          // Ensure the price is a valid number
+          priceToUse = Number(priceToUse);
+          setMarketPrice(priceToUse);
+          setLastPrice(priceToUse); // Also update lastPrice to ensure consistency
+          setCurrentPrice(priceToUse); // And currentPrice
+          
+          // Generate a new order book with the updated price
+          const newOrderBook = generateOrderBook(priceToUse);
+          setOrderBook(newOrderBook);
+          
+          // Check limit orders immediately whenever price updates
+          if (pendingLimitOrders.length > 0) {
+            console.log('📊 Price updated, checking pending orders...');
+            checkPendingLimitOrders();
+          }
+        } else {
+          console.warn('No valid price found in crypto data:', cryptoData);
+        }
       }
     };
     
@@ -3328,6 +3418,37 @@ const Trading = () => {
 
   // Update getDexScreenerUrl for proper iframe embedding
   const getDexScreenerUrl = () => {
+    // Get URL params to check for custom token
+    const urlParams = getSearchParams();
+    
+    // Handle custom tokens from My List
+    if (urlParams.custom && urlParams.address && urlParams.chain) {
+      const address = urlParams.address.toLowerCase();
+      
+      // Map chain IDs to DexScreener format
+      const chainMap = {
+        'bsc': 'bsc',
+        'ethereum': 'ethereum',
+        'polygon': 'polygon',
+        'arbitrum': 'arbitrum',
+        'avalanche': 'avalanche',
+        'solana': 'solana',
+        'base': 'base',
+        '1': 'ethereum',
+        '56': 'bsc',
+        '137': 'polygon',
+        '42161': 'arbitrum',
+        '43114': 'avalanche',
+        '8453': 'base'
+      };
+      
+      const chain = chainMap[urlParams.chain?.toLowerCase()] || 'ethereum';
+      
+      console.log(`Creating DexScreener URL for custom token: https://dexscreener.com/${chain}/${address}`);
+      return `https://dexscreener.com/${chain}/${address}`;
+    }
+    
+    // Original implementation for non-custom tokens
     if (cryptoData?.token?.type !== 'dex' || !cryptoData?.pairInfo?.address) {
       return 'https://dexscreener.com';
     }
@@ -3339,7 +3460,8 @@ const Trading = () => {
       'polygon': 'polygon',
       'arbitrum': 'arbitrum',
       'avalanche': 'avalanche',
-      'solana': 'solana'
+      'solana': 'solana',
+      'base': 'base'
     };
 
     const chain = chainMap[cryptoData.token.chainId?.toLowerCase()] || 'ethereum';
@@ -3351,6 +3473,38 @@ const Trading = () => {
 
   // Add special function for getting chart embed URL
   const getDexScreenerChartEmbedUrl = () => {
+    // Get URL params to check for custom token
+    const urlParams = getSearchParams();
+    
+    // Handle custom tokens from My List
+    if (urlParams.custom && urlParams.address && urlParams.chain) {
+      const address = urlParams.address.toLowerCase();
+      
+      // Map chain IDs to DexScreener format
+      const chainMap = {
+        'bsc': 'bsc',
+        'ethereum': 'ethereum',
+        'polygon': 'polygon',
+        'arbitrum': 'arbitrum',
+        'avalanche': 'avalanche',
+        'solana': 'solana',
+        'base': 'base',
+        '1': 'ethereum',
+        '56': 'bsc',
+        '137': 'polygon',
+        '42161': 'arbitrum',
+        '43114': 'avalanche',
+        '8453': 'base'
+      };
+      
+      const chain = chainMap[urlParams.chain?.toLowerCase()] || 'ethereum';
+      
+      // Use embed=1 for iframe embedding and dark theme for better UI
+      console.log(`Creating DexScreener Embed URL for custom token: https://dexscreener.com/${chain}/${address}?embed=1&theme=dark&trades=0&info=0`);
+      return `https://dexscreener.com/${chain}/${address}?embed=1&theme=dark&trades=0&info=0`;
+    }
+    
+    // Original implementation for non-custom tokens
     if (cryptoData?.token?.type !== 'dex' || !cryptoData?.pairInfo?.address) {
       return 'https://dexscreener.com';
     }
@@ -3362,7 +3516,8 @@ const Trading = () => {
       'polygon': 'polygon',
       'arbitrum': 'arbitrum',
       'avalanche': 'avalanche',
-      'solana': 'solana'
+      'solana': 'solana',
+      'base': 'base'
     };
 
     const chain = chainMap[cryptoData.token.chainId?.toLowerCase()] || 'ethereum';
@@ -3373,181 +3528,264 @@ const Trading = () => {
     return `https://dexscreener.com/${chain}/${pairAddress}?embed=1&theme=dark&trades=0&info=0`;
   };
 
-  // Effect to extract trading pair info from URL if cryptoData is missing
+  // Function to get the search parameters from the URL
+  const getSearchParams = () => {
+    const searchParams = new URLSearchParams(window.location.search);
+    return {
+      symbol: searchParams.get('symbol'),
+      address: searchParams.get('address'),
+      chain: searchParams.get('chain'),
+      custom: searchParams.get('custom') === 'true'
+    };
+  };
+
+  // Initialize crypto data based on URL params, navigation state, or defaults
   useEffect(() => {
     // Only run this initialization once on mount
-    const initializeCryptoData = () => {
-      // If we already have data from navigation state, use it
-      if (location.state?.cryptoData) {
-        console.log('Using cryptoData from navigation state:', location.state.cryptoData);
-        setCryptoData(location.state.cryptoData);
-        return;
-      }
-      
-      // Otherwise try to parse from URL
-      if (cryptoId) {
-        console.log('Initializing from cryptoId:', cryptoId);
+    const initializeCryptoData = async () => {
+      try {
+        const params = getSearchParams();
         
-        // First check if this is a direct ID (from search results)
-        // Try to fetch the data from Firestore
-        const fetchCryptoData = async () => {
+        // Handle custom token from URL parameters
+        if (params.symbol && params.address && params.chain && params.custom === 'true') {
+          const customTradingData = {
+            id: `custom_${params.address}`,
+            name: params.name || params.symbol,
+            symbol: params.symbol,
+            type: 'dex',
+            chainId: params.chain,
+            address: params.address,
+            imageUrl: params.imageUrl || 'https://cryptologos.cc/logos/ethereum-eth-logo.png',
+            isCustomToken: true,
+            token: {
+              id: `custom_${params.address}`,
+              name: params.name || params.symbol,
+              symbol: params.symbol,
+              type: 'dex',
+              chainId: params.chain,
+              address: params.address,
+              imageUrl: params.imageUrl || 'https://cryptologos.cc/logos/ethereum-eth-logo.png',
+              isCustomToken: true
+            }
+          };
+          
+          console.log(`Loading custom token from URL: ${params.symbol} (${params.address}) on chain ${params.chain}`);
+          
           try {
-            // Check both 'coins' and 'tokens' collections
-            const coinDoc = await getDoc(doc(db, 'coins', cryptoId));
-            if (coinDoc.exists()) {
-              const coinData = coinDoc.data();
-              console.log('Found coin data:', coinData);
-              
-              const tradingData = {
-                token: {
-                  id: cryptoId,
-                  name: coinData.name,
-                  symbol: coinData.symbol,
-                  type: 'cex',
-                  chainId: coinData.chainId || 'ethereum',
-                  image: coinData.logo || coinData.icon || coinData.logoUrl || `https://coinicons-api.vercel.app/api/icon/${coinData.symbol?.toLowerCase()}`
-                },
-                pairInfo: {
-                  symbol: `${coinData.symbol}/USDT`,
-                  baseAsset: 'USDT',
-                  quoteAsset: coinData.symbol,
-                  address: coinData.address || ''
-                },
-                chartData: {
-                  lastPrice: parseFloat(coinData.price) || 0,
-                  change24h: parseFloat(coinData.priceChange24h) || 0,
-                  volume24h: coinData.volume24h || 0
+            // First check sessionStorage for cached price data
+            let cachedPrice = null;
+            try {
+              const cachedData = sessionStorage.getItem(`customToken_${params.symbol}_${params.address}`);
+              if (cachedData) {
+                const parsedData = JSON.parse(cachedData);
+                if (parsedData.price && !isNaN(parsedData.price) && parsedData.price > 0) {
+                  cachedPrice = parsedData.price;
+                  console.log('📊 Retrieved cached price for custom token:', cachedPrice);
+                  
+                  // Use cached price immediately
+                  setMarketPrice(cachedPrice);
+                  setLastPrice(cachedPrice);
+                  setCurrentPrice(cachedPrice);
+                  
+                  // Generate order book with cached price
+                  const cachedOrderBook = generateOrderBook(cachedPrice);
+                  setOrderBook(cachedOrderBook);
+                  
+                  // Add price info to customTradingData
+                  customTradingData.chartData = {
+                    lastPrice: cachedPrice,
+                    price: cachedPrice
+                  };
+                  customTradingData.pairInfo = {
+                    priceUsd: cachedPrice.toString(),
+                    priceChange: parsedData.pairData?.priceChange || { h24: '0' },
+                    price: cachedPrice.toString()
+                  };
                 }
-              };
-              
-              setCryptoData(tradingData);
-              return true;
+              }
+            } catch (cacheError) {
+              console.warn('Error reading price from cache:', cacheError);
             }
             
-            const tokenDoc = await getDoc(doc(db, 'tokens', cryptoId));
-            if (tokenDoc.exists()) {
-              const tokenData = tokenDoc.data();
-              console.log('Found token data:', tokenData);
-              
-              const tradingData = {
-                token: {
-                  id: cryptoId,
-                  name: tokenData.name,
-                  symbol: tokenData.symbol,
-                  type: 'dex',
-                  chainId: tokenData.chainId || 'ethereum',
-                  image: tokenData.logo || tokenData.icon || tokenData.logoUrl || `https://coinicons-api.vercel.app/api/icon/${tokenData.symbol?.toLowerCase()}`
-                },
-                pairInfo: {
-                  symbol: `${tokenData.symbol}/USDT`,
-                  baseAsset: 'USDT',
-                  quoteAsset: tokenData.symbol,
-                  address: tokenData.address || ''
-                },
-                chartData: {
-                  lastPrice: parseFloat(tokenData.price) || 0,
-                  change24h: parseFloat(tokenData.priceChange24h) || 0,
-                  volume24h: tokenData.volume24h || 0
-                }
-              };
-              
-              setCryptoData(tradingData);
-              return true;
-            }
+            // Always fetch fresh price, even if we have cached data
+            const priceResponse = await axios.get(`https://api.dexscreener.com/latest/dex/pairs/${params.chain}/${params.address}`);
             
-            return false;
+            if (priceResponse.data?.pairs && priceResponse.data.pairs.length > 0) {
+              const pair = priceResponse.data.pairs[0];
+              const price = parseFloat(pair.priceUsd);
+              
+              if (!isNaN(price) && price > 0) {
+                console.log('📊 Got fresh initial price for custom token:', price);
+                
+                // Cache the price in sessionStorage
+                try {
+                  sessionStorage.setItem(`customToken_${params.symbol}_${params.address}`, JSON.stringify({
+                    price: price,
+                    timestamp: new Date().getTime(),
+                    pairData: pair
+                  }));
+                } catch (storageError) {
+                  console.warn('Failed to cache custom token price:', storageError);
+                }
+                
+                // Set all price states
+                setMarketPrice(price);
+                setLastPrice(price);
+                setCurrentPrice(price);
+                
+                // Generate a new order book with the updated price
+                const newOrderBook = generateOrderBook(price);
+                setOrderBook(newOrderBook);
+                
+                // Add price info to customTradingData
+                customTradingData.chartData = {
+                  lastPrice: price,
+                  price: price
+                };
+                customTradingData.pairInfo = {
+                  priceUsd: price.toString(),
+                  priceChange: pair.priceChange || { h24: '0' },
+                  price: price.toString()
+                };
+                
+                // Add extra fields for price persistence
+                customTradingData.customTokenPrice = price;
+                customTradingData.lastPriceUpdate = new Date().getTime();
+              } else if (cachedPrice) {
+                // If API returns invalid price but we have cached price, stick with that
+                console.log('API returned invalid price, using cached price instead:', cachedPrice);
+              }
+            } else if (cachedPrice) {
+              // If API returns no pairs but we have cached price, use cached price
+              console.log('API returned no pairs, using cached price instead:', cachedPrice);
+            }
           } catch (error) {
-            console.error('Error fetching crypto data:', error);
-            return false;
+            console.error('Error fetching initial price for custom token:', error);
+            
+            // If API call fails but we have cached price, use that as fallback
+            try {
+              const cachedData = sessionStorage.getItem(`customToken_${params.symbol}_${params.address}`);
+              if (cachedData) {
+                const parsedData = JSON.parse(cachedData);
+                if (parsedData.price && !isNaN(parsedData.price) && parsedData.price > 0) {
+                  const fallbackPrice = parsedData.price;
+                  console.log('📊 Using fallback cached price after API failure:', fallbackPrice);
+                  
+                  // Use cached price
+                  setMarketPrice(fallbackPrice);
+                  setLastPrice(fallbackPrice);
+                  setCurrentPrice(fallbackPrice);
+                  
+                  // Generate order book with cached price
+                  const fallbackOrderBook = generateOrderBook(fallbackPrice);
+                  setOrderBook(fallbackOrderBook);
+                  
+                  // Add price info to customTradingData
+                  customTradingData.chartData = {
+                    lastPrice: fallbackPrice,
+                    price: fallbackPrice
+                  };
+                  customTradingData.pairInfo = {
+                    priceUsd: fallbackPrice.toString(),
+                    price: fallbackPrice.toString()
+                  };
+                  
+                  // Add extra fields for price persistence
+                  customTradingData.customTokenPrice = fallbackPrice;
+                  customTradingData.lastPriceUpdate = new Date().getTime();
+                }
+              }
+            } catch (fallbackError) {
+              console.error('Error using fallback price from cache:', fallbackError);
+            }
           }
-        };
-        
-        // Execute the fetch and then fall back to parsing if needed
-        fetchCryptoData().then(found => {
-          if (!found) {
-            // If not found, try to parse as pair-format
-      const pairParts = cryptoId.split('-');
-      if (pairParts.length === 2) {
-        const quoteAsset = pairParts[0];
-        const baseAsset = pairParts[1];
-        
-        // Create a default cryptoData object based on URL
-        const defaultCryptoData = {
-          token: {
-            id: `${quoteAsset.toLowerCase()}_${baseAsset.toLowerCase()}`,
-            name: quoteAsset,
-            symbol: quoteAsset,
-            type: 'cex',
-            image: `https://coinicons-api.vercel.app/api/icon/${quoteAsset.toLowerCase()}`
-          },
-          pairInfo: {
-            symbol: `${quoteAsset}/${baseAsset}`,
-            baseAsset: baseAsset,
-            quoteAsset: quoteAsset
-          },
-          chartData: {
-            lastPrice: 0,
-            change24h: 0,
-            volume24h: 0
+          
+          // Set crypto data with the custom token
+          setCryptoData(customTradingData);
+          
+          // Set up price refresh interval for custom tokens (separate from WebSocket)
+          if (window.customTokenInterval) {
+            clearInterval(window.customTokenInterval);
           }
-        };
-        
-        setCryptoData(defaultCryptoData);
-              console.log('Created default cryptoData from URL pair format:', defaultCryptoData);
-      } else {
-        // If we can't parse the URL properly, set a default BTC/USDT pair
-              console.warn('Could not parse crypto from URL, using default BTC/USDT');
-        const defaultCryptoData = {
-          token: {
-            id: 'btc_usdt',
-            name: 'Bitcoin',
-            symbol: 'BTC',
-            type: 'cex',
-            image: 'https://coinicons-api.vercel.app/api/icon/btc'
-          },
-          pairInfo: {
-            symbol: 'BTC/USDT',
-            baseAsset: 'USDT',
-            quoteAsset: 'BTC'
-          },
-          chartData: {
-            lastPrice: 0,
-            change24h: 0,
-            volume24h: 0
-          }
-        };
-        setCryptoData(defaultCryptoData);
-      }
-    }
-        });
-      } else {
-        // If we have no cryptoId at all, set a default
-        console.warn('No cryptoId provided, using default BTC/USDT');
-      const defaultCryptoData = {
-        token: {
-          id: 'btc_usdt',
-          name: 'Bitcoin',
-          symbol: 'BTC',
-          type: 'cex',
-          image: 'https://coinicons-api.vercel.app/api/icon/btc'
-        },
-        pairInfo: {
-          symbol: 'BTC/USDT',
-          baseAsset: 'USDT',
-          quoteAsset: 'BTC'
-        },
-        chartData: {
-          lastPrice: 0,
-          change24h: 0,
-          volume24h: 0
+          
+          window.customTokenInterval = setInterval(async () => {
+            try {
+              console.log(`Refreshing price for custom token ${params.symbol}`);
+              const response = await axios.get(`https://api.dexscreener.com/latest/dex/pairs/${params.chain}/${params.address}`);
+              
+              if (response.data?.pairs && response.data.pairs.length > 0) {
+                const pair = response.data.pairs[0];
+                const price = parseFloat(pair.priceUsd);
+                
+                if (!isNaN(price) && price > 0) {
+                  console.log('📊 Got refreshed price for custom token:', price);
+                  
+                  // Cache the price
+                  try {
+                    sessionStorage.setItem(`customToken_${params.symbol}_${params.address}`, JSON.stringify({
+                      price: price,
+                      timestamp: new Date().getTime(),
+                      pairData: pair
+                    }));
+                  } catch (e) {
+                    console.warn('Failed to cache custom token price:', e);
+                  }
+                  
+                  // Update all price states directly
+                  setMarketPrice(price);
+                  setLastPrice(price);
+                  setCurrentPrice(price);
+                  
+                  // Generate a new order book with the updated price
+                  const newOrderBook = generateOrderBook(price);
+                  setOrderBook(newOrderBook);
+                  
+                  // Update crypto data with new price
+                  setCryptoData(prevData => {
+                    if (!prevData) return null;
+                    return {
+                      ...prevData,
+                      chartData: {
+                        ...prevData.chartData,
+                        lastPrice: price,
+                        price: price
+                      },
+                      pairInfo: {
+                        ...prevData.pairInfo,
+                        priceUsd: price.toString(),
+                        price: price.toString()
+                      },
+                      customTokenPrice: price,
+                      lastPriceUpdate: new Date().getTime()
+                    };
+                  });
+                }
+              }
+            } catch (error) {
+              console.error('Error refreshing custom token price:', error);
+            }
+          }, 5000); // Update every 5 seconds
+          
+          // Set up cleanup for the interval
+          return;
         }
-      };
-      setCryptoData(defaultCryptoData);
+        // ... existing code ...
+      } catch (error) {
+        console.error('Error initializing crypto data:', error);
       }
     };
     
     initializeCryptoData();
-  }, [cryptoId, location, db]); // Added db to dependencies
+    
+    // Return cleanup function to clear any custom token intervals when component unmounts
+    return () => {
+      if (window.customTokenInterval) {
+        console.log('Cleaning up custom token interval on unmount');
+        clearInterval(window.customTokenInterval);
+        window.customTokenInterval = null;
+      }
+    };
+  }, [cryptoId, location.state]);
 
   // Add error handling for missing data - make sure we always have something to display
   // This useEffect has been removed to avoid hook ordering issues
@@ -3568,6 +3806,13 @@ const Trading = () => {
 
   // Define canShowTradingViewChart outside of renderChartSection 
   const canShowTradingViewChart = () => {
+    // Check if this is a custom token from My List
+    const urlParams = getSearchParams();
+    if (urlParams.custom) {
+      // Always use DexScreener for custom tokens from My List
+      return false;
+    }
+    
     // Don't show TradingView for DEX tokens except major ones
     if (cryptoData?.token?.type === 'dex') {
       // Allow major DEX tokens on major exchanges
@@ -3605,15 +3850,12 @@ const Trading = () => {
 
   // Update renderChartSection to use the new timeframe bar
   const renderChartSection = () => {
-    const canShowTradingViewChart = () => {
-      // Don't show TradingView for DEX tokens except major ones
-      if (cryptoData?.token?.type === 'dex') {
-        // Allow major DEX tokens on major exchanges
-        const majorTokens = ['ETH', 'BTC', 'BNB', 'MATIC', 'AVAX', 'ARB', 'SOL'];
-        return majorTokens.includes(cryptoData.token.symbol.toUpperCase());
-      }
-      return true;
-    };
+    // Use the outer canShowTradingViewChart function
+    const shouldShowTradingViewChart = canShowTradingViewChart();
+    
+    // Check if this is a custom token from My List
+    const urlParams = getSearchParams();
+    const isCustomToken = urlParams.custom;
 
     // Generate a unique container ID for each symbol to prevent conflicts
     const chartContainerId = `tradingview_${cryptoData?.token?.symbol?.toLowerCase() || 'chart'}_${timeframe}`;
@@ -3623,34 +3865,36 @@ const Trading = () => {
       <ChartContainer>
         {renderTimeframeBar()}
           
-          {cryptoData?.token?.type === 'dex' ? (
-            // For DEX tokens, use DexScreener iframe
+          {(cryptoData?.token?.type === 'dex' || isCustomToken) ? (
+            // For DEX tokens or custom tokens, use DexScreener iframe
             <div style={{ position: 'relative', height: '500px', width: '100%' }}>
-              {canShowTradingViewChart() ? (
+              {shouldShowTradingViewChart ? (
                 // For major DEX tokens, try TradingView
                 <div id={chartContainerId} style={{ height: '100%', width: '100%' }}>
-        <TradingChartComponent
+                  <TradingChartComponent
                     symbol={getDexTradingViewSymbol()}
-          theme={theme}
+                    theme={theme}
                     timeframe={TIMEFRAMES[timeframe]?.tradingViewInterval || '60'}
-          autosize={true}
+                    autosize={true}
                     container_id={chartContainerId}
                     onPriceUpdate={(price) => {
                       if (price && !isNaN(price)) {
                         // Synchronize chart price with order book
                         setMarketPrice(price);
                         setCurrentPrice(price);
+                        setLastPrice(price);
                         // Update order book with the exact chart price
-                        setOrderBook(generateDummyOrders(price));
+                        setOrderBook(generateOrderBook(price));
                       }
                     }}
                   />
                 </div>
               ) : (
-                // For other DEX tokens, use DexScreener iframe
+                // For custom tokens or other DEX tokens, use DexScreener iframe
                 <iframe
                   src={getDexScreenerChartEmbedUrl()}
                   title="DEX Chart"
+                  id="dexscreener-iframe"
                   style={{ 
                     height: '100%', 
                     width: '100%', 
@@ -3658,6 +3902,137 @@ const Trading = () => {
                     borderRadius: '8px' 
                   }}
                   allowFullScreen
+                  onLoad={() => {
+                    // Set up message listener for price updates from DexScreener iframe
+                    console.log('🔍 DexScreener iframe loaded - initializing price synchronization');
+                    
+                    // Function to extract price directly from the iframe
+                    const extractPriceFromIframe = () => {
+                      try {
+                        const iframe = document.getElementById('dexscreener-iframe');
+                        if (iframe && iframe.contentDocument) {
+                          // Try direct DOM access to price elements
+                          const priceElement = iframe.contentDocument.querySelector('.chakra-text[data-price]');
+                          if (priceElement) {
+                            const priceValue = priceElement.getAttribute('data-price');
+                            if (priceValue) {
+                              const price = parseFloat(priceValue);
+                              if (!isNaN(price) && price > 0) {
+                                console.log('🔄 Extracted price directly from chart:', price);
+                                // Update all price states with the real-time price from the chart
+                                setMarketPrice(price);
+                                setCurrentPrice(price);
+                                setLastPrice(price);
+                                
+                                // Update order book with real-time price
+                                setOrderBook(generateOrderBook(price));
+                                return true;
+                              }
+                            }
+                          }
+                          
+                          // Fallback to other price selectors
+                          const altPriceElement = iframe.contentDocument.querySelector('.price-value');
+                          if (altPriceElement && altPriceElement.textContent) {
+                            const priceText = altPriceElement.textContent.replace('$', '').trim();
+                            const price = parseFloat(priceText);
+                            if (!isNaN(price) && price > 0) {
+                              console.log('🔄 Extracted alternate price from chart:', price);
+                              // Update all price states
+                              setMarketPrice(price);
+                              setCurrentPrice(price);
+                              setLastPrice(price);
+                              
+                              // Update order book with real-time price
+                              setOrderBook(generateOrderBook(price));
+                              return true;
+                            }
+                          }
+                        }
+                      } catch (error) {
+                        console.error('Error extracting price from iframe DOM:', error);
+                      }
+                      return false;
+                    };
+                    
+                    // Try to get the initial price
+                    setTimeout(extractPriceFromIframe, 2000);
+                    setTimeout(extractPriceFromIframe, 5000);
+                    
+                    // Setup an observer to watch for price changes in the iframe
+                    setTimeout(() => {
+                      try {
+                        const iframe = document.getElementById('dexscreener-iframe');
+                        if (iframe && iframe.contentDocument) {
+                          console.log('Setting up mutation observer on DexScreener iframe');
+                          
+                          // Create a MutationObserver to watch for DOM changes
+                          const observer = new MutationObserver((mutations) => {
+                            extractPriceFromIframe();
+                          });
+                          
+                          // Target the price container or the entire document
+                          const targetNode = iframe.contentDocument.querySelector('.price-container') || 
+                                            iframe.contentDocument.body;
+                          
+                          if (targetNode) {
+                            // Start observing with configuration
+                            observer.observe(targetNode, {
+                              childList: true,
+                              subtree: true,
+                              characterData: true,
+                              attributes: true
+                            });
+                            
+                            console.log('Successfully set up mutation observer for real-time price updates');
+                          }
+                        }
+                      } catch (error) {
+                        console.error('Error setting up mutation observer:', error);
+                      }
+                    }, 3000);
+                    
+                    // Also set up a regular polling interval as ultimate fallback
+                    const priceInterval = setInterval(extractPriceFromIframe, 2000);
+                    
+                    // Regular message listener for postMessage communication as backup
+                    const listenForDexScreenerPriceUpdates = () => {
+                      window.addEventListener('message', (event) => {
+                        try {
+                          // Check if message is from DexScreener
+                          if (event.data && typeof event.data === 'string' && event.data.includes('dexscreener')) {
+                            // Try to parse the message data
+                            const data = JSON.parse(event.data);
+                            
+                            // Look for price data in the message
+                            if (data && data.price) {
+                              const price = parseFloat(data.price);
+                              if (!isNaN(price) && price > 0) {
+                                console.log('🔄 Real-time price update from DexScreener chart message:', price);
+                                // Update all price states with the real-time price from the chart
+                                setMarketPrice(price);
+                                setCurrentPrice(price);
+                                setLastPrice(price);
+                                
+                                // Update order book with real-time price
+                                setOrderBook(generateOrderBook(price));
+                              }
+                            }
+                          }
+                        } catch (error) {
+                          console.error('Error processing DexScreener message:', error);
+                        }
+                      });
+                    };
+                    
+                    // Set up message listener
+                    listenForDexScreenerPriceUpdates();
+                    
+                    // Return cleanup function
+                    return () => {
+                      clearInterval(priceInterval);
+                    };
+                  }}
                 />
               )}
               {showDebug && renderDebugInfo()}
@@ -3685,8 +4060,9 @@ const Trading = () => {
                     // Synchronize chart price with order book
                     setMarketPrice(price);
                     setCurrentPrice(price);
+                    setLastPrice(price);
                     // Update order book with the exact chart price
-                    setOrderBook(generateDummyOrders(price));
+                    setOrderBook(generateOrderBook(price));
                   }
                 }}
               />
@@ -3811,21 +4187,45 @@ const Trading = () => {
     // Get the current token symbol from cryptoData
     const tokenSymbol = cryptoData?.token?.symbol || 'BNB';
     
-    // Note: Using the global generateRandomQty function now
+    // Ensure we have a valid currentPrice to work with
+    const validCurrentPrice = currentPrice && !isNaN(currentPrice) && currentPrice > 0 
+      ? Number(currentPrice) 
+      : marketPrice && !isNaN(marketPrice) && marketPrice > 0
+        ? Number(marketPrice)
+        : 100;
     
-    // Ensure orderBook contains valid data
+    console.log('Using valid currentPrice for order book display:', validCurrentPrice);
+    
+    // For custom tokens, make sure we're displaying the latest stored price
+    let displayPrice = validCurrentPrice;
+    if (cryptoData?.isCustomToken) {
+      const cachedData = sessionStorage.getItem(`customToken_${cryptoData.token.symbol}_${cryptoData.token.address}`);
+      if (cachedData) {
+        try {
+          const parsedData = JSON.parse(cachedData);
+          if (parsedData.price && !isNaN(parsedData.price) && parsedData.price > 0) {
+            displayPrice = parsedData.price;
+            console.log('Using cached price for order book display:', displayPrice);
+          }
+        } catch (e) {
+          console.warn('Failed to parse cached price:', e);
+        }
+      }
+    }
+    
+    // Ensure orderBook contains valid data based on our display price
     const safeOrderBook = {
       asks: (orderBook?.asks || []).map(ask => ({
-        price: !isNaN(ask.price) ? ask.price : Number(currentPrice * (1 + Math.random() * 0.02)),
+        price: !isNaN(ask.price) ? ask.price : Number(displayPrice * (1 + Math.random() * 0.02)),
         quantity: !isNaN(ask.quantity) ? ask.quantity : generateRandomQty(ask.price),
-        total: !isNaN(ask.total) ? ask.total : Number((currentPrice * (1 + Math.random() * 0.02)) * generateRandomQty(ask.price))
+        total: !isNaN(ask.total) ? ask.total : Number((displayPrice * (1 + Math.random() * 0.02)) * generateRandomQty(ask.price))
       })),
       bids: (orderBook?.bids || []).map(bid => ({
-        price: !isNaN(bid.price) ? bid.price : Number(currentPrice * (1 - Math.random() * 0.02)),
+        price: !isNaN(bid.price) ? bid.price : Number(displayPrice * (1 - Math.random() * 0.02)),
         quantity: !isNaN(bid.quantity) ? bid.quantity : generateRandomQty(bid.price),
-        total: !isNaN(bid.total) ? bid.total : Number((currentPrice * (1 - Math.random() * 0.02)) * generateRandomQty(bid.price))
+        total: !isNaN(bid.total) ? bid.total : Number((displayPrice * (1 - Math.random() * 0.02)) * generateRandomQty(bid.price))
       })),
-      marketPrice: !isNaN(orderBook?.marketPrice) ? orderBook.marketPrice : currentPrice
+      marketPrice: !isNaN(orderBook?.marketPrice) ? orderBook.marketPrice : displayPrice
     };
     
     return (
@@ -3857,7 +4257,7 @@ const Trading = () => {
           
           <div style={{ padding: '4px', textAlign: 'center', color: '#666', background: '#1b1b2f', borderTop: '1px solid #333', borderBottom: '1px solid #333' }}>
             <span style={{ color: '#e63946', marginRight: '5px' }}>↓</span> 
-            <span style={{ color: '#f1faee', fontWeight: 'bold' }}>{Number(safeOrderBook.marketPrice || currentPrice).toFixed(2)}</span>
+            <span style={{ color: '#f1faee', fontWeight: 'bold' }}>{Number(displayPrice).toFixed(2)}</span>
           </div>
           
           <div style={{flex: 1, overflow: 'auto', maxHeight: '46%'}}>
@@ -4552,6 +4952,389 @@ const Trading = () => {
     
     return false;
   };
+
+  // Default hardcoded prices for common coins
+  const initialHardcodedPrices = {
+    'BTC': 62345.23,
+    'ETH': 3456.78,
+    'BNB': 567.89,
+    'SOL': 145.67,
+    'XRP': 0.57,
+    'ADA': 0.45,
+    'AVAX': 34.56,
+    'DOT': 6.72,
+    'MATIC': 0.78,
+    'LINK': 15.34,
+    'DOGE': 0.12,
+    'SHIB': 0.00023,
+    'UNI': 9.12,
+    'ATOM': 7.89,
+    'LTC': 56.78
+  };
+
+  // Setup direct price fetching from DexScreener API for custom tokens
+  useEffect(() => {
+    if (cryptoData?.token?.type === 'dex' && cryptoData?.token?.address && cryptoData?.token?.chainId) {
+      // Function to fetch the latest price directly from DexScreener API
+      const fetchLatestDexScreenerPrice = async () => {
+        try {
+          console.log(`🔍 Direct price fetch for ${cryptoData.token.symbol} on ${cryptoData.token.chainId}`);
+          const response = await axios.get(`https://api.dexscreener.com/latest/dex/pairs/${cryptoData.token.chainId}/${cryptoData.token.address}`);
+          
+          if (response.data?.pairs && response.data.pairs.length > 0) {
+            const pair = response.data.pairs[0];
+            const price = parseFloat(pair.priceUsd);
+            
+            if (!isNaN(price) && price > 0) {
+              console.log('📊 Got real-time price from DexScreener API:', price);
+              
+              // Update all price states with the real-time price
+              setMarketPrice(price);
+              setCurrentPrice(price);
+              setLastPrice(price);
+              
+              // Update order book with real-time price
+              setOrderBook(generateOrderBook(price));
+              
+              // Also update cryptoData for consistency
+              setCryptoData(prevData => ({
+                ...prevData,
+                chartData: {
+                  ...prevData.chartData,
+                  lastPrice: price,
+                  price: price,
+                },
+                pairInfo: {
+                  ...prevData.pairInfo,
+                  priceUsd: price.toString(),
+                }
+              }));
+              
+              // Update price change if available
+              if (pair.priceChange) {
+                setPriceChange(parseFloat(pair.priceChange.h24) || 0);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching latest price from DexScreener API:', error);
+        }
+      };
+      
+      // Fetch immediately on component mount
+      fetchLatestDexScreenerPrice();
+      
+      // Then fetch every 10 seconds for continuous updates
+      const intervalId = setInterval(fetchLatestDexScreenerPrice, 10000);
+      
+      // Clean up on unmount
+      return () => {
+        clearInterval(intervalId);
+      };
+    }
+  }, [cryptoData?.token?.type, cryptoData?.token?.address, cryptoData?.token?.chainId, cryptoData?.token?.symbol]);
+
+  // Disable regular price updates for custom tokens and prioritize chart price
+  useEffect(() => {
+    let ws;
+    let interval;
+    
+    // For custom tokens and DEX tokens, prioritize chart-based price updates and disable regular updates
+    const isCustomToken = cryptoData?.isCustomToken || false;
+    const isDexToken = cryptoData?.token?.type === 'dex' || false;
+    
+    if (!isCustomToken && !isDexToken) {
+      // Only run regular price updates for standard CEX tokens
+      const updatePrice = async () => {
+        // Use CoinGecko API for reliable CEX prices
+        try {
+          const symbol = cryptoData?.token?.symbol?.toLowerCase() || 'btc';
+          let coinId;
+          
+          // Map symbols to CoinGecko IDs
+          switch (symbol) {
+            case 'btc':
+            case 'btcusdt':
+              coinId = 'bitcoin';
+              break;
+            case 'eth':
+            case 'ethusdt':
+              coinId = 'ethereum';
+              break;
+            default:
+              // Try to use symbol as coinId for other tokens
+              coinId = symbol.replace('usdt', '');
+          }
+          
+          console.log(`Fetching price for ${coinId} from CoinGecko`);
+          const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd`);
+          
+          if (response.data[coinId] && response.data[coinId].usd) {
+            const newPrice = parseFloat(response.data[coinId].usd);
+            console.log('Raw price from CoinGecko:', newPrice);
+            if (!isNaN(newPrice) && newPrice > 0) {
+              console.log(`Received price update for ${coinId}:`, newPrice);
+              setMarketPrice(newPrice);
+              setLastPrice(newPrice);
+              setCurrentPrice(newPrice);
+              
+              // Generate order book with the exact same price
+              console.log('Generating order book with exact price:', newPrice);
+              const newOrderBook = generateOrderBook(newPrice);
+              setOrderBook(newOrderBook);
+              
+              // Also set up a WebSocket for real-time updates if available
+              setupWebSocketConnection(symbol.toLowerCase());
+            }
+          } else {
+            console.warn('Failed to get price from CoinGecko, falling back to Binance WebSocket');
+            setupWebSocketConnection(symbol.toLowerCase());
+          }
+        } catch (error) {
+          console.error('Error fetching price from CoinGecko:', error);
+          
+          // Fallback to Binance WebSocket
+          const symbol = cryptoData?.token?.symbol?.toLowerCase() || 'btcusdt';
+          setupWebSocketConnection(symbol.toLowerCase());
+        }
+      };
+      
+      const setupWebSocketConnection = (symbol) => {
+        // Skip WebSocket connection for custom tokens
+        if (cryptoData?.isCustomToken) {
+          console.log('Skipping WebSocket setup for custom token');
+          return;
+        }
+        
+        // Ensure symbol has usdt suffix
+        const formattedSymbol = symbol.endsWith('usdt') ? symbol : `${symbol}usdt`;
+        
+        console.log('Setting up WebSocket for symbol:', formattedSymbol);
+        
+        // Close existing connection
+        if (ws) {
+          ws.close();
+        }
+        
+        // Create new connection
+        ws = new WebSocket(`wss://stream.binance.com:9443/ws/${formattedSymbol}@trade`);
+          
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.p) {
+              const newPrice = parseFloat(data.p);
+              if (!isNaN(newPrice) && newPrice > 0) {
+                console.log(`Received WebSocket price update for ${formattedSymbol}:`, newPrice);
+                
+                // Validate the price and update consistency state
+                const isValid = trackPrice(newPrice, formattedSymbol);
+                setIsPriceConsistent(isValid);
+                
+                // Get safe price (either the original or a fallback if suspicious)
+                const safePrice = getSafePrice(newPrice, formattedSymbol);
+                
+                // Use safe price for all state updates
+                setMarketPrice(safePrice);
+                setLastPrice(safePrice);
+                setCurrentPrice(safePrice);
+                
+                // Generate order book with the safe price
+                console.log('Generating order book with WebSocket price:', safePrice);
+                const newOrderBook = generateOrderBook(safePrice);
+                setOrderBook(newOrderBook);
+              } else {
+                console.warn('Invalid price received from WebSocket:', data.p);
+                setIsPriceConsistent(false);
+              }
+            }
+          } catch (error) {
+            console.error('Error processing WebSocket message:', error);
+            setIsPriceConsistent(false);
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error);
+        };
+        
+        ws.onclose = () => {
+          console.log('WebSocket connection closed');
+        };
+      };
+
+      // Initialize price update for standard CEX tokens only
+      updatePrice();
+
+      // Set up periodic updates every 30 seconds as a fallback for standard tokens
+      interval = setInterval(updatePrice, 30000);
+    } else {
+      console.log('Regular price updates disabled for custom/DEX token, using chart-based updates instead');
+    }
+
+    return () => {
+      if (ws) {
+        ws.close();
+      }
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [cryptoData?.token?.type, cryptoData?.isCustomToken, cryptoData?.token?.symbol]);
+
+  // Set up a dedicated interval for updating custom token prices
+  useEffect(() => {
+    let customTokenInterval;
+    
+    if (cryptoData?.isCustomToken && cryptoData?.token?.address && cryptoData?.token?.chainId) {
+      console.log('Setting up custom token price update interval with Firebase-like persistence');
+      
+      const updateCustomTokenPrice = async () => {
+        try {
+          console.log(`Refreshing price for custom token ${cryptoData.token.symbol}`);
+          
+          // Store current price before fetching new one
+          const currentStoredPrice = parseFloat(cryptoData?.pairInfo?.priceUsd || marketPrice);
+          
+          // Fetch from DexScreener API
+          const response = await axios.get(`https://api.dexscreener.com/latest/dex/pairs/${cryptoData.token.chainId}/${cryptoData.token.address}`);
+          
+          if (response.data?.pairs && response.data.pairs.length > 0) {
+            const pair = response.data.pairs[0];
+            const price = parseFloat(pair.priceUsd);
+            
+            if (!isNaN(price) && price > 0) {
+              console.log('📊 Got refreshed price for custom token:', price);
+              
+              // Use a transaction-like approach to ensure all price states are updated consistently
+              const priceUpdate = {
+                marketPrice: price,
+                lastPrice: price,
+                currentPrice: price
+              };
+              
+              // Update all price states atomically
+              setMarketPrice(priceUpdate.marketPrice);
+              setLastPrice(priceUpdate.lastPrice);
+              setCurrentPrice(priceUpdate.currentPrice);
+              
+              // Generate a new order book with the updated price
+              const newOrderBook = generateOrderBook(price);
+              setOrderBook(newOrderBook);
+              
+              // Also update cryptoData for consistency - this is the key persistence mechanism
+              setCryptoData(prevData => {
+                const updatedData = {
+                  ...prevData,
+                  chartData: {
+                    ...prevData?.chartData,
+                    lastPrice: price,
+                    price: price,
+                  },
+                  pairInfo: {
+                    ...prevData?.pairInfo,
+                    priceUsd: price.toString(),
+                    price: price.toString(),
+                  },
+                  customTokenPrice: price, // Additional storage to preserve price
+                  lastPriceUpdate: new Date().getTime() // Track when we last updated
+                };
+                
+                // Store in sessionStorage for persistence across rerenders
+                try {
+                  sessionStorage.setItem(
+                    `customToken_${cryptoData.token.symbol}_${cryptoData.token.address}`, 
+                    JSON.stringify({
+                      price: price,
+                      timestamp: new Date().getTime()
+                    })
+                  );
+                } catch (e) {
+                  console.warn('Failed to store custom token price in sessionStorage', e);
+                }
+                
+                return updatedData;
+              });
+            } else {
+              console.warn('Invalid price received for custom token:', price);
+              
+              // Fallback to previous price if new price is invalid
+              if (currentStoredPrice && currentStoredPrice > 0) {
+                console.log('Using previous stored price:', currentStoredPrice);
+              }
+            }
+          } else {
+            console.warn('No valid pair data received from DexScreener');
+          }
+        } catch (error) {
+          console.error('Error refreshing custom token price:', error);
+          
+          // Try to recover price from storage on error
+          try {
+            const storedData = sessionStorage.getItem(`customToken_${cryptoData.token.symbol}_${cryptoData.token.address}`);
+            if (storedData) {
+              const parsedData = JSON.parse(storedData);
+              if (parsedData.price && parsedData.timestamp) {
+                const fiveMinutesAgo = new Date().getTime() - (5 * 60 * 1000);
+                if (parsedData.timestamp > fiveMinutesAgo) {
+                  console.log('Recovered price from session storage:', parsedData.price);
+                  setMarketPrice(parsedData.price);
+                  setLastPrice(parsedData.price);
+                  setCurrentPrice(parsedData.price);
+                }
+              }
+            }
+          } catch (storageError) {
+            console.error('Failed to recover price from storage', storageError);
+          }
+        }
+      };
+      
+      // Update immediately and then every 10 seconds
+      updateCustomTokenPrice();
+      customTokenInterval = setInterval(updateCustomTokenPrice, 10000);
+    }
+    
+    return () => {
+      if (customTokenInterval) {
+        clearInterval(customTokenInterval);
+      }
+    };
+  }, [cryptoData?.isCustomToken, cryptoData?.token?.address, cryptoData?.token?.chainId, cryptoData?.token?.symbol]);
+
+  // Set up WebSocket for price updates when online and not using a custom token
+  useEffect(() => {
+    let cleanup = null;
+    
+    // Only set up WebSocket if online and not a custom token
+    if (isOnline && !cryptoData?.isCustomToken) {
+      console.log('Setting up WebSocket effect for price updates');
+      cleanup = setupWebSocketConnection(cryptoData?.token?.symbol);
+    } else {
+      console.log('Skipping WebSocket setup - offline or custom token');
+      
+      // Close any existing WebSocket
+      if (ws.current) {
+        console.log('Closing existing WebSocket');
+        ws.current.close();
+        ws.current = null;
+      }
+    }
+    
+    // Return cleanup function
+    return () => {
+      if (cleanup) {
+        cleanup();
+      }
+      
+      // Always ensure WebSocket is closed
+      if (ws.current) {
+        console.log('Cleaning up WebSocket connection');
+        ws.current.close();
+        ws.current = null;
+      }
+    };
+  }, [isOnline, cryptoData?.token?.symbol, cryptoData?.isCustomToken]);
 
   return (
     <TradingContainer>

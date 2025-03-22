@@ -13,6 +13,7 @@ import Trading from './pages/Trading';
 import Deposit from './pages/Deposit';
 import Withdraw from './pages/Withdraw';
 import Airdrop from './pages/Airdrop';
+import MyList from './pages/MyList';
 import { auth } from './firebase';
 import { isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth';
 import AOS from 'aos';
@@ -93,6 +94,11 @@ function App() {
                     <Route path="/airdrop" element={
                         <PrivateRoute>
                             <Airdrop />
+                        </PrivateRoute>
+                    } />
+                    <Route path="/mylist" element={
+                        <PrivateRoute>
+                            <MyList />
                         </PrivateRoute>
                     } />
                     <Route path="/admin/*" element={

@@ -20,6 +20,7 @@ import Login from "./Login";
 import Register from "./Register";
 import Contact from "./Contact";
 import Faq from "./Faq";
+import MyList from "./MyList";
 
 
 
@@ -31,6 +32,7 @@ const routes = [
   { path: '/buy-crypto-confirm', component: <BuyCryptoConfirm />},
   { path: '/buy-crypto-details', component: <BuyCryptoDetails />},
   { path: '/market', component: <Market />},
+  { path: '/mylist', component: <MyList />},
   { path: '/sell-select', component: <SellSelect />},
   { path: '/sell-crypto-amount', component: <SellCryptoAmount />},
   { path: '/sell-crypto-confirm', component: <SellCryptoConfirm />},

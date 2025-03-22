@@ -379,8 +379,8 @@ function CoinManagement() {
                   <option value="ethereum">Ethereum (ETH)</option>
                   <option value="bsc">Binance Smart Chain (BSC)</option>
                   <option value="polygon">Polygon (MATIC)</option>
-                  <option value="avalanche">Avalanche (AVAX)</option>
                   <option value="arbitrum">Arbitrum (ARB)</option>
+                  <option value="base">BASE</option>
                   <option value="solana">Solana (SOL)</option>
                 </Select>
               </FormGroup>

@@ -864,6 +864,7 @@ const Header = () => {
                             NEW
                         </span>
                     </NavLink>
+                    <NavLink onClick={() => handleNavLinkClick('/mylist')}>My List</NavLink>
                     <NavLink onClick={() => handleNavLinkClick('/deposit')}>Deposit</NavLink>
                     <NavLinkWrapper>
                         <NavLink onClick={() => handleNavLinkClick('/withdraw')}>

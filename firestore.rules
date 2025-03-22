@@ -32,6 +32,20 @@ service cloud.firestore {
           .hasOnly(['referrals', 'referralStats', 'referredBy', 'joinedViaReferral', 'balances', 'referralCode', 'referralLink']));
     }
     
+    // Allow users to manage custom tokens in their list
+    match /userTokens/{docId} {
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow update: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+    }
+    
     // Allow users to manage their wallet data
     match /walletAddresses/{userId} {
       // Allow users to create their wallet when they register
