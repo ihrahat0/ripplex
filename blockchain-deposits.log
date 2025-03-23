@@ -18274,3 +18274,165 @@ Caused by: Error
 [2025-03-23T11:24:00.461Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
 [2025-03-23T11:24:20.837Z] Running blockchain deposit check at 3/23/2025, 5:24:20 PM
 [2025-03-23T11:24:27.596Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:25:42.865Z] Running blockchain deposit check at 3/23/2025, 5:25:42 PM
+[2025-03-23T11:25:53.029Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:25:53.822Z] Running blockchain deposit check at 3/23/2025, 5:25:53 PM
+[2025-03-23T11:26:01.465Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:26:20.838Z] Running blockchain deposit check at 3/23/2025, 5:26:20 PM
+[2025-03-23T11:26:28.796Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:27:42.866Z] Running blockchain deposit check at 3/23/2025, 5:27:42 PM
+[2025-03-23T11:27:50.561Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:27:53.823Z] Running blockchain deposit check at 3/23/2025, 5:27:53 PM
+[2025-03-23T11:28:01.218Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:28:20.838Z] Running blockchain deposit check at 3/23/2025, 5:28:20 PM
+[2025-03-23T11:28:28.519Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:29:42.866Z] Running blockchain deposit check at 3/23/2025, 5:29:42 PM
+[2025-03-23T11:29:49.325Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:29:53.823Z] Running blockchain deposit check at 3/23/2025, 5:29:53 PM
+[2025-03-23T11:30:04.096Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:30:20.839Z] Running blockchain deposit check at 3/23/2025, 5:30:20 PM
+[2025-03-23T11:30:27.846Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:31:42.873Z] Running blockchain deposit check at 3/23/2025, 5:31:42 PM
+[2025-03-23T11:31:51.868Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:31:53.823Z] Running blockchain deposit check at 3/23/2025, 5:31:53 PM
+[2025-03-23T11:32:02.725Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:32:20.839Z] Running blockchain deposit check at 3/23/2025, 5:32:20 PM
+[2025-03-23T11:32:30.695Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:33:42.869Z] Running blockchain deposit check at 3/23/2025, 5:33:42 PM
+[2025-03-23T11:33:51.101Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:33:53.825Z] Running blockchain deposit check at 3/23/2025, 5:33:53 PM
+[2025-03-23T11:34:02.151Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:34:20.840Z] Running blockchain deposit check at 3/23/2025, 5:34:20 PM
+[2025-03-23T11:34:28.899Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:35:42.870Z] Running blockchain deposit check at 3/23/2025, 5:35:42 PM
+[2025-03-23T11:35:49.319Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:35:53.834Z] Running blockchain deposit check at 3/23/2025, 5:35:53 PM
+[2025-03-23T11:36:00.808Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:36:20.875Z] Running blockchain deposit check at 3/23/2025, 5:36:20 PM
+[2025-03-23T11:36:30.539Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:37:42.911Z] Running blockchain deposit check at 3/23/2025, 5:37:42 PM
+[2025-03-23T11:37:51.798Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:37:53.865Z] Running blockchain deposit check at 3/23/2025, 5:37:53 PM
+[2025-03-23T11:38:01.259Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:38:20.882Z] Running blockchain deposit check at 3/23/2025, 5:38:20 PM
+[2025-03-23T11:38:31.165Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:39:42.911Z] Running blockchain deposit check at 3/23/2025, 5:39:42 PM
+[2025-03-23T11:39:50.947Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:39:53.867Z] Running blockchain deposit check at 3/23/2025, 5:39:53 PM
+[2025-03-23T11:40:04.575Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:40:20.884Z] Running blockchain deposit check at 3/23/2025, 5:40:20 PM
+[2025-03-23T11:40:30.817Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:41:42.914Z] Running blockchain deposit check at 3/23/2025, 5:41:42 PM
+[2025-03-23T11:41:50.499Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:41:53.868Z] Running blockchain deposit check at 3/23/2025, 5:41:53 PM
+[2025-03-23T11:42:01.399Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:42:20.885Z] Running blockchain deposit check at 3/23/2025, 5:42:20 PM
+[2025-03-23T11:42:27.989Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:43:42.916Z] Running blockchain deposit check at 3/23/2025, 5:43:42 PM
+[2025-03-23T11:43:51.866Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:43:53.869Z] Running blockchain deposit check at 3/23/2025, 5:43:53 PM
+[2025-03-23T11:44:04.279Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:44:20.887Z] Running blockchain deposit check at 3/23/2025, 5:44:20 PM
+[2025-03-23T11:44:32.680Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:45:42.919Z] Running blockchain deposit check at 3/23/2025, 5:45:42 PM
+[2025-03-23T11:45:52.778Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:45:53.872Z] Running blockchain deposit check at 3/23/2025, 5:45:53 PM
+[2025-03-23T11:46:02.129Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:46:20.888Z] Running blockchain deposit check at 3/23/2025, 5:46:20 PM
+[2025-03-23T11:46:30.560Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:47:42.930Z] Running blockchain deposit check at 3/23/2025, 5:47:42 PM
+[2025-03-23T11:47:53.056Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:47:53.872Z] Running blockchain deposit check at 3/23/2025, 5:47:53 PM
+[2025-03-23T11:48:03.121Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:48:20.888Z] Running blockchain deposit check at 3/23/2025, 5:48:20 PM
+[2025-03-23T11:48:28.713Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:49:42.932Z] Running blockchain deposit check at 3/23/2025, 5:49:42 PM
+[2025-03-23T11:49:52.294Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:49:53.875Z] Running blockchain deposit check at 3/23/2025, 5:49:53 PM
+[2025-03-23T11:50:01.765Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:50:20.890Z] Running blockchain deposit check at 3/23/2025, 5:50:20 PM
+[2025-03-23T11:50:29.775Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:51:42.926Z] Running blockchain deposit check at 3/23/2025, 5:51:42 PM
+[2025-03-23T11:51:53.220Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:51:53.883Z] Running blockchain deposit check at 3/23/2025, 5:51:53 PM
+[2025-03-23T11:52:04.122Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:52:20.901Z] Running blockchain deposit check at 3/23/2025, 5:52:20 PM
+[2025-03-23T11:52:28.331Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:53:42.948Z] Running blockchain deposit check at 3/23/2025, 5:53:42 PM
+[2025-03-23T11:53:50.905Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:53:53.887Z] Running blockchain deposit check at 3/23/2025, 5:53:53 PM
+[2025-03-23T11:54:02.764Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:54:20.904Z] Running blockchain deposit check at 3/23/2025, 5:54:20 PM
+[2025-03-23T11:54:28.314Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:55:42.937Z] Running blockchain deposit check at 3/23/2025, 5:55:42 PM
+[2025-03-23T11:55:50.999Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:55:53.891Z] Running blockchain deposit check at 3/23/2025, 5:55:53 PM
+[2025-03-23T11:56:01.006Z] Loaded alternative service account key
+[2025-03-23T11:56:01.034Z] Firebase initialized
+[2025-03-23T11:56:01.034Z] Starting blockchain deposit scanner with check interval of 120 seconds
+[2025-03-23T11:56:01.064Z] Running blockchain deposit check at 3/23/2025, 5:56:01 PM
+[2025-03-23T11:56:02.945Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:56:10.048Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:56:20.909Z] Running blockchain deposit check at 3/23/2025, 5:56:20 PM
+[2025-03-23T11:56:28.601Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:57:42.946Z] Running blockchain deposit check at 3/23/2025, 5:57:42 PM
+[2025-03-23T11:57:53.147Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:57:53.895Z] Running blockchain deposit check at 3/23/2025, 5:57:53 PM
+[2025-03-23T11:58:01.068Z] Running blockchain deposit check at 3/23/2025, 5:58:01 PM
+[2025-03-23T11:58:02.580Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:58:09.509Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:58:20.910Z] Running blockchain deposit check at 3/23/2025, 5:58:20 PM
+[2025-03-23T11:58:29.678Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:59:42.947Z] Running blockchain deposit check at 3/23/2025, 5:59:42 PM
+[2025-03-23T11:59:51.698Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:59:53.894Z] Running blockchain deposit check at 3/23/2025, 5:59:53 PM
+[2025-03-23T12:00:00.912Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:00:01.069Z] Running blockchain deposit check at 3/23/2025, 6:00:01 PM
+[2025-03-23T12:00:09.847Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:00:20.910Z] Running blockchain deposit check at 3/23/2025, 6:00:20 PM
+[2025-03-23T12:00:28.787Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:00:39.188Z] Loaded alternative service account key
+[2025-03-23T12:00:39.215Z] Firebase initialized
+[2025-03-23T12:00:39.215Z] Starting blockchain deposit scanner with check interval of 120 seconds
+[2025-03-23T12:00:39.249Z] Running blockchain deposit check at 3/23/2025, 6:00:39 PM
+[2025-03-23T12:00:48.038Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:01:42.955Z] Running blockchain deposit check at 3/23/2025, 6:01:42 PM
+[2025-03-23T12:01:53.896Z] Running blockchain deposit check at 3/23/2025, 6:01:53 PM
+[2025-03-23T12:02:01.071Z] Running blockchain deposit check at 3/23/2025, 6:02:01 PM
+[2025-03-23T12:02:12.830Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:02:20.913Z] Running blockchain deposit check at 3/23/2025, 6:02:20 PM
+[2025-03-23T12:02:26.474Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:02:37.545Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:02:39.255Z] Running blockchain deposit check at 3/23/2025, 6:02:39 PM
+[2025-03-23T12:03:00.049Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:03:17.925Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:03:42.952Z] Running blockchain deposit check at 3/23/2025, 6:03:42 PM
+[2025-03-23T12:03:51.698Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:03:53.898Z] Running blockchain deposit check at 3/23/2025, 6:03:53 PM
+[2025-03-23T12:04:01.081Z] Running blockchain deposit check at 3/23/2025, 6:04:01 PM
+[2025-03-23T12:04:05.438Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:04:10.231Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:04:20.915Z] Running blockchain deposit check at 3/23/2025, 6:04:20 PM
+[2025-03-23T12:04:30.765Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:04:39.257Z] Running blockchain deposit check at 3/23/2025, 6:04:39 PM
+[2025-03-23T12:04:46.370Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:05:42.957Z] Running blockchain deposit check at 3/23/2025, 6:05:42 PM
+[2025-03-23T12:05:51.260Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:05:53.899Z] Running blockchain deposit check at 3/23/2025, 6:05:53 PM
+[2025-03-23T12:06:01.081Z] Running blockchain deposit check at 3/23/2025, 6:06:01 PM
+[2025-03-23T12:06:03.439Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:06:08.135Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:06:20.917Z] Running blockchain deposit check at 3/23/2025, 6:06:20 PM
+[2025-03-23T12:06:30.486Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:06:39.258Z] Running blockchain deposit check at 3/23/2025, 6:06:39 PM
+[2025-03-23T12:06:48.085Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:07:10.874Z] Loaded alternative service account key
+[2025-03-23T12:07:10.904Z] Firebase initialized
+[2025-03-23T12:07:10.904Z] Starting blockchain deposit scanner with check interval of 120 seconds
+[2025-03-23T12:07:10.929Z] Running blockchain deposit check at 3/23/2025, 6:07:10 PM
+[2025-03-23T12:07:21.822Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T12:07:42.965Z] Running blockchain deposit check at 3/23/2025, 6:07:42 PM
+[2025-03-23T12:07:53.907Z] Running blockchain deposit check at 3/23/2025, 6:07:53 PM
+[2025-03-23T12:08:01.113Z] Running blockchain deposit check at 3/23/2025, 6:08:01 PM
+[2025-03-23T12:08:20.925Z] Running blockchain deposit check at 3/23/2025, 6:08:20 PM
+[2025-03-23T12:08:31.633Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.

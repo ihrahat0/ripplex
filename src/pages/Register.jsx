@@ -11,7 +11,7 @@ import {
     signOut,
     deleteUser
 } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Tab, Tabs, TabList, TabPanel } from 'react-tabs';
 import 'react-tabs/style/react-tabs.css';
@@ -64,6 +64,7 @@ function Register(props) {
     const [isResending, setIsResending] = useState(false);
     const [resendError, setResendError] = useState('');
     const [resendSuccess, setResendSuccess] = useState('');
+    const [emailSent, setEmailSent] = useState(false);
 
     // Check for referral code in URL params when component mounts
     React.useEffect(() => {
@@ -71,7 +72,6 @@ function Register(props) {
         const refCode = queryParams.get('ref');
         if (refCode) {
             setReferralCode(refCode);
-            console.log('Referral code found in URL:', refCode);
         }
     }, [location]);
 
@@ -85,10 +85,6 @@ function Register(props) {
             const urlParams = new URLSearchParams(window.location.search);
             const urlRefCode = urlParams.get('ref');
             const finalReferralCode = userData.referralCode || referralCode || urlRefCode;
-            
-            if (finalReferralCode) {
-                console.log("Processing referral code during registration:", finalReferralCode);
-            }
             
             // Initialize user's balances
             const userWithBalances = {
@@ -112,9 +108,7 @@ function Register(props) {
             // Create a basic user document first (this ensures we have a document even if subsequent operations fail)
             try {
                 await setDoc(doc(db, "users", user.uid), userWithBalances);
-                console.log("User document created successfully");
             } catch (createError) {
-                console.error("Error creating user document:", createError);
                 throw createError;
             }
             
@@ -125,32 +119,23 @@ function Register(props) {
                 
                 // If wallet generation was successful, update the user's wallet address
                 if (newWallet) {
-                    console.log("Wallet created successfully:", newWallet.address);
                     setWalletInfo(newWallet);
                 }
             } catch (walletError) {
-                console.error("Error creating wallet:", walletError);
                 // Continue even if wallet creation fails - we'll try again later
             }
             
             // Process referral if provided
             if (finalReferralCode) {
                 try {
-                    const referralResult = await referralService.registerReferral(finalReferralCode, user.uid);
-                    if (referralResult) {
-                        console.log("Referral processed successfully");
-                    } else {
-                        console.warn("Referral processing returned false");
-                    }
+                    await referralService.registerReferral(finalReferralCode, user.uid);
                 } catch (referralError) {
-                    console.error("Error processing referral:", referralError);
                     // Continue even if referral processing fails
                 }
             }
             
             return true;
         } catch (err) {
-            console.error("Error in storeUserData:", err);
             throw err;
         }
     };
@@ -186,7 +171,6 @@ function Register(props) {
             const finalReferralCode = referralCode || urlRefCode;
             
             if (urlRefCode && !referralCode) {
-                console.log("Using referral code from URL:", urlRefCode);
                 setReferralCode(urlRefCode);
             }
             
@@ -194,67 +178,43 @@ function Register(props) {
             const verificationCode = generateOTP();
             setSentVerificationCode(verificationCode);
             
-            try {
-                // Send verification code via email
-                console.log('Sending verification request to:', `${API_BASE_URL}/send-verification-code`);
-                
-                const emailResponse = await axios.post(`${API_BASE_URL}/send-verification-code`, {
-                    email,
-                    code: verificationCode
-                }, {
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    withCredentials: true
-                }).catch(error => {
-                    console.error('Axios error details:', {
-                        message: error.message,
-                        response: error.response ? {
-                            status: error.response.status,
-                            data: error.response.data,
-                            headers: error.response.headers
-                        } : 'No response',
-                        request: error.request ? 'Request present' : 'No request',
-                        config: error.config ? {
-                            url: error.config.url,
-                            method: error.config.method,
-                            headers: error.config.headers
-                        } : 'No config'
-                    });
-                    throw new Error(`Error during email sending: ${error.message}`);
-                });
-                
-                if (emailResponse && emailResponse.data && emailResponse.data.success) {
-                    // Save email and password for later use
-                    setRegisteredEmail(email);
-                    
-                    // Create user data object
-                    const userData = {
-                        email,
-                        nickname,
-                        phone: '',
-                        country,
-                        authProvider: 'email',
-                        emailVerified: false,
-                        referralCode: finalReferralCode // Use the final referral code
-                    };
-                    
-                    // Store user data temporarily
-                    setTempUserData(userData);
-                    
-                    // Show OTP verification
-                    setShowOtpVerification(true);
-                    setSuccess('Verification code sent to your email');
-                } else {
-                    throw new Error(emailResponse?.data?.error || 'Failed to send verification code');
+            // Send verification code via email
+            const emailResponse = await axios.post(`${API_BASE_URL}/send-verification-code`, {
+                email,
+                code: verificationCode
+            }, {
+                headers: {
+                    'Content-Type': 'application/json',
                 }
-            } catch (apiError) {
-                console.error('Error during email sending:', apiError);
-                throw new Error(`Error during email sending: ${apiError.response?.data?.error || apiError.message}`);
+            });
+            
+            if (emailResponse.data.success) {
+                // Save email for later use
+                setRegisteredEmail(email);
+                setEmailSent(true);
+                setSuccess('Verification code sent to your email');
+                
+                // Create user data object
+                const userData = {
+                    email,
+                    nickname,
+                    phone: '',
+                    country,
+                    authProvider: 'email',
+                    emailVerified: false,
+                    referralCode: finalReferralCode
+                };
+                
+                // Store user data temporarily
+                setTempUserData(userData);
+                
+                // Show OTP verification
+                setShowOtpVerification(true);
+            } else {
+                throw new Error(emailResponse.data.error || 'Failed to send verification code');
             }
         } catch (err) {
-            console.error('Registration error:', err);
-            setError(err.message || 'Registration failed. Please try again.');
+            setError(err.response?.data?.error || err.message || 'Registration failed. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -298,39 +258,15 @@ function Register(props) {
                 displayName: nickname
             });
 
-            // Import email service dynamically
-            const { generateVerificationCode, sendRegistrationVerificationEmail } = await import('../utils/emailService');
+            // Generate a verification code and send it
+            await handleSendVerificationCode();
             
-            // Generate a 6-digit code
-            const otp = generateVerificationCode();
-            setSentVerificationCode(otp);
-            
-            // Send the registration verification code via email
-            console.log('Sending verification email...');
-            let emailSent = false;
-
-            try {
-                const emailResult = await sendRegistrationVerificationEmail(email, otp);
-                
-                if (emailResult.success) {
-                    console.log('Verification email sent successfully');
-                    emailSent = true;
-                } else {
-                    console.error('Email service reported an error:', emailResult.error);
-                    // Continue with registration even if email fails
-                }
-            } catch (emailError) {
-                console.error('Error during email sending:', emailError);
-                // Continue with registration even if email fails
-            }
-
             // Extract referral code from URL if present
             const urlParams = new URLSearchParams(window.location.search);
             const urlRefCode = urlParams.get('ref');
             
             // Use URL referral code if available and none entered manually
             if (urlRefCode && !referralCode) {
-                console.log("Using referral code from URL:", urlRefCode);
                 setReferralCode(urlRefCode);
             }
             
@@ -340,14 +276,12 @@ function Register(props) {
                 nickname,
                 phone: `${countryCode}${phone}`,
                 country,
-                uidCode,
                 referralCode: referralCode || urlRefCode,
-                otp,
                 authProvider: 'email',
-                emailSent: emailSent
+                emailVerified: false
             };
 
-            // Store user data in Firestore and wait for it to complete
+            // Store user data in Firestore
             await storeUserData(user, userData);
             
             // Store temp data for verification
@@ -357,8 +291,7 @@ function Register(props) {
             setShowOtpVerification(true);
             setRegisteredEmail(email);
         } catch (err) {
-            console.error('Registration error:', err);
-            setError(err.message);
+            setError(err.message || 'Registration failed. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -369,54 +302,116 @@ function Register(props) {
             setLoading(true);
             setError('');
 
-            // We don't have the OTP on the frontend for security
-            // We'll verify it directly with Firebase's auth
-            
-            const user = auth.currentUser;
-            if (!user) {
-                throw new Error('No user found. Please try again.');
+            // First check if the input matches our sent code - simple verification without server
+            if (otpInput === sentVerificationCode) {
+                // OTP matches, check if there's an existing account
+                if (auth.currentUser) {
+                    // Update the verified status in Firestore
+                    try {
+                        const userRef = doc(db, 'users', auth.currentUser.uid);
+                        await updateDoc(userRef, {
+                            emailVerified: true
+                        });
+                    } catch (dbError) {
+                        // Continue with verification even if database update fails
+                    }
+                } else if (tempUserData) {
+                    // No auth user but we have the data to create one
+                    try {
+                        // Create a Firebase Auth user
+                        const userCredential = await createUserWithEmailAndPassword(auth, registeredEmail, password);
+                        const newUser = userCredential.user;
+                        
+                        // Update profile
+                        await updateProfile(newUser, {
+                            displayName: tempUserData.nickname || 'User'
+                        });
+                        
+                        // Create Firestore document
+                        await storeUserData(newUser, {
+                            ...tempUserData,
+                            emailVerified: true
+                        });
+                    } catch (err) {
+                        // Continue with verification even if user creation fails
+                    }
+                }
+                
+                // Show success and redirect
+                setSuccess('Account verified successfully! You can now log in.');
+                
+                // Sign out the user
+                if (auth.currentUser) {
+                    await signOut(auth);
+                }
+                
+                // Redirect to login
+                setTimeout(() => {
+                    navigate('/login');
+                }, 2000);
+                
+                return;
             }
-
-            // Make an API call to verify the OTP with the server
+            
+            // If direct verification failed, try verifying through API
             try {
-                const response = await axios.post('/verify-otp', {
+                // Build verification request
+                const verificationData = {
                     email: registeredEmail,
-                    otp: otpInput,
-                    uid: user.uid
+                    otp: otpInput
+                };
+                
+                // Add user ID if available
+                if (auth.currentUser) {
+                    verificationData.uid = auth.currentUser.uid;
+                }
+                
+                // Send verification request
+                const response = await axios.post(`${API_BASE_URL}/verify-otp`, verificationData, {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
                 });
                 
                 if (response.data.success) {
-                    // Try to update user document to mark as verified
-                    try {
-                        const userRef = doc(db, 'users', user.uid);
-                        await updateDoc(userRef, {
-                            emailVerified: true
-                        }).catch(updateErr => {
-                            console.warn("Couldn't update emailVerified in database:", updateErr);
-                            // Continue anyway - server already verified it
-                        });
-                    } catch (dbError) {
-                        console.warn("Database update failed:", dbError);
-                        // Continue with verification even if DB update fails
+                    // Update user status if we have a user
+                    if (auth.currentUser) {
+                        try {
+                            const userRef = doc(db, 'users', auth.currentUser.uid);
+                            await updateDoc(userRef, {
+                                emailVerified: true
+                            });
+                        } catch (dbError) {
+                            // Continue with verification even if database update fails
+                        }
                     }
-
+                    
                     setSuccess('Account verified successfully! You can now log in.');
                     
-                    // Sign out the user after verification to ensure they have to log in properly
-                    await signOut(auth);
+                    // Sign out
+                    if (auth.currentUser) {
+                        await signOut(auth);
+                    }
                     
                     setTimeout(() => {
                         navigate('/login');
                     }, 2000);
                 } else {
-                    setError('Invalid verification code. Please try again.');
+                    throw new Error(response.data.error || 'Invalid verification code. Please try again.');
                 }
             } catch (apiError) {
-                console.error('API error during verification:', apiError);
-                throw new Error(`Error verifying account: ${apiError.response?.data?.error || apiError.message}`);
+                // Check one last time against sentVerificationCode
+                if (otpInput === sentVerificationCode) {
+                    setSuccess('Account verified successfully! You can now log in.');
+                    
+                    setTimeout(() => {
+                        navigate('/login');
+                    }, 2000);
+                } else {
+                    throw new Error(`Error verifying account: ${apiError.response?.data?.error || apiError.message}`);
+                }
             }
         } catch (err) {
-            console.error('Verification error:', err);
             setError(err.message || 'Error verifying account. Please try again.');
         } finally {
             setLoading(false);
@@ -441,44 +436,32 @@ function Register(props) {
             setSentVerificationCode(newOtp);
             
             // Try to update the code in Firebase first
-            try {
-                const user = auth.currentUser;
-                if (user) {
-                    const userRef = doc(db, 'users', user.uid);
-                    await updateDoc(userRef, { otp: newOtp }).catch(err => {
-                        console.warn("Couldn't update OTP in database:", err);
-                        // Continue anyway - email verification is more important
-                    });
+            if (auth.currentUser) {
+                try {
+                    const userRef = doc(db, 'users', auth.currentUser.uid);
+                    await updateDoc(userRef, { otp: newOtp });
+                } catch (dbError) {
+                    // Continue with resend attempt even if database update fails
                 }
-            } catch (dbError) {
-                console.warn("Database update failed, but continuing:", dbError);
-                // Continue with email send even if DB update fails
             }
             
             // Send verification email via server API
-            try {
-                const response = await axios.post(`${API_BASE_URL}/send-verification-code`, { 
-                    email,
-                    code: newOtp
-                }, {
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                if (response.data.success) {
-                    setSuccess('New verification code sent. Please check your email.');
-                } else {
-                    setError(response.data.error || 'Failed to send new verification code. Please try again.');
+            const response = await axios.post(`${API_BASE_URL}/send-verification-code`, { 
+                email,
+                code: newOtp
+            }, {
+                headers: {
+                    'Content-Type': 'application/json'
                 }
-            } catch (apiError) {
-                console.error('API error during resend:', apiError);
-                throw new Error(`Network error while resending verification code: ${apiError.response?.data?.error || apiError.message}`);
-            }
+            });
             
+            if (response.data.success) {
+                setSuccess('New verification code sent. Please check your email.');
+            } else {
+                setError(response.data.error || 'Failed to send new verification code. Please try again.');
+            }
         } catch (err) {
-            console.error('Error resending OTP:', err);
-            setError(err.message || 'Failed to resend verification code');
+            setError('Failed to resend verification code. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -500,7 +483,6 @@ function Register(props) {
                 nickname: user.displayName,
                 phone: user.phoneNumber || '',
                 country: country,
-                uidCode: '',
                 authProvider: 'google',
                 emailVerified: true // Mark as verified since Google verifies emails
             };
@@ -511,7 +493,6 @@ function Register(props) {
             
             // Use URL referral code if available and none entered manually
             if (urlRefCode && !referralCode) {
-                console.log("Using referral code from URL:", urlRefCode);
                 setReferralCode(urlRefCode);
             }
 
@@ -528,8 +509,7 @@ function Register(props) {
 
             setIsGoogleUser(true);
         } catch (err) {
-            console.error('Google signup error:', err);
-            setError(err.message);
+            setError(err.message || 'Google sign-up failed. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -542,22 +522,33 @@ function Register(props) {
 
     const handleSendVerificationCode = async () => {
         try {
+            setLoading(true);
+            setError('');
+            
+            // Generate a code
+            const verificationCode = generateOTP();
+            setSentVerificationCode(verificationCode);
+            
             const response = await axios.post(`${API_BASE_URL}/send-verification-code`, { 
                 email,
-                code: generateOTP()
+                code: verificationCode
             }, {
                 headers: {
                     'Content-Type': 'application/json'
                 }
             });
+            
             if (response.data.success) {
-                // Just show a message to check email
                 setVerificationSent(true);
-                // Code will be entered by user from their email
+                setRegisteredEmail(email);
+                setSuccess('Verification code sent. Please check your email.');
+            } else {
+                setError(response.data.error || 'Failed to send verification code. Please try again.');
             }
-        } catch (error) {
-            console.error('Error sending verification code:', error);
-            setError(error.response?.data?.error || 'Failed to send verification code');
+        } catch (err) {
+            setError('Failed to send verification code. Please try again.');
+        } finally {
+            setLoading(false);
         }
     };
 
