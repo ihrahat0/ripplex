@@ -71,8 +71,11 @@ export const referralService = {
     async registerReferral(referrerCode, newUserId) {
         try {
             if (!referrerCode || !newUserId) {
+                console.error('Missing referrer code or new user ID');
                 return false;
             }
+            
+            console.log(`Processing referral: code ${referrerCode} for user ${newUserId}`);
             
             // Find the referrer by their code
             const usersRef = collection(db, 'users');
@@ -86,6 +89,7 @@ export const referralService = {
             
             const referrerDoc = querySnapshot.docs[0];
             const referrerId = referrerDoc.id;
+            console.log(`Found referrer with ID: ${referrerId}`);
             
             // Make sure the referrer is not referring themselves
             if (referrerId === newUserId) {
@@ -93,8 +97,16 @@ export const referralService = {
                 return false;
             }
             
-            const referrerRef = doc(db, 'users', referrerId);
+            // Check if this user was already referred (prevent duplicate referrals)
             const newUserRef = doc(db, 'users', newUserId);
+            const newUserDoc = await getDoc(newUserRef);
+            
+            if (newUserDoc.exists() && newUserDoc.data().referredBy) {
+                console.warn('User was already referred by someone else');
+                return false;
+            }
+            
+            const referrerRef = doc(db, 'users', referrerId);
             
             // Update the referrer's stats
             await updateDoc(referrerRef, {
@@ -102,6 +114,7 @@ export const referralService = {
                 'referralStats.activeReferrals': increment(1),
                 'referrals': arrayUnion({
                     userId: newUserId,
+                    email: newUserDoc.exists() ? newUserDoc.data().email : null,
                     date: serverTimestamp(),
                     status: 'active'
                 })
@@ -110,12 +123,13 @@ export const referralService = {
             // Update the new user with referrer info
             await updateDoc(newUserRef, {
                 referredBy: referrerId,
-                referralCode: referrerCode,
+                referredByCode: referrerCode,
                 joinedViaReferral: true
             });
             
-            // Award 1 RIPPLEX token to the referrer
-            await this.awardReferralBonus(referrerId);
+            // Award RIPPLEX token to the referrer
+            const bonusResult = await this.awardReferralBonus(referrerId);
+            console.log(`Bonus award result: ${bonusResult ? 'success' : 'failed'}`);
             
             return true;
         } catch (error) {
@@ -261,7 +275,7 @@ export const referralService = {
     },
 
     /**
-     * Award 1 RIPPLEX token to the referrer when a user completes signup
+     * Award a referral bonus to the referrer
      * @param {string} referrerId - The referrer's user ID
      * @returns {Promise<boolean>} - Whether the bonus was awarded successfully
      */
@@ -272,6 +286,8 @@ export const referralService = {
                 return false;
             }
             
+            console.log(`Awarding bonus to referrer: ${referrerId}`);
+            
             const referrerRef = doc(db, 'users', referrerId);
             const referrerDoc = await getDoc(referrerRef);
             
@@ -279,6 +295,12 @@ export const referralService = {
                 console.error('Referrer not found');
                 return false;
             }
+            
+            // Get current RIPPLEX balance
+            const userData = referrerDoc.data();
+            const currentBalance = userData.balances?.RIPPLEX || 0;
+            
+            console.log(`Current RIPPLEX balance: ${currentBalance}`);
             
             // Add 1 RIPPLEX token to the referrer's balance
             await updateDoc(referrerRef, {
@@ -298,13 +320,19 @@ export const referralService = {
             });
             
             // Create a notification for the referrer
-            await notificationService.createNotification(
-                referrerId,
-                'Referral Bonus',
-                'You received 1 RIPPLEX token for your referral!',
-                'referral_bonus'
-            );
+            try {
+                await notificationService.createNotification(
+                    referrerId,
+                    'Referral Bonus',
+                    'You received 1 RIPPLEX token for your referral!',
+                    'referral_bonus'
+                );
+            } catch (notificationError) {
+                console.warn('Failed to create notification:', notificationError);
+                // Continue even if notification fails
+            }
             
+            console.log('Successfully awarded 1 RIPPLEX token to referrer');
             return true;
         } catch (error) {
             console.error('Error awarding referral bonus:', error);

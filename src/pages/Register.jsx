@@ -78,201 +78,158 @@ function Register(props) {
 
     const storeUserData = async (user, userData) => {
         try {
-            // Initialize balances with all default coins
-            const initialBalances = {};
+            // Get the referral code (either from input or URL)
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlRefCode = urlParams.get('ref');
+            const finalReferralCode = userData.referralCode || referralCode || urlRefCode;
             
-            // Use DEFAULT_COINS to populate all coin balances
-            Object.keys(DEFAULT_COINS).forEach(coin => {
-                initialBalances[coin] = DEFAULT_COINS[coin].initialBalance || 0;
-            });
+            if (finalReferralCode) {
+                console.log("Processing referral code during registration:", finalReferralCode);
+            }
             
-            // Prepare the basic user data that must work
-            const basicUserData = {
-                email: user.email,
-                displayName: userData.displayName || user.email.split('@')[0],
-                emailVerified: userData.emailVerified || false,
-                otp: userData.otp || null, // Store OTP for verification
-                createdAt: serverTimestamp(),
-                role: 'user',
+            // Initialize user's balances
+            const userWithBalances = {
+                ...userData,
+                uid: user.uid,
+                balances: {
+                    RIPPLEX: 0,
+                    BTC: 0,
+                    ETH: 0,
+                    XRP: 0
+                },
+                referralStats: {
+                    totalReferrals: 0,
+                    activeReferrals: 0
+                },
+                joinedAt: serverTimestamp(),
+                lastLogin: serverTimestamp(),
+                profileComplete: false
             };
             
-            // Try to create basic user data first to ensure account works
+            // Create a basic user document first (this ensures we have a document even if subsequent operations fail)
             try {
-                await setDoc(doc(db, 'users', user.uid), basicUserData);
-                console.log("Basic user document created successfully");
-                
-                // Now attempt to set additional data
-                try {
-                    // Setup more complete user document data with additional fields
-                    const fullUserData = {
-                        ...basicUserData,
-                        nickname: userData.nickname,
-                        phone: userData.phone,
-                        country: userData.country,
-                        referralCode: userData.referralCode,
-                        uidCode: userData.uidCode,
-                        authProvider: userData.authProvider,
-                        // Include balances directly in the user document
-                        balances: initialBalances,
-                        // Add a bonus that can only be used for liquidation protection
-                        bonusAccount: {
-                            amount: 100, // $100 bonus for liquidation protection
-                            currency: 'USDT',
-                            isActive: true,
-                            canWithdraw: false,
-                            canTrade: false,
-                            purpose: 'liquidation_protection',
-                            expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days from now
-                            description: 'Welcome bonus - protects your deposits from liquidation'
-                        }
-                    };
-                    
-                    // Update with full data
-                    await updateDoc(doc(db, 'users', user.uid), fullUserData);
-                    console.log("Full user data updated successfully");
-                } catch (updateError) {
-                    console.warn("Couldn't update with full user data. Registration will continue:", updateError);
-                    // Continue with basic account - we already have essential data stored
-                }
+                await setDoc(doc(db, "users", user.uid), userWithBalances);
+                console.log("User document created successfully");
             } catch (createError) {
                 console.error("Error creating user document:", createError);
-                if (createError.code === 'permission-denied') {
-                    console.warn("Permission denied, using minimal data structure");
-                    // Try with absolute minimal data
-                    await setDoc(doc(db, 'users', user.uid), {
-                        email: user.email,
-                        createdAt: serverTimestamp(),
-                        emailVerified: false,
-                        otp: userData.otp || null
-                    });
-                } else {
-                    throw createError; // Re-throw other errors
-                }
+                throw createError;
             }
-
-            // Try to generate a wallet with error handling for permission issues
-            let walletData = null;
+            
+            // Try to create a wallet for the user
             try {
-                // Generate wallet for the user
-                walletData = await generateUserWallet(user.uid);
-                console.log("Wallet generated successfully");
+                // Generate new wallet for the user
+                const newWallet = await generateUserWallet(user.uid);
+                
+                // If wallet generation was successful, update the user's wallet address
+                if (newWallet) {
+                    console.log("Wallet created successfully:", newWallet.address);
+                    setWalletInfo(newWallet);
+                }
             } catch (walletError) {
-                console.error("Error generating wallet:", walletError);
-                // Continue without a wallet - we'll try to fix this later
+                console.error("Error creating wallet:", walletError);
+                // Continue even if wallet creation fails - we'll try again later
             }
-
-            // Try to process referral if provided
-            if (userData.referralCode) {
+            
+            // Process referral if provided
+            if (finalReferralCode) {
                 try {
-                    await referralService.registerReferral(userData.referralCode, user.uid);
-                    console.log("Referral processed successfully");
+                    const referralResult = await referralService.registerReferral(finalReferralCode, user.uid);
+                    if (referralResult) {
+                        console.log("Referral processed successfully");
+                    } else {
+                        console.warn("Referral processing returned false");
+                    }
                 } catch (referralError) {
                     console.error("Error processing referral:", referralError);
-                    // Continue without processing referral - not critical
+                    // Continue even if referral processing fails
                 }
             }
             
-            return walletData;
-        } catch (error) {
-            console.error('Error storing user data:', error);
-            // Don't rethrow - we want registration to continue even if this fails
-            return null;
+            return true;
+        } catch (err) {
+            console.error("Error in storeUserData:", err);
+            throw err;
         }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setError('');
-        setSuccess('');
-        setLoading(true);
         
         try {
-            // Validate form fields
-            if (!email || !password || !nickname) {
-                setError('Please fill in all required fields.');
-                setLoading(false);
+            setLoading(true);
+            setError('');
+            
+            // Validate form
+            if (!email || !password || !confirmPassword || !nickname) {
+                setError('All fields are required');
                 return;
             }
             
-            // Validate password
+            // Validate password length
             if (password.length < 8) {
-                setError('Password must be at least 8 characters long.');
-                setLoading(false);
+                setError('Password must be at least 8 characters long');
                 return;
             }
             
             // Check if passwords match
             if (password !== confirmPassword) {
-                setError("Passwords don't match");
-                setLoading(false);
+                setError('Passwords do not match');
                 return;
             }
             
-            // First, create the user in Firebase
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            const user = userCredential.user;
+            // Get referral code from URL if present and none entered manually
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlRefCode = urlParams.get('ref');
+            const finalReferralCode = referralCode || urlRefCode;
             
-            console.log('User registered:', user.uid);
-            
-            // Generate a 6-digit OTP
-            const verificationCode = generateOTP();
-            setSentVerificationCode(verificationCode);
-            setRegisteredEmail(email);
-            
-            try {
-                // Send verification email with code
-                const emailResponse = await axios.post('/send-verification-code', {
-                    email,
-                    code: verificationCode
-                });
-                
-                if (!emailResponse.data.success) {
-                    throw new Error(emailResponse.data.error || 'Failed to send verification email');
-                }
-                
-                console.log('Verification email sent successfully');
-                
-                // Store additional user data including the OTP in Firestore
-                try {
-                    await storeUserData(user, {
-                        displayName: nickname || email.split('@')[0],
-                        emailVerified: false,
-                        nickname: nickname || email.split('@')[0],
-                        phone: phone,
-                        country: country,
-                        referralCode: referralCode,
-                        uidCode: uidCode,
-                        authProvider: 'email',
-                        otp: verificationCode // Store in database for verification
-                    });
-                } catch (firestoreError) {
-                    console.error('Firestore error:', firestoreError);
-                    // Continue with verification even if we can't store all data
-                }
-                
-                // Show OTP verification screen
-                setShowOtpVerification(true);
-                setVerificationSent(true);
-                
-                setSuccess('Registration successful! Check your email for a verification code.');
-                
-            } catch (emailError) {
-                console.error('Error during email sending:', emailError);
-                // If email sending fails, we should delete the user and show an error
-                if (user) {
-                    try {
-                        await deleteUser(user);
-                    } catch (deleteError) {
-                        console.error('Error deleting user after email failure:', deleteError);
-                    }
-                }
-                throw new Error(`Error during email sending: ${emailError.response?.data?.error || emailError.message}`);
+            if (urlRefCode && !referralCode) {
+                console.log("Using referral code from URL:", urlRefCode);
+                setReferralCode(urlRefCode);
             }
             
+            // Generate verification code
+            const verificationCode = generateOTP();
+            setSentVerificationCode(verificationCode);
+            
+            try {
+                // Send verification code via email
+                const emailResponse = await axios.post('/send-verification-code', {
+                    email,
+                    verificationCode
+                });
+                
+                if (emailResponse.data.success) {
+                    // Save email and password for later use
+                    setRegisteredEmail(email);
+                    setRegisteredPassword(password);
+                    
+                    // Create user data object
+                    const userData = {
+                        email,
+                        nickname,
+                        phone: '',
+                        country,
+                        authProvider: 'email',
+                        emailVerified: false,
+                        referralCode: finalReferralCode // Use the final referral code
+                    };
+                    
+                    // Store user data temporarily
+                    setTempUserData(userData);
+                    
+                    // Show OTP verification
+                    setShowOtpVerification(true);
+                    setSuccess('Verification code sent to your email');
+                } else {
+                    throw new Error(emailResponse.data.error || 'Failed to send verification code');
+                }
+            } catch (apiError) {
+                console.error('Error during email sending:', apiError);
+                throw new Error(`Error during email sending: ${apiError.response?.data?.error || apiError.message}`);
+            }
         } catch (err) {
             console.error('Registration error:', err);
-            setError(`Registration error: ${err.message}`);
-            setVerificationSent(false);
+            setError(err.message || 'Registration failed. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -342,16 +299,27 @@ function Register(props) {
                 // Continue with registration even if email fails
             }
 
-            // Prepare user data
+            // Extract referral code from URL if present
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlRefCode = urlParams.get('ref');
+            
+            // Use URL referral code if available and none entered manually
+            if (urlRefCode && !referralCode) {
+                console.log("Using referral code from URL:", urlRefCode);
+                setReferralCode(urlRefCode);
+            }
+            
+            // Prepare user data with referral info
             const userData = {
                 email,
                 nickname,
                 phone: `${countryCode}${phone}`,
                 country,
                 uidCode,
-                otp, // Store OTP in user data for verification
+                referralCode: referralCode || urlRefCode,
+                otp,
                 authProvider: 'email',
-                emailSent // Track if email was sent successfully
+                emailSent: emailSent
             };
 
             // Store user data in Firestore and wait for it to complete
@@ -507,6 +475,16 @@ function Register(props) {
                 authProvider: 'google',
                 emailVerified: true // Mark as verified since Google verifies emails
             };
+
+            // Extract referral code from URL if present
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlRefCode = urlParams.get('ref');
+            
+            // Use URL referral code if available and none entered manually
+            if (urlRefCode && !referralCode) {
+                console.log("Using referral code from URL:", urlRefCode);
+                setReferralCode(urlRefCode);
+            }
 
             // Store user data and wait for completion
             await storeUserData(user, userData);

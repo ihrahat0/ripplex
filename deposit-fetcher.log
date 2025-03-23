@@ -1,0 +1,33 @@
+[2025-03-23T07:09:12.719Z] Loaded alternative service account key
+[2025-03-23T07:09:12.800Z] Firebase initialized
+[2025-03-23T07:09:12.800Z] Starting deposit fetch cycle...
+[2025-03-23T07:09:12.802Z] Initial fetch completed, now running every minute
+[2025-03-23T07:09:12.802Z] Deposit fetcher started. Press Ctrl+C to stop.
+[2025-03-23T07:09:13.398Z] Fetched 119 users for reference
+[2025-03-23T07:09:13.398Z] Fetching deposits with minimal filtering
+[2025-03-23T07:09:13.534Z] Found 100 total deposits (98 real, 2 test)
+[2025-03-23T07:09:13.535Z] Deposit data saved to deposit-data.json
+[2025-03-23T07:09:13.535Z] Deposit fetch cycle completed
+[2025-03-23T07:10:12.804Z] Starting deposit fetch cycle...
+[2025-03-23T07:10:13.102Z] Fetched 119 users for reference
+[2025-03-23T07:10:13.103Z] Fetching deposits with minimal filtering
+[2025-03-23T07:10:13.264Z] Found 100 total deposits (98 real, 2 test)
+[2025-03-23T07:10:13.265Z] Deposit data saved to deposit-data.json
+[2025-03-23T07:10:13.265Z] Deposit fetch cycle completed
+[2025-03-23T07:11:12.811Z] Starting deposit fetch cycle...
+[2025-03-23T07:11:13.068Z] Fetched 119 users for reference
+[2025-03-23T07:11:13.069Z] Fetching deposits with minimal filtering
+[2025-03-23T07:11:13.239Z] Found 100 total deposits (98 real, 2 test)
+[2025-03-23T07:11:13.240Z] Deposit data saved to deposit-data.json
+[2025-03-23T07:11:13.240Z] Deposit fetch cycle completed
+[2025-03-23T07:11:38.997Z] Deposit fetcher stopped
+[2025-03-23T07:12:17.045Z] Loaded alternative service account key
+[2025-03-23T07:12:17.129Z] Firebase initialized
+[2025-03-23T07:12:17.130Z] Starting deposit fetch cycle...
+[2025-03-23T07:12:17.131Z] Initial fetch completed, now running every minute
+[2025-03-23T07:12:17.132Z] Deposit fetcher started. Press Ctrl+C to stop.
+[2025-03-23T07:12:17.741Z] Fetched 119 users for reference
+[2025-03-23T07:12:17.741Z] Fetching deposits with minimal filtering
+[2025-03-23T07:12:17.876Z] Found 100 total deposits: 3 real, 1 test, 96 pending
+[2025-03-23T07:12:17.877Z] Deposit data saved to deposit-data.json
+[2025-03-23T07:12:17.877Z] Deposit fetch cycle completed

@@ -2,8 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import styled from 'styled-components';
 import { db } from '../../firebase';
-import { collection, getDocs, getDoc, doc, query, where, orderBy } from 'firebase/firestore';
+import { 
+  collection, 
+  getDocs, 
+  getDoc, 
+  doc, 
+  query, 
+  where, 
+  orderBy, 
+  onSnapshot, 
+  updateDoc, 
+  increment, 
+  serverTimestamp,
+  addDoc
+} from 'firebase/firestore';
 import { SUPPORTED_CHAINS } from '../../services/walletService';
+import { toast } from 'react-toastify'; // Assuming you use react-toastify
+import { processHistoricalDeposits } from '../../services/blockchainService';
 
 const Container = styled.div`
   padding: 20px;
@@ -208,6 +223,138 @@ const ErrorMessage = styled.div`
   margin-bottom: 20px;
 `;
 
+const RefreshButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--bg2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+  
+  &:hover {
+    background: var(--bg1);
+  }
+`;
+
+const SuccessMessage = styled.div`
+  color: #0ECB81;
+  background: rgba(14, 203, 129, 0.1);
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 20px;
+`;
+
+const ManualDepositForm = styled.form`
+  background: var(--bg2);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border: 1px solid var(--line);
+`;
+
+const FormGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+  
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const FormGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+const Label = styled.label`
+  font-size: 14px;
+  color: var(--text-light);
+`;
+
+const Input = styled.input`
+  padding: 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 14px;
+  
+  &:focus {
+    outline: none;
+    border-color: var(--primary);
+  }
+`;
+
+const Select = styled.select`
+  padding: 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 14px;
+  
+  &:focus {
+    outline: none;
+    border-color: var(--primary);
+  }
+`;
+
+const ScanButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #7132DB;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  
+  &:hover {
+    background: #8644EA;
+  }
+  
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+`;
+
+const ScanResultsCard = styled.div`
+  background: var(--bg2);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border: 1px solid var(--line);
+`;
+
+const ResultItem = styled.div`
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  
+  &:last-child {
+    border-bottom: none;
+  }
+`;
+
+const ResultLabel = styled.div`
+  color: var(--text-light);
+`;
+
+const ResultValue = styled.div`
+  color: var(--text);
+  font-weight: 500;
+`;
+
 const UserDeposits = () => {
   const navigate = useNavigate();
   const { userId } = useParams();
@@ -216,14 +363,32 @@ const UserDeposits = () => {
   const [userWallets, setUserWallets] = useState({});
   const [deposits, setDeposits] = useState([]);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [copiedAddress, setCopiedAddress] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanResults, setScanResults] = useState(null);
+  const [foundDeposits, setFoundDeposits] = useState([]);
+  
+  // Form state for manual deposit
+  const [manualDeposit, setManualDeposit] = useState({
+    amount: '',
+    token: 'USDT',
+    chain: 'ethereum',
+    txHash: `mock-tx-${Date.now()}`
+  });
 
   useEffect(() => {
     if (userId) {
       fetchUserDetails();
       fetchUserWallets();
-      fetchUserDeposits();
+      setupRealtimeDeposits();
     }
+    
+    // Cleanup subscription on unmount
+    return () => {
+      // If we stored the unsubscribe function somewhere, we would call it here
+    };
   }, [userId]);
 
   const fetchUserDetails = async () => {
@@ -255,87 +420,326 @@ const UserDeposits = () => {
     }
   };
 
-  const fetchUserDeposits = async () => {
-    try {
-      const depositsQuery = query(
-        collection(db, 'transactions'),
-        where('userId', '==', userId),
-        where('type', '==', 'deposit'),
-        orderBy('timestamp', 'desc')
-      );
-      
-      const depositsSnapshot = await getDocs(depositsQuery);
-      const depositsList = depositsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().timestamp?.toDate?.() || new Date()
-      }));
-      
-      setDeposits(depositsList);
-    } catch (err) {
-      console.error('Error fetching user deposits:', err);
-      setError('Failed to fetch user deposit history');
-    } finally {
-      setLoading(false);
-    }
+  const setupRealtimeDeposits = () => {
+    setLoading(true);
+    
+    // Create a query for this user's transactions (deposits only)
+    const depositsQuery = query(
+      collection(db, 'transactions'),
+      where('userId', '==', userId),
+      where('type', '==', 'deposit'),
+      orderBy('timestamp', 'desc')
+    );
+    
+    // Set up real-time listener
+    const unsubscribe = onSnapshot(depositsQuery, 
+      (snapshot) => {
+        const depositsList = [];
+        
+        snapshot.forEach((doc) => {
+          depositsList.push({
+            id: doc.id,
+            ...doc.data()
+          });
+        });
+        
+        // Update state with the new deposits
+        setDeposits(depositsList);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Error fetching real-time deposits:", error);
+        setError(`Failed to get real-time deposits: ${error.message}`);
+        setLoading(false);
+      }
+    );
+    
+    // You could store this unsubscribe function in state if you need to call it elsewhere
+    return unsubscribe;
   };
 
   const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text)
-      .then(() => {
-        setCopiedAddress(text);
-        setTimeout(() => setCopiedAddress(null), 2000);
-      })
-      .catch(err => {
-        console.error('Failed to copy to clipboard:', err);
-      });
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedAddress(text);
+      setTimeout(() => setCopiedAddress(null), 2000);
+    });
   };
 
   const formatDate = (date) => {
-    return new Date(date).toLocaleString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
+    if (!date) return 'N/A';
+    
+    if (date instanceof Date) {
+      return date.toLocaleString();
+    }
+    
+    if (date.toDate && typeof date.toDate === 'function') {
+      return date.toDate().toLocaleString();
+    }
+    
+    try {
+      const jsDate = new Date(date);
+      return jsDate.toLocaleString();
+    } catch (err) {
+      return 'Invalid date';
+    }
   };
 
   const getExplorerUrl = (value, chain, type = 'tx') => {
     if (!value || !chain) return '#';
     
-    const explorer = SUPPORTED_CHAINS[chain]?.explorer;
-    if (!explorer) return '#';
+    const explorer = SUPPORTED_CHAINS[chain]?.explorer || 'https://etherscan.io';
     
-    // Handle different URL formats based on type
     if (type === 'address') {
       return `${explorer}/address/${value}`;
-    } else {
-      return `${explorer}/tx/${value}`;
     }
+    
+    return `${explorer}/tx/${value}`;
   };
 
   const truncateAddress = (address) => {
     if (!address) return 'N/A';
-    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
+    if (address.length <= 14) return address;
+    
+    return `${address.slice(0, 6)}...${address.slice(-6)}`;
+  };
+  
+  const handleManualDepositChange = (e) => {
+    const { name, value } = e.target;
+    setManualDeposit(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+  
+  const addManualDeposit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    
+    try {
+      const { amount, token, chain, txHash } = manualDeposit;
+      
+      if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+        setError('Please enter a valid amount');
+        return;
+      }
+      
+      // Add the transaction to the transactions collection
+      await addDoc(collection(db, 'transactions'), {
+        userId,
+        type: 'deposit',
+        amount: parseFloat(amount),
+        token,
+        chain,
+        txHash: txHash || `manual-${Date.now()}`,
+        status: 'completed',
+        timestamp: serverTimestamp(),
+        fromAddress: 'Manual Deposit',
+        toAddress: userWallets[chain] || 'Unknown',
+        isRealDeposit: true,
+        confirmations: 100 // Already confirmed
+      });
+      
+      // Update the user's balance
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        [`balances.${token}`]: increment(parseFloat(amount))
+      });
+      
+      setSuccess(`Manually added ${amount} ${token} to user's balance`);
+      
+      // Reset form
+      setManualDeposit({
+        amount: '',
+        token: 'USDT',
+        chain: 'ethereum',
+        txHash: `manual-${Date.now()}`
+      });
+      
+      // Toast notification
+      toast.success(`Successfully deposited ${amount} ${token} to user's account`);
+    } catch (err) {
+      console.error('Error adding manual deposit:', err);
+      setError(`Failed to add manual deposit: ${err.message}`);
+    }
+  };
+  
+  const refreshData = async () => {
+    setRefreshing(true);
+    
+    try {
+      await fetchUserDetails();
+      await fetchUserWallets();
+      // Real-time listener will automatically update deposits
+      
+      toast.success('Data refreshed successfully');
+    } catch (err) {
+      console.error('Error refreshing data:', err);
+      toast.error('Failed to refresh data');
+    } finally {
+      setRefreshing(false);
+    }
   };
 
-  if (loading) {
-    return <Container>Loading user deposit data...</Container>;
-  }
+  const scanBlockchainDeposits = async () => {
+    setScanning(true);
+    setScanResults(null);
+    setFoundDeposits([]);
+    
+    try {
+      // First, perform a dry-run scan to see what deposits we can find
+      const results = await processHistoricalDeposits(userId, true);
+      
+      if (results.success) {
+        setScanResults({
+          scannedAt: new Date(),
+          depositsFound: results.foundDeposits.length,
+          message: results.message
+        });
+        
+        if (results.foundDeposits.length > 0) {
+          setFoundDeposits(results.foundDeposits);
+          
+          // Ask for confirmation before processing
+          const confirmProcess = window.confirm(
+            `Found ${results.foundDeposits.length} unprocessed deposits. Process them now?`
+          );
+          
+          if (confirmProcess) {
+            // Process the deposits for real
+            const processResults = await processHistoricalDeposits(userId, false);
+            
+            if (processResults.success) {
+              toast.success(`Successfully processed ${processResults.foundDeposits.length} historical deposits`);
+              
+              // Refresh the data to show new deposits
+              refreshData();
+            } else {
+              toast.error(`Error processing deposits: ${processResults.message}`);
+            }
+          }
+        }
+      } else {
+        toast.error(`Error scanning blockchain: ${results.message}`);
+      }
+    } catch (error) {
+      console.error('Error scanning blockchain:', error);
+      toast.error(`Failed to scan blockchain: ${error.message}`);
+    } finally {
+      setScanning(false);
+    }
+  };
 
   return (
     <Container>
-      <ActionButton onClick={() => navigate('/admin/users')}>
-        ← Back to Users
-      </ActionButton>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <ActionButton onClick={() => navigate('/admin/users')}>
+          ← Back to Users
+        </ActionButton>
+        
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <ScanButton 
+            onClick={scanBlockchainDeposits} 
+            disabled={scanning || !userWallets || Object.keys(userWallets).length === 0}
+          >
+            <i className={`bi bi-search ${scanning ? 'spin' : ''}`}></i>
+            {scanning ? 'Scanning Blockchain...' : 'Scan Blockchain for Deposits'}
+          </ScanButton>
+          
+          <RefreshButton onClick={refreshData} disabled={refreshing}>
+            <i className={`bi bi-arrow-repeat ${refreshing ? 'spin' : ''}`}></i>
+            {refreshing ? 'Refreshing...' : 'Refresh Data'}
+          </RefreshButton>
+        </div>
+      </div>
       
       {error && <ErrorMessage>{error}</ErrorMessage>}
+      {success && <SuccessMessage>{success}</SuccessMessage>}
+      
+      {scanResults && (
+        <ScanResultsCard>
+          <h4>Blockchain Scan Results</h4>
+          <ResultItem>
+            <ResultLabel>Scan Time:</ResultLabel>
+            <ResultValue>{scanResults.scannedAt.toLocaleString()}</ResultValue>
+          </ResultItem>
+          <ResultItem>
+            <ResultLabel>Deposits Found:</ResultLabel>
+            <ResultValue>{scanResults.depositsFound}</ResultValue>
+          </ResultItem>
+          {scanResults.message && (
+            <ResultItem>
+              <ResultLabel>Message:</ResultLabel>
+              <ResultValue>{scanResults.message}</ResultValue>
+            </ResultItem>
+          )}
+          
+          {foundDeposits.length > 0 && (
+            <>
+              <h4>Found Deposits</h4>
+              <DepositTable>
+                <thead>
+                  <tr>
+                    <th>Chain</th>
+                    <th>Token</th>
+                    <th>Amount</th>
+                    <th>From Address</th>
+                    <th>Transaction</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {foundDeposits.map((deposit, index) => (
+                    <tr key={index}>
+                      <td>
+                        <NetworkBadge network={deposit.chain}>
+                          {SUPPORTED_CHAINS[deposit.chain]?.name || deposit.chain}
+                        </NetworkBadge>
+                      </td>
+                      <td>{deposit.token}</td>
+                      <td>{deposit.amount}</td>
+                      <td>
+                        {deposit.fromAddress ? (
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <span>{truncateAddress(deposit.fromAddress)}</span>
+                            <CopyButton onClick={() => copyToClipboard(deposit.fromAddress)}>
+                              {copiedAddress === deposit.fromAddress ? 
+                                <i className="bi bi-check-circle"></i> : 
+                                <i className="bi bi-clipboard"></i>}
+                            </CopyButton>
+                          </div>
+                        ) : (
+                          'N/A'
+                        )}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <a 
+                            href={getExplorerUrl(deposit.txHash, deposit.chain)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: 'var(--primary)' }}
+                          >
+                            {truncateAddress(deposit.txHash)}
+                          </a>
+                          <CopyButton onClick={() => copyToClipboard(deposit.txHash)}>
+                            {copiedAddress === deposit.txHash ? 
+                              <i className="bi bi-check-circle"></i> : 
+                              <i className="bi bi-clipboard"></i>}
+                          </CopyButton>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </DepositTable>
+            </>
+          )}
+        </ScanResultsCard>
+      )}
       
       {user && (
         <>
-          <h2>Deposit History for {user.email || user.displayName || userId}</h2>
+          <h2>Deposit Management for {user.email || user.displayName || userId}</h2>
           
           <UserInfoCard>
             <InfoBlock>
@@ -349,7 +753,7 @@ const UserDeposits = () => {
             <InfoBlock>
               <InfoTitle>Account Created</InfoTitle>
               <InfoValue>
-                {user.createdAt ? formatDate(user.createdAt.toDate ? user.createdAt.toDate() : user.createdAt) : 'N/A'}
+                {user.createdAt ? formatDate(user.createdAt) : 'N/A'}
               </InfoValue>
             </InfoBlock>
             <InfoBlock>
@@ -357,6 +761,74 @@ const UserDeposits = () => {
               <InfoValue style={{ fontSize: '14px' }}>{userId}</InfoValue>
             </InfoBlock>
           </UserInfoCard>
+          
+          <h3>Manual Deposit</h3>
+          <ManualDepositForm onSubmit={addManualDeposit}>
+            <FormGrid>
+              <FormGroup>
+                <Label>Amount</Label>
+                <Input
+                  type="number"
+                  name="amount"
+                  value={manualDeposit.amount}
+                  onChange={handleManualDepositChange}
+                  placeholder="0.00"
+                  step="0.000001"
+                  min="0"
+                  required
+                />
+              </FormGroup>
+              
+              <FormGroup>
+                <Label>Token</Label>
+                <Select 
+                  name="token"
+                  value={manualDeposit.token}
+                  onChange={handleManualDepositChange}
+                  required
+                >
+                  <option value="USDT">USDT</option>
+                  <option value="BTC">BTC</option>
+                  <option value="ETH">ETH</option>
+                  <option value="USDC">USDC</option>
+                  <option value="BNB">BNB</option>
+                  <option value="SOL">SOL</option>
+                </Select>
+              </FormGroup>
+              
+              <FormGroup>
+                <Label>Chain</Label>
+                <Select 
+                  name="chain"
+                  value={manualDeposit.chain}
+                  onChange={handleManualDepositChange}
+                  required
+                >
+                  <option value="ethereum">Ethereum</option>
+                  <option value="bsc">BSC</option>
+                  <option value="polygon">Polygon</option>
+                  <option value="arbitrum">Arbitrum</option>
+                  <option value="base">Base</option>
+                  <option value="solana">Solana</option>
+                </Select>
+              </FormGroup>
+            </FormGrid>
+            
+            <FormGroup>
+              <Label>Transaction Hash (Optional)</Label>
+              <Input
+                type="text"
+                name="txHash"
+                value={manualDeposit.txHash}
+                onChange={handleManualDepositChange}
+                placeholder="0x..."
+              />
+            </FormGroup>
+            
+            <ActionButton type="submit" style={{ marginTop: '16px' }}>
+              <i className="bi bi-plus-circle"></i> Add Manual Deposit
+            </ActionButton>
+          </ManualDepositForm>
           
           <h3>User Wallet Addresses</h3>
           
@@ -377,7 +849,7 @@ const UserDeposits = () => {
                     </CopyButton>
                   </AddressField>
                   <a 
-                    href={`${SUPPORTED_CHAINS[chain]?.explorer}/address/${address}`} 
+                    href={getExplorerUrl(address, chain, 'address')} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     style={{ color: 'var(--primary)', fontSize: '14px', textDecoration: 'none' }}
@@ -397,7 +869,12 @@ const UserDeposits = () => {
           
           <h3>Deposit History</h3>
           
-          {deposits.length > 0 ? (
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px 0' }}>
+              <div style={{ display: 'inline-block', width: '40px', height: '40px', border: '4px solid rgba(255, 255, 255, 0.1)', borderTopColor: 'var(--primary)', borderRadius: '50%' }} className="spin" />
+              <p>Loading deposits...</p>
+            </div>
+          ) : deposits.length > 0 ? (
             <DepositTable>
               <thead>
                 <tr>
@@ -422,53 +899,43 @@ const UserDeposits = () => {
                         {SUPPORTED_CHAINS[deposit.chain || deposit.network]?.name || deposit.chain || deposit.network || 'Unknown'}
                       </NetworkBadge>
                     </td>
-                    <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <td>
                       {deposit.fromAddress ? (
                         <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <a 
-                            href={getExplorerUrl(deposit.fromAddress, deposit.chain || deposit.network, 'address')}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: 'var(--primary)' }}
-                          >
-                            {truncateAddress(deposit.fromAddress)}
-                          </a>
+                          <span>{truncateAddress(deposit.fromAddress)}</span>
                           <CopyButton onClick={() => copyToClipboard(deposit.fromAddress)}>
                             {copiedAddress === deposit.fromAddress ? 
                               <i className="bi bi-check-circle"></i> : 
                               <i className="bi bi-clipboard"></i>}
                           </CopyButton>
                         </div>
-                      ) : 'N/A'}
+                      ) : (
+                        'N/A'
+                      )}
                     </td>
-                    <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <td>
                       {deposit.toAddress ? (
                         <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <a 
-                            href={getExplorerUrl(deposit.toAddress, deposit.chain || deposit.network, 'address')}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: 'var(--primary)' }}
-                          >
-                            {truncateAddress(deposit.toAddress)}
-                          </a>
+                          <span>{truncateAddress(deposit.toAddress)}</span>
                           <CopyButton onClick={() => copyToClipboard(deposit.toAddress)}>
                             {copiedAddress === deposit.toAddress ? 
                               <i className="bi bi-check-circle"></i> : 
                               <i className="bi bi-clipboard"></i>}
                           </CopyButton>
                         </div>
-                      ) : 'N/A'}
+                      ) : (
+                        'N/A'
+                      )}
                     </td>
                     <td>
                       <StatusBadge $status={deposit.status}>
                         <i className={
                           deposit.status === 'completed' ? 'bi bi-check-circle' :
-                          deposit.status === 'pending' ? 'bi bi-hourglass-split' :
+                          deposit.status === 'pending' ? 'bi bi-clock' :
                           deposit.status === 'failed' ? 'bi bi-x-circle' :
                           'bi bi-question-circle'
                         }></i>
-                        {deposit.status}
+                        {deposit.status || 'Unknown'}
                       </StatusBadge>
                     </td>
                     <td>

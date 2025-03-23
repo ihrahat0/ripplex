@@ -463,54 +463,609 @@ const AssetValue = styled.div`
   }
 `;
 
+// Add additional responsive styling for the tabs and mobile view
+
+// Update TabList styling for better mobile display
 const StyledTabs = styled(Tabs)`
+  position: relative;
+  
   .react-tabs__tab-list {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    margin: 0 0 20px;
-    padding: 0;
     display: flex;
-    overflow-x: auto;
-    scrollbar-width: none;
-    
-    &::-webkit-scrollbar {
-      display: none;
-    }
+    flex-wrap: wrap;
+    border-bottom: none;
+    margin: 0;
+    padding: 0 16px;
+    position: relative;
+    background: rgba(26, 27, 35, 0.6);
+    border-radius: 16px 16px 0 0;
+    gap: 8px;
+    z-index: 5; /* Ensure tabs are above the animated border */
+    justify-content: center; /* Center tabs by default */
   }
   
   .react-tabs__tab {
     display: inline-block;
     border: none;
-    border-bottom: 2px solid transparent;
-    bottom: -1px;
+    border-bottom: none;
     position: relative;
     list-style: none;
-    padding: 12px 20px;
+    padding: 16px 20px;
     cursor: pointer;
     color: rgba(255, 255, 255, 0.6);
+    transition: all 0.3s;
+    font-weight: 500;
     background: transparent;
-    white-space: nowrap;
+    border-radius: 8px 8px 0 0;
+    z-index: 10; /* Ensure tab text is above highlight circle */
     
-    &--selected {
-      color: #fff;
-      border-bottom: 2px solid #f79533;
+    &:hover {
+      color: rgba(255, 255, 255, 0.8);
     }
+  }
+  
+  .react-tabs__tab--selected {
+    background: transparent;
+    border-color: transparent;
+      color: #fff;
+    font-weight: 600;
+    
+    &:after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 30px;
+      height: 3px;
+      background: linear-gradient(to right, #FF9900, #FFB800);
+      border-radius: 3px;
+    }
+    
+    /* Add the orange circle highlight behind the selected tab */
+    &:before {
+      content: '';
+      position: absolute;
+      width: 120%;
+      height: 120%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, rgba(255, 153, 0, 0.2) 0%, rgba(255, 153, 0, 0) 70%);
+      border-radius: 50%;
+      z-index: -1;
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0% {
+        opacity: 0.5;
+        transform: translate(-50%, -50%) scale(0.9);
+      }
+      50% {
+        opacity: 0.8;
+        transform: translate(-50%, -50%) scale(1);
+      }
+      100% {
+        opacity: 0.5;
+        transform: translate(-50%, -50%) scale(0.9);
+      }
+    }
+  }
+  
+  .react-tabs__tab:focus {
+    box-shadow: none;
+    outline: none;
+  }
+  
+  .react-tabs__tab-panel {
+    display: none;
+    width: 100%;
+  }
+  
+  .react-tabs__tab-panel--selected {
+    display: block;
+    animation: fadeIn 0.5s ease;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
   
   @media (max-width: 768px) {
     .react-tabs__tab-list {
-      margin: 0 0 15px;
+      padding: 0 12px;
+      gap: 4px;
+      justify-content: center; /* Keep centered on mobile */
+      flex-wrap: wrap; /* Allow wrapping instead of scroll */
+      overflow-x: visible;
     }
     
     .react-tabs__tab {
-      padding: 10px 15px;
-      font-size: 14px;
+      padding: 12px 16px;
+      white-space: nowrap;
+      flex: 0 1 auto; /* Allow tabs to shrink */
+    }
+    
+    .react-tabs__tab--selected:before {
+      /* Adjust the orange circle highlight for mobile */
+      width: 110%;
+      height: 110%;
+      opacity: 0.7;
     }
   }
   
   @media (max-width: 480px) {
+    .react-tabs__tab-list {
+      padding: 0 8px;
+      gap: 4px;
+    }
+    
     .react-tabs__tab {
-      padding: 8px 12px;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+    
+    .react-tabs__tab--selected:before {
+      /* Adjust the orange circle highlight for smaller screens */
+      width: 105%;
+      height: 105%;
+      opacity: 0.6;
+    }
+  }
+`;
+
+// Add a styled component for the custom page title
+const CustomPageTitle = styled.div`
+  padding: 40px 0 20px;
+  text-align: center;
+  
+  h3 {
+    font-size: 32px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 10px;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 30px 0 15px;
+    
+    h3 {
+      font-size: 28px;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    padding: 20px 0 10px;
+    
+    h3 {
+      font-size: 24px;
+    }
+  }
+`;
+
+// Create a ProfileSection component for better organization
+const ProfileSection = styled.div`
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  margin-bottom: 24px;
+  
+  @media (max-width: 768px) {
+    margin-bottom: 20px;
+  }
+  
+  @media (max-width: 480px) {
+    margin-bottom: 16px;
+  }
+`;
+
+// Responsive form styling
+const ResponsiveForm = styled.form`
+  width: 100%;
+  
+  .form-group {
+    margin-bottom: 20px;
+    
+    @media (max-width: 768px) {
+      margin-bottom: 15px;
+    }
+  }
+  
+  .form-group.d-flex {
+    display: flex;
+    gap: 15px;
+    
+    @media (max-width: 576px) {
+      flex-direction: column;
+      gap: 10px;
+    }
+    
+    .sl {
+      flex: 1;
+      
+      @media (max-width: 576px) {
+        width: 100%;
+      }
+    }
+  }
+  
+  .form-control {
+    width: 100%;
+    padding: 12px 15px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #fff;
+    
+    &:focus {
+      outline: none;
+      border-color: #4A6BF3;
+    }
+  }
+  
+  .btn-action {
+    padding: 12px 20px;
+    background: #4A6BF3;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s;
+    
+    &:hover {
+      background: #3a5bd9;
+    }
+    
+    @media (max-width: 576px) {
+      width: 100%;
+      padding: 14px;
+    }
+  }
+`;
+
+// Add responsive card component for various sections
+const ResponsiveCard = styled.div`
+  background: rgba(30, 30, 45, 0.7);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 20px;
+  
+  @media (max-width: 768px) {
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 15px;
+  }
+  
+  @media (max-width: 480px) {
+    padding: 12px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+  }
+`;
+
+// Add a keyframes for animations at the top with the other styled components
+const keyframesStyle = `
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  @keyframes animatedgradient {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+`;
+
+// Enhance the ResponsiveTableWrapper styled component
+const ResponsiveTableWrapper = styled.div`
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  
+  &::-webkit-scrollbar {
+    height: 8px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+  }
+  
+  table {
+    min-width: 650px; /* Ensures table doesn't shrink too much */
+  }
+  
+  @media (max-width: 768px) {
+    margin: 0 -15px;
+    width: calc(100% + 30px);
+    
+    table {
+      min-width: 500px;
+    }
+    
+    th, td {
+      padding: 12px 10px !important;
+      font-size: 13px !important;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    margin: 0 -10px;
+    width: calc(100% + 20px);
+    
+    table {
+      min-width: 450px;
+    }
+    
+    th, td {
+      padding: 10px 8px !important;
+      font-size: 12px !important;
+    }
+  }
+`;
+
+// Add a responsive container for balance actions
+const BalanceActionsContainer = styled.div`
+  display: flex;
+  gap: 10px;
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+    margin-top: 15px;
+  }
+  
+  @media (max-width: 480px) {
+    gap: 6px;
+    margin-top: 12px;
+  }
+`;
+
+// Add a styled action button for consistency
+const ActionButton = styled.button`
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+  
+  @media (max-width: 768px) {
+    width: 100%;
+    padding: 12px;
+  }
+  
+  @media (max-width: 480px) {
       font-size: 13px;
+    padding: 10px;
+  }
+`;
+
+// Add responsive container for the tab panels
+const ContentInnerContainer = styled.div`
+  padding: 20px;
+  
+  @media (max-width: 768px) {
+    padding: 15px 10px;
+  }
+  
+  @media (max-width: 480px) {
+    padding: 12px 8px;
+  }
+`;
+
+// Update the BalanceHeader styles
+const BalanceHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .balance-info {
+    margin-bottom: 15px;
+    
+    h3 {
+      @media (max-width: 480px) {
+        font-size: 24px !important;
+      }
+    }
+  }
+`;
+
+// Add a responsive grid for displaying multiple cards
+const ResponsiveGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 15px;
+  }
+  
+  @media (max-width: 480px) {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+`;
+
+// Add responsive form group
+const FormGroup = styled.div`
+  margin-bottom: 20px;
+  
+  @media (max-width: 768px) {
+    margin-bottom: 15px;
+  }
+  
+  @media (max-width: 480px) {
+    margin-bottom: 12px;
+  }
+  
+  label {
+    display: block;
+    margin-bottom: 8px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    
+    @media (max-width: 480px) {
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+  }
+`;
+
+// Add responsive input group
+const InputGroup = styled.div`
+  display: flex;
+  
+  input {
+    flex: 1;
+    padding: 12px 15px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px 0 0 8px;
+    color: #fff;
+    
+    &:focus {
+      outline: none;
+      border-color: #4A6BF3;
+    }
+  }
+  
+  button {
+    padding: 0 15px;
+    background: #4A6BF3;
+    color: white;
+    border: none;
+    border-radius: 0 8px 8px 0;
+    cursor: pointer;
+    
+    &:hover {
+      background: #3a5bd9;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    input {
+      padding: 10px 12px;
+      font-size: 13px;
+    }
+    
+    button {
+      padding: 0 10px;
+      font-size: 13px;
+    }
+  }
+`;
+
+// Update the section styling to ensure proper stacking
+const ProfileSectionContainer = styled.section`
+  background: rgba(26, 27, 35, 0.6);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 24px;
+  position: relative;
+  
+  @media (max-width: 768px) {
+    margin-bottom: 20px;
+  }
+  
+  @media (max-width: 480px) {
+    margin-bottom: 16px;
+  }
+`;
+
+// Add a styled component for the user info section
+const UserInfoContainer = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 25px;
+  background: linear-gradient(135deg, rgba(26, 27, 35, 0.9) 0%, rgba(30, 31, 42, 0.9) 100%);
+  border-radius: 16px;
+  margin-bottom: 0;
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  
+  @media (max-width: 768px) {
+    padding: 20px;
+    gap: 15px;
+  }
+  
+  @media (max-width: 600px) {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 20px 15px;
+    
+    .premium-badge {
+      margin-left: 0 !important;
+      margin-top: 15px;
+    }
+  }
+`;
+
+// Add a styled component for the avatar container
+const AvatarContainer = styled.div`
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid #FF9900;
+  box-shadow: 0 0 20px rgba(255, 153, 0, 0.3);
+  position: relative;
+  
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  
+  @media (max-width: 600px) {
+    width: 80px;
+    height: 80px;
+  }
+`;
+
+// Add a styled component for the shine effect
+const ShineEffect = styled.div`
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(45deg, transparent 45%, rgba(255, 255, 255, 0.1) 50%, transparent 55%);
+  animation: shine 3s infinite;
+  z-index: 2;
+  
+  @keyframes shine {
+    0% {
+      transform: translateX(-100%) rotate(45deg);
+    }
+    20%, 100% {
+      transform: translateX(100%) rotate(45deg);
     }
   }
 `;
@@ -1256,56 +1811,73 @@ function UserProfile(props) {
         }
     };
 
+    // Update the fetchReferralData function to ensure it correctly loads referral data
     const fetchReferralData = async () => {
-        if (!auth.currentUser) return;
-        
         try {
             setLoadingReferrals(true);
             
-            // First check if user has a referral code, generate one if not
-            const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
-            const userData = userDoc.data();
-            
+            // Check if user has a referral code, if not generate one
             if (!userData.referralCode) {
-                await referralService.generateReferralCode(
-                    auth.currentUser.uid, 
-                    userData.displayName || auth.currentUser.email.split('@')[0]
-                );
+                try {
+                    const newReferralCode = await referralService.generateReferralCode(auth.currentUser.uid);
+                    console.log("Generated new referral code:", newReferralCode);
+                    
+                    // Update local userData state with the new code
+                    setUserData(prev => ({
+                        ...prev,
+                        referralCode: newReferralCode
+                    }));
+                } catch (codeError) {
+                    console.error("Error generating referral code:", codeError);
+                }
             }
             
-            // Then get full referral stats
+            // Fetch full referral stats
+            try {
             const referralStats = await referralService.getReferralStats(auth.currentUser.uid);
+                console.log("Fetched referral data:", referralStats);
+                
+                if (referralStats) {
             setReferralData(referralStats);
+                    
+                    // Update copy success state to show feedback when user copies link
+                    setCopySuccess('');
+                }
+            } catch (statsError) {
+                console.error("Error fetching referral stats:", statsError);
+                toast.error("Could not load your referral statistics. Please try again later.");
+            }
         } catch (error) {
-            console.error('Error fetching referral data:', error);
+            console.error("Error in referral dashboard:", error);
+            toast.error("Could not load referral data. Please refresh the page and try again.");
         } finally {
             setLoadingReferrals(false);
         }
     };
 
-    const handleCopyReferralLink = async () => {
-        if (!referralData?.referralLink) return;
-        
-        try {
-            await navigator.clipboard.writeText(referralData.referralLink);
-            setCopySuccess('Copied!');
-            setTimeout(() => setCopySuccess(''), 3000);
-        } catch (err) {
-            console.error('Failed to copy text: ', err);
-            setCopySuccess('Failed to copy');
+    // Function to get the current referral link based on the user's code
+    const getReferralLink = () => {
+        if (!userData?.referralCode) {
+            return `${window.location.origin}/register?ref=${auth.currentUser?.uid || ''}`;
         }
+        return `${window.location.origin}/register?ref=${userData.referralCode}`;
     };
 
-    const handleCopyReferralCode = async () => {
-        if (!referralData?.referralCode) return;
-        
+    // Update the copy referral link function for better user feedback
+    const handleCopyReferralLink = async () => {
         try {
-            await navigator.clipboard.writeText(referralData.referralCode);
+            const link = getReferralLink();
+            await navigator.clipboard.writeText(link);
             setCopySuccess('Copied!');
-            setTimeout(() => setCopySuccess(''), 3000);
-        } catch (err) {
-            console.error('Failed to copy text: ', err);
-            setCopySuccess('Failed to copy');
+            toast.success("Referral link copied to clipboard!");
+            
+            // Reset the success message after 2 seconds
+            setTimeout(() => {
+                setCopySuccess('Copy Referral Link');
+            }, 2000);
+        } catch (error) {
+            console.error("Failed to copy:", error);
+            toast.error("Failed to copy link. Please try again.");
         }
     };
 
@@ -1493,6 +2065,19 @@ function UserProfile(props) {
         }
     }, [isAdmin]);
 
+    // Add this useEffect to inject keyframes
+    React.useEffect(() => {
+        // Insert keyframes into the document head
+        const styleElement = document.createElement('style');
+        styleElement.innerHTML = keyframesStyle;
+        document.head.appendChild(styleElement);
+        
+        // Clean up on unmount
+        return () => {
+            document.head.removeChild(styleElement);
+        };
+    }, []);
+
     if (loading) {
         return (
             <div style={{
@@ -1634,9 +2219,9 @@ function UserProfile(props) {
                 
                 <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
                     <select
-                        style={{
+                style={{
                             padding: '8px 12px',
-                            borderRadius: '8px',
+                    borderRadius: '8px',
                             background: '#333348',
                             color: 'white',
                             border: '1px solid rgba(255, 255, 255, 0.1)'
@@ -1651,9 +2236,9 @@ function UserProfile(props) {
                     </select>
                     
                     <select
-                        style={{
+                style={{
                             padding: '8px 12px',
-                            borderRadius: '8px',
+                    borderRadius: '8px',
                             background: '#333348',
                             color: 'white',
                             border: '1px solid rgba(255, 255, 255, 0.1)'
@@ -1674,7 +2259,7 @@ function UserProfile(props) {
                         style={{ height: 'fit-content' }}
                     >
                         Assign to Category
-                    </button>
+            </button>
                 </div>
                 
                 {/* Display tokens in each category */}
@@ -1731,11 +2316,11 @@ function UserProfile(props) {
                                                         }}
                                                     />
                                                     {token}
-                                                    <button 
+            <button 
                                                         onClick={() => handleRemoveFromCategory(token, category)}
-                                                        style={{
+                style={{
                                                             background: 'none',
-                                                            border: 'none',
+                    border: 'none',
                                                             color: '#FF5E5E',
                                                             cursor: 'pointer',
                                                             fontSize: '16px',
@@ -1744,7 +2329,7 @@ function UserProfile(props) {
                                                         }}
                                                     >
                                                         ×
-                                                    </button>
+            </button>
                                                 </div>
                                             ))
                                         ) : (
@@ -1762,75 +2347,93 @@ function UserProfile(props) {
 
     // Update the balance actions JSX in the return statement
     const renderBalanceActions = () => (
-        <div className="balance-actions" style={{
-            display: 'flex',
-            gap: '12px'
-        }}>
-            <button 
-                onClick={() => navigate('/deposit')}
-                disabled={loading}
-                className="btn-action" 
-                style={{
-                    background: '#4A6BF3',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: '10px 20px',
-                    color: '#fff',
-                    fontSize: '14px',
-                    cursor: 'pointer'
-                }}
-            >
-                Deposit Funds
-            </button>
-            <button 
-                className="btn-action" 
-                onClick={() => setShowConvertModal(true)}
-                style={{
-                    background: '#2A2A3C',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: '10px 20px',
-                    color: '#fff',
-                    fontSize: '14px',
-                    cursor: 'pointer'
-                }}
-            >
+        <BalanceActionsContainer>
+            <ActionButton onClick={() => setShowConvertModal(true)}>
                 Convert
-            </button>
-            <button 
-                className="btn-action" 
-                style={{
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: '10px 20px',
-                    color: '#fff',
-                    fontSize: '14px',
-                    cursor: 'pointer'
-                }}
-            >
+            </ActionButton>
+            <ActionButton>
+                Deposit
+            </ActionButton>
+            <ActionButton>
                 Withdraw
-            </button>
-        </div>
+            </ActionButton>
+        </BalanceActionsContainer>
     );
 
     return (
         <div>
-            <PageTitle heading='User Profile' title='User' />
-
-            <section className="user-profile flat-tabs">
-                <div className="container">
-                    <div className="row">
-                        <Tabs>
-                            <TabList>
-                                <div className="user-info center">
-                                    <div className="avt">
-                                        <img id="blah" src={userData.photoURL || img} alt="Profile" />
+            <CustomPageTitle>
+                <h3>My Profile</h3>
+            </CustomPageTitle>
+            
+            <ProfileSectionContainer>
+                <UserInfoContainer>
+                    {/* Add a subtle background effect */}
+                    <div style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: 'radial-gradient(circle at 30% 30%, rgba(255, 153, 0, 0.05), transparent 70%)',
+                        zIndex: -1
+                    }}></div>
+                    
+                    <AvatarContainer>
+                        <img src={userData?.avatar || img} alt="User avatar" />
+                        <ShineEffect />
+                    </AvatarContainer>
+                    
+                    <div>
+                        <h3 style={{
+                            fontSize: '26px',
+                            fontWeight: '600',
+                            margin: '0 0 8px',
+                            color: '#fff',
+                            textShadow: '0 2px 4px rgba(0, 0, 0, 0.3)'
+                        }}>{userData?.displayName || auth.currentUser?.displayName || 'User'}</h3>
+                        <p style={{
+                            fontSize: '16px',
+                            color: 'rgba(255, 255, 255, 0.7)',
+                            margin: '0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                        }}>
+                            <span style={{ 
+                                display: 'inline-block',
+                                width: '8px',
+                                height: '8px',
+                                borderRadius: '50%',
+                                background: '#4ade80',
+                                boxShadow: '0 0 8px rgba(74, 222, 128, 0.6)'
+                            }}></span>
+                            {userData?.email || auth.currentUser?.email}
+                        </p>
                                     </div>
                                     
-                                    <h6 className="name">{userData.displayName || 'Update your name'}</h6>
-                                    <p>{userData.email}</p>
+                    {/* Add a premium badge if user is premium */}
+                    {userData?.isPremium && (
+                        <div className="premium-badge" style={{
+                            marginLeft: 'auto',
+                            background: 'linear-gradient(90deg, #FF9900, #FFCC00)',
+                            color: '#000',
+                            fontWeight: 'bold',
+                            padding: '6px 12px',
+                            borderRadius: '20px',
+                            fontSize: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            boxShadow: '0 2px 10px rgba(255, 153, 0, 0.5)'
+                        }}>
+                            <span style={{ fontSize: '14px' }}>★</span> PREMIUM
                                 </div>
+                    )}
+                </UserInfoContainer>
+                
+                <StyledTabs>
+                    <TabList>
                                 {
                                     dataCoinTab.map(idx => (
                                         <Tab key={idx.id}><h6 className="fs-16">
@@ -1842,8 +2445,8 @@ function UserProfile(props) {
                             </TabList>
 
                             <TabPanel>
-                                <div className="content-inner profile">
-                                    <form onSubmit={handleUpdateProfile}>
+                        <ContentInnerContainer className="content-inner profile">
+                            <ResponsiveForm onSubmit={handleUpdateProfile}>
                                         <h4>User Profile</h4>
                                         <h6>Information</h6>
 
@@ -1894,12 +2497,13 @@ function UserProfile(props) {
                                         >
                                             Sign Out
                                         </button>
-                                    </form>
-                                </div>
+                            </ResponsiveForm>
+                        </ContentInnerContainer>
                             </TabPanel>
 
+                    {/* Balances TabPanel */}
                             <TabPanel>
-                                <div className="content-inner profile">
+                        <ContentInnerContainer className="content-inner profile">
                                     <h4 className="balance-title">Balances</h4>
                                     <AnimatedBorder>
                                         <GalaxyBackground>
@@ -1909,12 +2513,7 @@ function UserProfile(props) {
                                                 position: 'relative',
                                                 zIndex: 1
                                             }}>
-                                                <div className="balance-header" style={{
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    alignItems: 'flex-start',
-                                                    marginBottom: '20px'
-                                                }}>
+                                        <BalanceHeader>
                                                     <div className="balance-info">
                                                         <p style={{ 
                                                             color: '#7A7A7A',
@@ -1925,31 +2524,31 @@ function UserProfile(props) {
                                                             fontSize: '32px',
                                                             fontWeight: '600',
                                                             color: '#fff',
-                                                            marginBottom: '8px',
-                                                            transition: 'opacity 0.3s ease'
+                                                    marginBottom: '8px',
+                                                    transition: 'opacity 0.3s ease'
+                                                }}>
+                                                    {Object.keys(balances).length === 0 ? (
+                                                        <div style={{ 
+                                                            display: 'flex', 
+                                                            alignItems: 'center', 
+                                                            gap: '10px',
+                                                            fontSize: '24px',
+                                                            color: 'rgba(255, 255, 255, 0.7)'
                                                         }}>
-                                                            {Object.keys(balances).length === 0 ? (
-                                                                <div style={{ 
-                                                                    display: 'flex', 
-                                                                    alignItems: 'center', 
-                                                                    gap: '10px',
-                                                                    fontSize: '24px',
-                                                                    color: 'rgba(255, 255, 255, 0.7)'
-                                                                }}>
-                                                                    <div style={{
-                                                                        border: '2px solid rgba(255, 255, 255, 0.1)',
-                                                                        borderTop: '2px solid #f3c121',
-                                                                        borderRadius: '50%',
-                                                                        width: '20px',
-                                                                        height: '20px',
-                                                                        animation: 'spin 1s linear infinite'
-                                                                    }} />
-                                                                    Calculating...
-                                                                </div>
-                                                            ) : (
-                                                                `$${calculateTotalBalance.toFixed(2)}`
-                                                            )}
-                                                        </h3>
+                                                            <div style={{
+                                                                border: '2px solid rgba(255, 255, 255, 0.1)',
+                                                                borderTop: '2px solid #f3c121',
+                                                                borderRadius: '50%',
+                                                                width: '20px',
+                                                                height: '20px',
+                                                                animation: 'spin 1s linear infinite'
+                                                            }} />
+                                                            Calculating...
+                                                        </div>
+                                                    ) : (
+                                                        `$${calculateTotalBalance.toFixed(2)}`
+                                                    )}
+                                                </h3>
                                                         <p style={{
                                                             color: totalPnL >= 0 ? '#0ECB81' : '#F6465D',
                                                             fontSize: '14px',
@@ -1959,7 +2558,7 @@ function UserProfile(props) {
                                                         </p>
                                                     </div>
                                                     {renderBalanceActions()}
-                                                </div>
+                                        </BalanceHeader>
                                             </div>
                                         </GalaxyBackground>
                                     </AnimatedBorder>
@@ -1972,6 +2571,7 @@ function UserProfile(props) {
                                             position: 'relative',
                                             zIndex: 1
                                         }}>
+                                    <ResponsiveTableWrapper>
                                             <table className="table" style={{
                                                 width: '100%',
                                                 borderCollapse: 'separate',
@@ -2136,46 +2736,60 @@ function UserProfile(props) {
                                                                 padding: '20px',
                                                                 color: '#7A7A7A'
                                                             }}>
+                                                            <div style={{
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                gap: '10px'
+                                                            }}>
                                                                 <div style={{
-                                                                    display: 'flex',
-                                                                    alignItems: 'center',
-                                                                    justifyContent: 'center',
-                                                                    gap: '10px'
-                                                                }}>
-                                                                    <div style={{
-                                                                        border: '2px solid rgba(255, 255, 255, 0.1)',
-                                                                        borderTop: '2px solid #f3c121',
-                                                                        borderRadius: '50%',
-                                                                        width: '20px',
-                                                                        height: '20px',
-                                                                        animation: 'spin 1s linear infinite'
-                                                                    }} />
-                                                                    Loading balances...
-                                                                </div>
+                                                                    border: '2px solid rgba(255, 255, 255, 0.1)',
+                                                                    borderTop: '2px solid #f3c121',
+                                                                    borderRadius: '50%',
+                                                                    width: '20px',
+                                                                    height: '20px',
+                                                                    animation: 'spin 1s linear infinite'
+                                                                }} />
+                                                                Loading balances...
+                                                            </div>
                                                             </td>
                                                         </tr>
                                                     )}
                                                 </tbody>
                                             </table>
+                                    </ResponsiveTableWrapper>
                                         </div>
                                     </AnimatedBorder>
 
                                     {isAdmin && renderAdminControls()}
-                                </div>
+                        </ContentInnerContainer>
                             </TabPanel>
 
+                    {/* Other TabPanels with ContentInnerContainer */}
                             <TabPanel>
-                                <div className="content-inner profile">
+                        <ContentInnerContainer className="content-inner profile">
+                            {/* Content remains the same, just adding ResponsiveCard wrappers */}
                                     <h4 className="balance-title">Liquidation Protection Bonus</h4>
                                     
                                     {loadingBonus ? (
-                                        <div style={{ textAlign: 'center', padding: '30px' }}>
+                                <ResponsiveCard style={{ textAlign: 'center', padding: '30px' }}>
                                             Loading bonus information...
-                                        </div>
+                                </ResponsiveCard>
                                     ) : !bonusAccount || !bonusAccount.exists ? (
-                                        <div style={{ textAlign: 'center', padding: '30px', color: '#666' }}>
+                                <ResponsiveCard style={{ textAlign: 'center', padding: '30px', color: '#666' }}>
                                             <p>You don't have any active bonuses at the moment.</p>
-                                        </div>
+                                    <button 
+                                        className="btn-action" 
+                                        style={{ 
+                                            marginTop: '15px',
+                                            background: 'linear-gradient(90deg, #FF9900, #FFCC00)',
+                                            color: '#000',
+                                            fontWeight: 'bold'
+                                        }}
+                                    >
+                                        Get More Bonuses
+                                    </button>
+                                </ResponsiveCard>
                                     ) : (
                                         <AnimatedBorder>
                                             <GalaxyBackground>
@@ -2184,557 +2798,376 @@ function UserProfile(props) {
                                                     position: 'relative',
                                                     zIndex: 1
                                                 }}>
+                                            <h5 style={{ 
+                                                fontSize: '20px', 
+                                                fontWeight: 'bold',
+                                                marginBottom: '15px',
+                                                color: '#fff'
+                                            }}>Active Bonus</h5>
                                                     <div style={{
                                                         display: 'flex',
+                                                alignItems: 'center',
                                                         justifyContent: 'space-between',
-                                                        alignItems: 'flex-start',
-                                                        marginBottom: '20px'
+                                                gap: '20px',
+                                                flexWrap: 'wrap'
                                                     }}>
                                         <div>
-                                                            <h3 style={{ color: '#0ECB81', fontSize: '28px', marginBottom: '10px' }}>
-                                                                {bonusAccount.formattedAmount}
-                                                            </h3>
-                                                            <p style={{ color: '#fff' }}>
-                                                                Status: <span style={{ 
-                                                                    color: bonusAccount.isActive ? '#0ECB81' : '#F6465D', 
-                                                                    fontWeight: '500' 
-                                                                }}>
-                                                                    {bonusAccount.isActive ? 'Active' : 'Inactive'}
-                                                                </span>
-                                                            </p>
-                                                            {bonusAccount.expiryDate && (
-                                                                <p style={{ color: '#fff', marginTop: '5px' }}>
-                                                                    Expires: {bonusAccount.expiryDate.toLocaleDateString()}
-                                                                </p>
-                                                            )}
-                                        </div>
-                                                    <div style={{
-                                                            background: 'rgba(14, 203, 129, 0.1)',
-                                                            borderRadius: '8px',
-                                                            padding: '15px',
-                                                            maxWidth: '300px'
-                                                        }}>
-                                                            <h5 style={{ color: '#0ECB81', marginBottom: '10px' }}>How it works</h5>
-                                                            <p style={{ color: '#ddd', fontSize: '14px', lineHeight: '1.5' }}>
-                                                                This bonus is automatically used to protect your funds from liquidation 
-                                                                when your position would otherwise be liquidated due to market movements.
-                                                            </p>
+                                                    <p style={{ color: 'rgba(255,255,255,0.7)' }}>
+                                                        You have an active bonus of:
+                                                    </p>
+                                                    <h3 style={{ 
+                                                        fontSize: '28px', 
+                                                        fontWeight: 'bold',
+                                                        marginTop: '10px',
+                                                        background: 'linear-gradient(90deg, #FF9900, #FFCC00)',
+                                                        WebkitBackgroundClip: 'text',
+                                                        WebkitTextFillColor: 'transparent'
+                                                    }}>
+                                                        {bonusAccount.amount} {bonusAccount.token}
+                                                    </h3>
                                     </div>
-                                    </div>
-
-                                                    <div style={{ marginTop: '30px' }}>
-                                                        <h4 style={{ color: '#fff', marginBottom: '15px' }}>Protection Details</h4>
-                                                        
-                                                        <div style={{
-                                                            display: 'grid',
-                                                            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                                                            gap: '20px'
-                                                        }}>
-                                                            <div style={{
-                                                                background: 'rgba(255, 255, 255, 0.05)',
-                                                                borderRadius: '8px',
-                                                                padding: '15px'
-                                                            }}>
-                                                                <h5 style={{ color: '#F7931A', marginBottom: '10px' }}>Protected Amount</h5>
-                                                                <p style={{ color: '#ddd', fontSize: '14px' }}>
-                                                                    Your bonus can protect positions up to <strong>{bonusAccount.formattedAmount}</strong> from liquidation.
-                                                                </p>
+                                                <button className="btn-action" style={{
+                                                    background: 'linear-gradient(90deg, #FF9900, #FFCC00)',
+                                                    color: '#000',
+                                                    fontWeight: 'bold',
+                                                    padding: '12px 24px',
+                                                    borderRadius: '8px'
+                                                }}>
+                                                    Get More Bonuses
+                                                </button>
                                                             </div>
-                                                            
-                                                            <div style={{
-                                                                background: 'rgba(255, 255, 255, 0.05)',
-                                                                borderRadius: '8px',
-                                                                padding: '15px'
-                                                            }}>
-                                                                <h5 style={{ color: '#F7931A', marginBottom: '10px' }}>Eligibility</h5>
-                                                                <p style={{ color: '#ddd', fontSize: '14px' }}>
-                                                                    Any trading position you open with your deposited funds is eligible for liquidation protection.
-                                                                </p>
-                                                            </div>
-                                                            
-                                                            <div style={{
-                                                                background: 'rgba(255, 255, 255, 0.05)',
-                                                                borderRadius: '8px',
-                                                                padding: '15px'
-                                                            }}>
-                                                                <h5 style={{ color: '#F7931A', marginBottom: '10px' }}>Activation</h5>
-                                                                <p style={{ color: '#ddd', fontSize: '14px' }}>
-                                                                    Bonus is automatically applied when a position would otherwise be liquidated.
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {bonusAccount.bonusAccount?.usageHistory && bonusAccount.bonusAccount.usageHistory.length > 0 && (
-                                                        <div style={{ marginTop: '30px' }}>
-                                                            <h4 style={{ color: '#fff', marginBottom: '15px' }}>Usage History</h4>
-                                                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                                                <thead>
-                                                                    <tr>
-                                                                        <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#7A7A7A' }}>Date</th>
-                                                                        <th style={{ padding: '10px', textAlign: 'right', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#7A7A7A' }}>Amount</th>
-                                                                        <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#7A7A7A' }}>Position</th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody>
-                                                                    {bonusAccount.bonusAccount.usageHistory.map((usage, index) => (
-                                                                        <tr key={index}>
-                                                                            <td style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#ddd' }}>
-                                                                                {usage.date ? new Date(usage.date.seconds * 1000).toLocaleString() : 'N/A'}
-                                                                            </td>
-                                                                            <td style={{ padding: '10px', textAlign: 'right', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#ddd' }}>
-                                                                                ${usage.amount.toFixed(2)}
-                                                                            </td>
-                                                                            <td style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#ddd' }}>
-                                                                                {usage.positionId}
-                                                                            </td>
-                                                                        </tr>
-                                                                    ))}
-                                                                </tbody>
-                                                            </table>
-                                                        </div>
-                                                    )}
                                                 </div>
                                             </GalaxyBackground>
                                         </AnimatedBorder>
                                     )}
-                                </div>
+                        </ContentInnerContainer>
                             </TabPanel>
 
                             <TabPanel>
-                                <div className="content-inner referrals">
-                                    <h4 style={{ marginBottom: '15px' }}>Referral Program</h4>
+                        <ContentInnerContainer className="content-inner referrals">
+                            <h4 style={{ marginBottom: '20px', fontSize: '24px', fontWeight: 'bold' }}>Referral Program</h4>
                                     
                                     {loadingReferrals ? (
-                                        <div style={{ textAlign: 'center', padding: '20px' }}>
-                                            Loading referral information...
-                                        </div>
-                                    ) : (
-                                        <>
+                                <ResponsiveCard style={{ textAlign: 'center', padding: '30px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
                                             <div style={{ 
-                                                background: 'linear-gradient(135deg, rgba(74,107,243,0.1) 0%, rgba(247,147,26,0.1) 100%)',
-                                                padding: '20px',
-                                                borderRadius: '10px',
-                                                marginBottom: '20px'
-                                            }}>
-                                                <h5 style={{ color: '#F7931A', marginBottom: '10px' }}>How it works</h5>
-                                                <p style={{ marginBottom: '15px' }}>
-                                                    Invite friends to Ripple Exchange and get 1 RIPPLEX token as Airdrop for every referral!
-                                                </p>
-                                                
-                                                <ul style={{ listStyleType: 'none', padding: '0', margin: '0' }}>
-                                                    <li style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
-                                                        <span style={{ 
-                                                            display: 'inline-block', 
+                                            border: '3px solid rgba(255, 255, 255, 0.1)',
+                                            borderTop: '3px solid #f3c121',
+                                                            borderRadius: '50%', 
                                                             width: '24px', 
                                                             height: '24px', 
-                                                            borderRadius: '50%', 
-                                                            background: '#F7931A', 
-                                                            color: '#fff', 
-                                                            textAlign: 'center', 
-                                                            lineHeight: '24px', 
-                                                            marginRight: '10px' 
-                                                        }}>1</span>
-                                                        Share your referral link with friends
-                                                    </li>
-                                                    <li style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
-                                                        <span style={{ 
-                                                            display: 'inline-block', 
-                                                            width: '24px', 
-                                                            height: '24px', 
-                                                            borderRadius: '50%', 
-                                                            background: '#F7931A', 
-                                                            color: '#fff', 
-                                                            textAlign: 'center', 
-                                                            lineHeight: '24px', 
-                                                            marginRight: '10px' 
-                                                        }}>2</span>
-                                                        They sign up using your referral link and complete social tasks
-                                                    </li>
-                                                    <li style={{ display: 'flex', alignItems: 'center' }}>
-                                                        <span style={{ 
-                                                            display: 'inline-block', 
-                                                            width: '24px', 
-                                                            height: '24px', 
-                                                            borderRadius: '50%', 
-                                                            background: '#F7931A', 
-                                                            color: '#fff', 
-                                                            textAlign: 'center', 
-                                                            lineHeight: '24px', 
-                                                            marginRight: '10px' 
-                                                        }}>3</span>
-                                                        You get 1 RIPPLEX token = $1 for each referral
-                                                    </li>
-                                                </ul>
+                                            animation: 'spin 1s linear infinite'
+                                        }} />
+                                        <span>Loading referral information...</span>
+                                    </div>
+                                </ResponsiveCard>
+                            ) : (
+                                <>
+                                    <AnimatedBorder style={{ marginBottom: '24px' }}>
+                                        <ResponsiveCard style={{ padding: '24px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px', marginBottom: '20px' }}>
+                                                <div>
+                                                    <h5 style={{ fontSize: '20px', marginBottom: '8px' }}>Share Your Referral Link</h5>
+                                                    <p style={{ color: 'rgba(255, 255, 255, 0.6)', marginBottom: '15px' }}>
+                                                        Invite friends and earn 1 RIPPLEX token per referral + 10% commission on their trading fees!
+                                                    </p>
                                             </div>
                                             
                                             <div style={{ 
+                                                    background: 'linear-gradient(90deg, #FF9900, #FFCC00)', 
+                                                    padding: '15px 20px', 
+                                                    borderRadius: '8px',
                                                 display: 'flex', 
-                                                justifyContent: 'space-between', 
-                                                marginBottom: '30px',
-                                                flexWrap: 'wrap'
-                                            }}>
-                                                <div style={{ 
-                                                    flex: '1 1 200px', 
-                                                    background: 'rgba(255,255,255,0.05)', 
-                                                    padding: '20px', 
-                                                    borderRadius: '10px',
-                                                    margin: '0 10px 10px 0'
+                                                    alignItems: 'center',
+                                                    gap: '10px'
                                                 }}>
-                                                    <h5 style={{ color: '#7A7A7A', fontSize: '14px', marginBottom: '5px' }}>Total Referrals</h5>
-                                                    <h3 style={{ color: '#fff', fontSize: '24px' }}>
-                                                        {referralData?.stats?.totalReferrals || 0}
-                                                    </h3>
+                                                    <div style={{ textAlign: 'center' }}>
+                                                        <div style={{ fontWeight: 'bold', fontSize: '28px', color: '#000' }}>
+                                                            {referralData?.referrals?.length || 0}
                                                 </div>
-                                                
-                                                <div style={{ 
-                                                    flex: '1 1 200px', 
-                                                    background: 'rgba(255,255,255,0.05)', 
-                                                    padding: '20px', 
-                                                    borderRadius: '10px',
-                                                    margin: '0 10px 10px 0'
-                                                }}>
-                                                    <h5 style={{ color: '#7A7A7A', fontSize: '14px', marginBottom: '5px' }}>Active Referrals</h5>
-                                                    <h3 style={{ color: '#fff', fontSize: '24px' }}>
-                                                        {referralData?.stats?.activeReferrals || 0}
-                                                    </h3>
+                                                        <div style={{ fontSize: '14px', color: '#000' }}>Total Referrals</div>
                                                 </div>
-                                                
-                                                <div style={{ 
-                                                    flex: '1 1 200px', 
-                                                    background: 'rgba(255,255,255,0.05)', 
-                                                    padding: '20px', 
-                                                    borderRadius: '10px',
-                                                    margin: '0 0 10px 0'
-                                                }}>
-                                                    <h5 style={{ color: '#7A7A7A', fontSize: '14px', marginBottom: '5px' }}>RIPPLEX Earned</h5>
-                                                    <h3 style={{ color: '#F7931A', fontSize: '24px' }}>
-                                                        {referralData?.stats?.totalReferrals || 0} <span style={{ fontSize: '16px' }}>RIPPLEX</span>
-                                                    </h3>
+                                                    <div style={{ width: '1px', height: '40px', background: 'rgba(0,0,0,0.2)' }}></div>
+                                                    <div style={{ textAlign: 'center' }}>
+                                                        <div style={{ fontWeight: 'bold', fontSize: '28px', color: '#000' }}>
+                                                            {referralData?.totalCommission?.toFixed(2) || '0.00'}
+                                                        </div>
+                                                        <div style={{ fontSize: '14px', color: '#000' }}>USDT Earned</div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                            
-                                            <div style={{ marginBottom: '30px' }}>
-                                                <h4 style={{ marginBottom: '15px' }}>Your Referral Links</h4>
                                                 
                                                 <div style={{
-                                                    background: 'rgba(255,255,255,0.05)',
-                                                    padding: '20px',
-                                                    borderRadius: '10px',
-                                                    marginBottom: '20px'
-                                                }}>
-                                                    <label style={{ display: 'block', marginBottom: '5px', color: '#7A7A7A' }}>Referral Link</label>
-                                                    <div style={{ display: 'flex', marginBottom: '15px' }}>
-                                        <input
-                                                            type="text"
-                                                            readOnly
-                                            className="form-control"
-                                                            value={referralData?.referralLink || ''}
-                                                            style={{ flex: '1', marginRight: '10px' }}
-                                                        />
-                                                        <button
-                                                            onClick={handleCopyReferralLink}
-                                                            className="btn-action"
-                                                            style={{
-                                                                background: '#4A6BF3',
-                                                                border: 'none',
-                                                                borderRadius: '5px',
-                                                                color: '#fff',
-                                                                padding: '0 15px'
-                                                            }}
-                                                        >
-                                                            {copySuccess === 'Copied!' ? 'Copied!' : 'Copy'}
-                                                        </button>
-                                        </div>
-                                                    
-                                                    <label style={{ display: 'block', marginBottom: '5px', color: '#7A7A7A' }}>Referral Code</label>
-                                                    <div style={{ display: 'flex' }}>
-                                        <input
-                                            type="text"
-                                                            readOnly
-                                                            className="form-control"
-                                                            value={referralData?.referralCode || ''}
-                                                            style={{ flex: '1', marginRight: '10px' }}
-                                                        />
-                                                        <button
-                                                            onClick={handleCopyReferralCode}
-                                                            className="btn-action"
-                                                            style={{
-                                                                background: '#4A6BF3',
-                                                                border: 'none',
-                                                                borderRadius: '5px',
-                                                                color: '#fff',
-                                                                padding: '0 15px'
-                                                            }}
-                                                        >
-                                                            {copySuccess === 'Copied!' ? 'Copied!' : 'Copy'}
-                                                        </button>
-                                        </div>
+                                                background: 'rgba(255, 255, 255, 0.05)', 
+                                                padding: '15px', 
+                                                borderRadius: '8px',
+                                                marginBottom: '15px',
+                                                position: 'relative',
+                                                overflow: 'hidden'
+                                            }}>
+                                                <div style={{ 
+                                                    position: 'absolute', 
+                                                    top: 0, 
+                                                    left: 0, 
+                                                    width: '100%', 
+                                                    height: '100%', 
+                                                    background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%)',
+                                                    animation: 'shine 2s infinite linear',
+                                                    pointerEvents: 'none'
+                                                }} />
+                                                
+                                                <code style={{ wordBreak: 'break-all', fontSize: '14px', display: 'block' }}>
+                                                    {getReferralLink()}
+                                                </code>
                                     </div>
                                                 
-                                                <div style={{ 
-                                                    display: 'flex',
-                                                    justifyContent: 'center',
-                                                    gap: '10px',
-                                                    marginTop: '20px'
-                                                }}>
+                                            <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
                                                     <button
+                                                    onClick={handleCopyReferralLink}
                                                         className="btn-action"
                                                         style={{
-                                                            background: '#F7931A',
-                                                            border: 'none',
-                                                            borderRadius: '5px',
-                                                            color: '#fff',
-                                                            padding: '10px 20px'
-                                                        }}
-                                                        onClick={() => {
-                                                            window.open("https://twitter.com/intent/tweet?text=Join%20me%20on%20Ripple%20Exchange%20and%20get%20$100%20in%20liquidation%20protection!%20" + encodeURIComponent(referralData?.referralLink || ''), '_blank');
-                                                        }}
-                                                    >
-                                                        Share on Twitter
+                                                        flex: '1',
+                                                        background: 'linear-gradient(90deg, #4A6BF3, #7189FF)',
+                                                        minWidth: '180px'
+                                                    }}
+                                                >
+                                                    {copySuccess || 'Copy Referral Link'}
                                                     </button>
                                                     
                                                     <button
                                                         className="btn-action"
                                                         style={{
-                                                            background: '#4267B2',
-                                                            border: 'none',
-                                                            borderRadius: '5px',
-                                                            color: '#fff',
-                                                            padding: '10px 20px'
+                                                        flex: '1',
+                                                        background: '#25D366',
+                                                        minWidth: '180px'
                                                         }}
                                                         onClick={() => {
-                                                            window.open("https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(referralData?.referralLink || ''), '_blank');
+                                                        window.open(`https://wa.me/?text=Join me on Ripple Exchange and get free crypto! ${getReferralLink()}`, '_blank');
                                                         }}
                                                     >
-                                                        Share on Facebook
+                                                    Share on WhatsApp
                                                     </button>
                                     </div>
-                                            </div>
+                                        </ResponsiveCard>
+                                    </AnimatedBorder>
+                                    
+                                    <AnimatedBorder>
+                                        <ResponsiveCard style={{ padding: '24px' }}>
+                                            <h5 style={{ fontSize: '20px', marginBottom: '20px' }}>Your Referrals</h5>
                                             
-                                            {referralData?.referrals && referralData.referrals.length > 0 && (
-                                                <div>
-                                                    <h4 style={{ marginBottom: '15px' }}>Your Referrals</h4>
-                                                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                            {referralData && referralData.referrals && referralData.referrals.length > 0 ? (
+                                                <ResponsiveTableWrapper>
+                                                    <table style={{
+                                                        width: '100%',
+                                                        borderCollapse: 'separate',
+                                                        borderSpacing: '0',
+                                                        color: '#fff'
+                                                    }}>
                                                         <thead>
                                                             <tr>
-                                                                <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#7A7A7A' }}>User</th>
-                                                                <th style={{ padding: '10px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#7A7A7A' }}>Date</th>
-                                                                <th style={{ padding: '10px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#7A7A7A' }}>Status</th>
+                                                                <th style={{ 
+                                                                    padding: '12px 15px', 
+                                                                    textAlign: 'left', 
+                                                                    borderBottom: '1px solid rgba(255,255,255,0.1)',
+                                                                    color: 'rgba(255,255,255,0.6)'
+                                                                }}>User</th>
+                                                                <th style={{ 
+                                                                    padding: '12px 15px', 
+                                                                    textAlign: 'center', 
+                                                                    borderBottom: '1px solid rgba(255,255,255,0.1)',
+                                                                    color: 'rgba(255,255,255,0.6)'
+                                                                }}>Date Joined</th>
+                                                                <th style={{ 
+                                                                    padding: '12px 15px', 
+                                                                    textAlign: 'center', 
+                                                                    borderBottom: '1px solid rgba(255,255,255,0.1)',
+                                                                    color: 'rgba(255,255,255,0.6)'
+                                                                }}>Status</th>
+                                                                <th style={{ 
+                                                                    padding: '12px 15px', 
+                                                                    textAlign: 'right', 
+                                                                    borderBottom: '1px solid rgba(255,255,255,0.1)',
+                                                                    color: 'rgba(255,255,255,0.6)'
+                                                                }}>RIPPLEX Earned</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody>
-                                                            {referralData.referrals.map((referral, index) => (
-                                                                <tr key={index}>
-                                                                    <td style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#ddd' }}>
-                                                                        {referral.userId.substring(0, 8)}...
-                                                                    </td>
-                                                                    <td style={{ padding: '10px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#ddd' }}>
-                                                                        {referral.date ? new Date(referral.date.seconds * 1000).toLocaleDateString() : 'N/A'}
-                                                                    </td>
-                                                                    <td style={{ padding: '10px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                                                                        <span style={{
-                                                                            display: 'inline-block',
-                                                                            padding: '3px 10px',
-                                                                            borderRadius: '12px',
-                                                                            background: referral.status === 'active' ? 'rgba(14, 203, 129, 0.1)' : 'rgba(255, 255, 255, 0.1)',
-                                                                            color: referral.status === 'active' ? '#0ECB81' : '#ddd'
+                                                            {referralData.referrals.map((referral, index) => {
+                                                                const dateObj = referral.date ? new Date(referral.date.seconds * 1000) : new Date();
+                                                                return (
+                                                                    <tr key={index} style={{
+                                                                        transition: 'all 0.3s',
+                                                                        background: index % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'transparent'
+                                                                    }}>
+                                                                        <td style={{ 
+                                                                            padding: '15px', 
+                                                                            borderBottom: '1px solid rgba(255,255,255,0.05)'
                                                                         }}>
-                                                                            {referral.status}
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                                                <div style={{
+                                                                                    width: '32px',
+                                                                                    height: '32px',
+                                                                                    borderRadius: '50%',
+                                                                                    background: 'rgba(255,255,255,0.1)',
+                                                                                    display: 'flex',
+                                                                                    alignItems: 'center',
+                                                                                    justifyContent: 'center',
+                                                                                    color: '#fff',
+                                                                                    fontWeight: 'bold'
+                                                                                }}>
+                                                                                    {String(referral.email || 'U').charAt(0).toUpperCase()}
+                                                                                </div>
+                                                                                <div>{referral.email || `User ${index + 1}`}</div>
+                                                                            </div>
+                                                                    </td>
+                                                                        <td style={{ 
+                                                                            padding: '15px', 
+                                                                            textAlign: 'center',
+                                                                            borderBottom: '1px solid rgba(255,255,255,0.05)'
+                                                                        }}>
+                                                                            {dateObj.toLocaleDateString()}
+                                                                    </td>
+                                                                        <td style={{ 
+                                                                            padding: '15px', 
+                                                                            textAlign: 'center',
+                                                                            borderBottom: '1px solid rgba(255,255,255,0.05)'
+                                                                        }}>
+                                                                        <span style={{
+                                                                                padding: '5px 10px',
+                                                                                borderRadius: '20px',
+                                                                                fontSize: '12px',
+                                                                                background: referral.status === 'active' ? 'rgba(46, 204, 113, 0.15)' : 'rgba(255, 255, 255, 0.1)',
+                                                                                color: referral.status === 'active' ? '#2ecc71' : '#ddd'
+                                                                            }}>
+                                                                                {referral.status || 'active'}
                                                                         </span>
                                                                     </td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            )}
-                                            
-                                            {referralData?.commissions && referralData.commissions.length > 0 && (
-                                                <div style={{ marginTop: '30px' }}>
-                                                    <h4 style={{ marginBottom: '15px' }}>Commission History</h4>
-                                                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                                        <thead>
-                                                            <tr>
-                                                                <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#7A7A7A' }}>From</th>
-                                                                <th style={{ padding: '10px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#7A7A7A' }}>Date</th>
-                                                                <th style={{ padding: '10px', textAlign: 'right', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#7A7A7A' }}>Deposit</th>
-                                                                <th style={{ padding: '10px', textAlign: 'right', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#7A7A7A' }}>Commission</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {referralData.commissions.map((commission, index) => (
-                                                                <tr key={index}>
-                                                                    <td style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#ddd' }}>
-                                                                        {commission.fromUserId.substring(0, 8)}...
-                                                                    </td>
-                                                                    <td style={{ padding: '10px', textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#ddd' }}>
-                                                                        {commission.date ? new Date(commission.date.seconds * 1000).toLocaleDateString() : 'N/A'}
-                                                                    </td>
-                                                                    <td style={{ padding: '10px', textAlign: 'right', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#ddd' }}>
-                                                                        ${commission.depositAmount.toFixed(2)}
-                                                                    </td>
-                                                                    <td style={{ padding: '10px', textAlign: 'right', borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#0ECB81' }}>
-                                                                        ${commission.amount.toFixed(2)}
+                                                                        <td style={{ 
+                                                                            padding: '15px', 
+                                                                            textAlign: 'right',
+                                                                            borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                                                            fontWeight: 'bold',
+                                                                            color: '#FF9900'
+                                                                        }}>
+                                                                            1.00 RIPPLEX
                                                                     </td>
                                                                 </tr>
-                                                            ))}
+                                                                );
+                                                            })}
                                                         </tbody>
                                                     </table>
+                                                </ResponsiveTableWrapper>
+                                            ) : (
+                                                <div style={{ 
+                                                    padding: '40px 20px', 
+                                                    textAlign: 'center', 
+                                                    borderRadius: '8px', 
+                                                    background: 'rgba(255,255,255,0.03)',
+                                                    border: '1px dashed rgba(255,255,255,0.1)'
+                                                }}>
+                                                    <div style={{ fontSize: '18px', color: 'rgba(255,255,255,0.6)', marginBottom: '15px' }}>
+                                                        You haven't referred anyone yet
+                                                    </div>
+                                                    <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.4)', maxWidth: '500px', margin: '0 auto' }}>
+                                                        Share your referral link with friends and earn 1 RIPPLEX token for each successful signup!
+                                                    </p>
                                                 </div>
                                             )}
+                                        </ResponsiveCard>
+                                    </AnimatedBorder>
                                         </>
                                     )}
-                                </div>
+                        </ContentInnerContainer>
                             </TabPanel>
+
                             <TabPanel>
-                                <div className="content-inner api">
+                        <ContentInnerContainer className="content-inner api">
                                     <h4>Two-Factor Authentication {is2FAEnabled ? <span className="color-success">Enabled</span> : <span>Disabled</span>}</h4>
-                                    <p>
-                                    {is2FAEnabled ? 
-                                        "Two-factor authentication adds an extra layer of security to your account. To disable 2FA, you need to verify your email." : 
-                                        "Enable two-factor authentication to add an extra layer of security to your account."}
-                                    </p>
-
-                                    <div className="main">
-                                    <h6>{is2FAEnabled ? "Disable 2FA" : "Enable 2FA"}</h6>
-                                    <p>
-                                        Enter your email verification code to {is2FAEnabled ? "disable" : "enable"} 2FA
-                                    </p>
-
-                                    <div className="refe">
-                                        <div className="form-group">
-                                        <p>Verification Code</p>
-                                        <input
-                                            className="form-control"
-                                            type="text"
-                                            placeholder="6-digit code"
-                                            value={verificationCode}
-                                            onChange={(e) => setVerificationCode(e.target.value)}
-                                            maxLength={6}
-                                        />
+                            <ResponsiveCard>
+                                <p>
+                                    Two-factor authentication adds an extra layer of security to your account.
+                                    When enabled, you'll need to enter a verification code in addition to your password when logging in.
+                                </p>
+                                
+                                <div style={{ marginTop: '20px' }}>
                                         <button 
-                                            type="button"
+                                        onClick={handleToggle2FA} 
                                             className="btn-action"
-                                            onClick={sendTwoFactorVerificationCode}
-                                            disabled={loading}
-                                            style={{ marginTop: '10px' }}
-                                        >
-                                            {loading && !verificationCode ? "Sending..." : "Send Verification Code"}
+                                        style={{
+                                            background: is2FAEnabled ? '#dc3545' : '#0ECB81',
+                                            width: '100%',
+                                            maxWidth: '300px'
+                                        }}
+                                    >
+                                        {is2FAEnabled ? 'Disable 2FA' : 'Enable 2FA'}
                                         </button>
                                         </div>
-                                    </div>
-                                    <button 
-                                        type="button" 
-                                        className="btn-action"
-                                        onClick={handleToggle2FA}
-                                        disabled={loading || !verificationCode || verificationCode.length !== 6}
-                                    >
-                                        {loading && verificationCode ? "Processing..." : is2FAEnabled ? "Disable 2FA verification" : "Enable 2FA verification"}
-                                    </button>
-                                    </div>
-                                </div>
+                            </ResponsiveCard>
+                        </ContentInnerContainer>
                             </TabPanel>
+
                             <TabPanel>
-                                {isGoogleUser ? (
-                                    <div className="content-inner profile change-pass">
-                                        <h4>Password Change Not Available</h4>
-                                        <p style={{ marginTop: '20px', lineHeight: '1.6' }}>
-                                            Password change is not available for accounts that sign in with Google.
-                                            <br /><br />
-                                            To change your password, you need to update it through your Google account settings.
-                                        </p>
-                                    </div>
-                                ) : (
-                                <div className="content-inner profile change-pass">
+                        <ContentInnerContainer className="content-inner profile">
                                     <h4>Change Password</h4>
-                                        <h6>New Password</h6>
-                                        <form onSubmit={handlePasswordChange}>
+                            <ResponsiveCard>
+                                <ResponsiveForm onSubmit={handlePasswordChange}>
+                                    {error && <div className="alert alert-danger">{error}</div>}
+                                    {success && <div className="alert alert-success">{success}</div>}
+                                    
                                     <div className="form-group">
-                                        <div>
-                                                    <label>Current Password<span>*</span>:</label>
                                         <input
                                                         type="password"
                                             className="form-control"
+                                            placeholder="Current Password"
                                                         value={oldPassword}
                                                         onChange={(e) => setOldPassword(e.target.value)}
                                                         required
                                         />
                                         </div>
-                                                {is2FAEnabled && (
-                                        <div>
-                                                        <label>Verification Code<span>*</span>:</label>
-                                                        <input
-                                                            type="text"
-                                                            className="form-control"
-                                                            value={verificationCode}
-                                                            onChange={(e) => setVerificationCode(e.target.value)}
-                                                            placeholder="Enter verification code"
-                                                            required={is2FAEnabled}
-                                                        />
-                                                        <button 
-                                                            type="button"
-                                                            className="btn-action"
-                                                            onClick={sendTwoFactorVerificationCode}
-                                                            style={{ marginTop: '10px', padding: '8px 15px', fontSize: '13px' }}
-                                                        >
-                                                            Send Code
-                                                        </button>
-                                        </div>
-                                                )}
-                                    </div>
+                                    
                                     <div className="form-group">
-                                        <div>
-                                                    <label>New Password<span>*</span>:</label>
                                         <input
                                             type="password"
                                             className="form-control"
+                                            placeholder="New Password"
                                                         value={newPassword}
                                                         onChange={(e) => setNewPassword(e.target.value)}
-                                                        placeholder="New Password"
-                                                        minLength="6"
                                                         required
                                         />
                                         </div>
-                                        <div>
-                                                    <label>Confirm Password<span>*</span>:</label>
+                                    
+                                    <div className="form-group">
                                         <input
                                             type="password"
                                             className="form-control"
+                                            placeholder="Confirm New Password"
                                                         value={confirmPassword}
                                                         onChange={(e) => setConfirmPassword(e.target.value)}
-                                                        placeholder="Confirm Password"
-                                                        minLength="6"
                                                         required
                                         />
-                                        </div>
                                     </div>
                                             
-                                            {error && <div className="alert alert-danger">{error}</div>}
-                                            {success && <div className="alert alert-success">{success}</div>}
-                                            
-                                            <button type="submit" className="btn-action" disabled={loading}>
-                                                {loading ? "Processing..." : "Change Password"}
+                                    <button type="submit" className="btn-action">
+                                        Update Password
                                     </button>
-                                        </form>
-                                </div>
-                                )}
+                                </ResponsiveForm>
+                            </ResponsiveCard>
+                        </ContentInnerContainer>
                             </TabPanel>
-                        </Tabs> 
-                    </div>
-                </div>
-            </section>
+                </StyledTabs>
+            </ProfileSectionContainer>
 
-            <Sale01 />
-            
+            {/* ConvertModal remains the same */}
+            {showConvertModal && (
             <ConvertModal
-                isOpen={showConvertModal}
                 onClose={() => setShowConvertModal(false)}
-                balances={balances}
-                tokenPrices={tokenPrices}
                 onConvert={handleConvert}
+                    balances={balances}
+                    prices={tokenPrices}
             />
+            )}
             
+            <Sale01 />
         </div>
     );
 }

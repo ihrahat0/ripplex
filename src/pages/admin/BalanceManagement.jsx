@@ -4,6 +4,7 @@ import { db } from '../../firebase';
 import { collection, doc, getDoc, getDocs, updateDoc, query, where } from 'firebase/firestore';
 import styled from 'styled-components';
 import { toast } from 'react-hot-toast';
+import { DEFAULT_COINS } from '../../utils/constants';
 
 const Container = styled.div`
   padding: 20px;
@@ -147,26 +148,67 @@ const QuickCoinButtons = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 10px;
   margin-bottom: 15px;
 `;
 
-const QuickCoinButton = styled.button`
-  background: var(--bg1);
-  border: 1px solid var(--line);
+const QuickAmountButtons = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 15px;
+`;
+
+const CoinButton = styled.button`
+  padding: 8px 12px;
+  background: ${props => props.selected ? 'var(--primary)' : 'var(--bg1)'};
+  color: ${props => props.selected ? 'white' : 'var(--text)'};
+  border: 1px solid ${props => props.selected ? 'var(--primary)' : 'var(--line)'};
   border-radius: 4px;
-  padding: 5px 10px;
-  color: var(--text);
   cursor: pointer;
+  transition: all 0.2s;
   
   &:hover {
-    background: var(--primary);
-    color: white;
+    background: ${props => props.selected ? 'var(--primary)' : 'rgba(58, 91, 217, 0.1)'};
+    border-color: var(--primary);
+  }
+`;
+
+const AmountButton = styled.button`
+  padding: 6px 12px;
+  background-color: ${props => props.selected ? '#ff6b00' : '#333'};
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+  
+  &:hover {
+    background-color: ${props => props.selected ? '#ff8c00' : '#444'};
   }
 `;
 
 // Common coins for quick selection
 const COMMON_COINS = ['BTC', 'ETH', 'USDT', 'USDC', 'BNB', 'SOL', 'XRP', 'ADA', 'DOGE'];
+
+// Add quick amounts in your component
+const quickAmounts = [0.1, 0.5, 1, 5, 10, 50, 100];
+
+// Add definition for QuickCoinButton
+const QuickCoinButton = styled.button`
+  padding: 6px 12px;
+  background-color: ${props => props.selected ? '#ff6b00' : '#333'};
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+  
+  &:hover {
+    background-color: ${props => props.selected ? '#ff8c00' : '#444'};
+  }
+`;
 
 const UserSearch = () => {
   const { userId } = useParams(); // Get userId from URL parameters if available
@@ -442,32 +484,79 @@ const UserSearch = () => {
             )}
             
             {showEditForm && (
-              <div style={{ marginTop: '30px' }}>
-                <h3>Edit {editBalance.token.toUpperCase()} Balance</h3>
+              <UserCard>
+                <h3>{editBalance.operation === 'deposit' ? 'Add Deposit' : 'Set Balance'}</h3>
                 <form onSubmit={handleSubmitBalanceChange}>
                   <FormGroup>
-                    <Label htmlFor="balanceAmount">Amount</Label>
+                    <Label htmlFor="token">Select Token</Label>
                     <Input
-                      id="balanceAmount"
+                      id="token"
+                      as="select"
+                      value={editBalance.token}
+                      onChange={(e) => setEditBalance({...editBalance, token: e.target.value})}
+                      required
+                    >
+                      {Object.keys(DEFAULT_COINS || {}).map(coin => (
+                        <option key={coin} value={coin}>{coin}</option>
+                      ))}
+                    </Input>
+                    
+                    <QuickCoinButtons>
+                      {Object.keys(DEFAULT_COINS || {}).slice(0, 8).map(coin => (
+                        <CoinButton 
+                          key={coin} 
+                          type="button"
+                          selected={editBalance.token === coin}
+                          onClick={() => setEditBalance({...editBalance, token: coin})}
+                        >
+                          {coin}
+                        </CoinButton>
+                      ))}
+                    </QuickCoinButtons>
+                  </FormGroup>
+                  
+                  <FormGroup>
+                    <Label htmlFor="amount">
+                      {editBalance.operation === 'deposit' ? 'Deposit Amount' : 'New Balance'}
+                    </Label>
+                    <Input
+                      id="amount"
                       type="number"
-                      step="any"
+                      step="0.00000001"
                       value={editBalance.amount}
                       onChange={(e) => setEditBalance({...editBalance, amount: e.target.value})}
                       required
                     />
+                    
+                    {editBalance.operation === 'deposit' && (
+                      <QuickAmountButtons>
+                        {quickAmounts.map(amount => (
+                          <AmountButton 
+                            key={amount} 
+                            type="button"
+                            selected={parseFloat(editBalance.amount) === amount}
+                            onClick={() => setEditBalance({...editBalance, amount: amount})}
+                          >
+                            {amount}
+                          </AmountButton>
+                        ))}
+                      </QuickAmountButtons>
+                    )}
                   </FormGroup>
-                  <Button type="submit" disabled={loading}>
-                    {loading ? 'Updating...' : 'Update Balance'}
-                  </Button>
-                  <Button 
-                    type="button" 
-                    style={{ marginLeft: '10px', background: '#666' }} 
-                    onClick={() => setShowEditForm(false)}
-                  >
-                    Cancel
-                  </Button>
+                  
+                  {error && <ErrorMessage>{error}</ErrorMessage>}
+                  {success && <SuccessMessage>{success}</SuccessMessage>}
+                  
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <Button type="submit" disabled={loading}>
+                      {loading ? 'Processing...' : editBalance.operation === 'deposit' ? 'Add Deposit' : 'Update Balance'}
+                    </Button>
+                    <Button type="button" onClick={() => setShowEditForm(false)} style={{ background: 'var(--bg1)' }}>
+                      Cancel
+                    </Button>
+                  </div>
                 </form>
-              </div>
+              </UserCard>
             )}
             
             {/* Option to add a new balance */}
