@@ -1017,7 +1017,7 @@ const AllDeposits = () => {
       
       if (userDoc.exists()) {
         const userData = userDoc.data();
-        return {
+                return {
           ...deposit,
           userName: userData.displayName || userData.username || 'Unknown',
           userEmail: userData.email || 'No email'
@@ -1136,7 +1136,7 @@ const AllDeposits = () => {
     setSelectedDeposit(deposit);
     setShowDetailsModal(true);
   };
-  
+
   // Close details modal
   const closeDetailsModal = () => {
     setShowDetailsModal(false);
@@ -1151,7 +1151,7 @@ const AllDeposits = () => {
       timeRange: 'all'
     });
   };
-  
+
   if (loading) {
     return (
       <Container>

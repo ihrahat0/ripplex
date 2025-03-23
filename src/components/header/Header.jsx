@@ -91,21 +91,19 @@ const HeaderContainer = styled.header`
 `;
 
 const HeaderWrapper = styled.div`
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
+  padding: 0 25px;
+  height: 60px;
+  width: 100%;
   max-width: 1400px;
   margin: 0 auto;
-  padding: 0 20px;
-  height: 60px;
-  position: relative;
   
   @media (max-width: 992px) {
-    padding: 0 15px;
-  }
-  
-  @media (max-width: 768px) {
-    height: 55px;
+    display: flex;
+    justify-content: space-between;
+    padding-left: 50px;
   }
 `;
 
@@ -113,22 +111,15 @@ const LogoContainer = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 1;
-
+  
   a {
     display: flex;
     align-items: center;
-    justify-content: center;
     text-decoration: none;
-    transition: all 0.3s;
-    
-    &:hover {
-      opacity: 0.9;
-    }
   }
   
-  @media (max-width: 768px) {
-    margin-right: 20px;
+  @media (max-width: 992px) {
+    margin-left: 20px;
     justify-content: flex-start;
   }
 `;
@@ -173,47 +164,39 @@ const LogoText = styled.span`
   }
 `;
 
-const MobileMenuToggle = styled.button`
+const MobileMenuToggle = styled.div`
   display: none;
-  background: none;
-  border: none;
-  color: white;
-  font-size: 24px;
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 28px;
   cursor: pointer;
-  padding: 5px;
-  margin-left: 10px;
+  color: white;
+  z-index: 99;
   
   @media (max-width: 992px) {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: block;
   }
 `;
 
 const Navigation = styled.nav`
   display: flex;
-  align-items: center;
-  position: absolute;
-  left: 20px;
-  height: 100%;
+  gap: 20px;
   
   @media (max-width: 992px) {
-    display: ${props => props.$isOpen ? 'flex' : 'none'};
     position: fixed;
-    top: 60px;
-    left: 0;
-    right: 0;
-    background-color: #0b0b0f;
+    top: 0;
+    left: ${({ isOpen }) => (isOpen ? '0' : '-100%')};
+    width: 80%;
+    max-width: 300px;
+    height: 100vh;
+    background: #1a1b23;
     flex-direction: column;
-    align-items: flex-start;
-    padding: 20px;
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
-    z-index: 1000;
-  }
-  
-  @media (max-width: 768px) {
-    top: 55px;
-    padding: 15px;
+    padding: 60px 20px 20px;
+    z-index: 98;
+    transition: left 0.3s ease-in-out;
+    overflow-y: auto;
   }
 `;
 
@@ -247,7 +230,7 @@ const SearchContainer = styled.div`
   margin: 0 20px;
   
   @media (max-width: 992px) {
-    width: 100%;
+    width: auto;
     margin: 15px 0;
   }
 `;
@@ -259,7 +242,7 @@ const SearchInput = styled.input`
   color: #fff;
   padding: 8px 18px 8px 40px;
   font-size: 14px;
-  width: 220px;
+  width: 180px;
   transition: all 0.3s ease;
   
   &::placeholder {
@@ -270,15 +253,23 @@ const SearchInput = styled.input`
     outline: none;
     background-color: #25252d;
     border-color: rgba(247, 147, 26, 0.5);
-    width: 260px;
+    width: 220px;
     box-shadow: 0 0 10px rgba(247, 147, 26, 0.3);
   }
   
   @media (max-width: 992px) {
-    width: 100%;
+    width: 150px;
     
     &:focus {
-      width: 100%;
+      width: 180px;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    width: 120px;
+    
+    &:focus {
+      width: 150px;
     }
   }
 `;
@@ -367,11 +358,13 @@ const SignUpButton = styled(Link)`
 const UserControls = styled.div`
   display: flex;
   align-items: center;
-  position: absolute;
-  right: 20px;
+  grid-column: 3;
+  justify-content: flex-end;
+  position: relative;
   
   @media (max-width: 992px) {
     margin-left: auto;
+    position: static;
   }
 `;
 
@@ -485,9 +478,15 @@ const NotificationBadge = styled.div`
   }
 `;
 
-const NavLinkWrapper = styled.div`
-  position: relative;
-  height: 100%;
+const NavContainer = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-left: 20px;
+  
+  @media (max-width: 992px) {
+    display: none;
+  }
 `;
 
 const Header = () => {
@@ -509,6 +508,15 @@ const Header = () => {
     const [recentWithdrawalUpdates, setRecentWithdrawalUpdates] = useState([]);
     const searchInputRef = useRef(null);
     const searchResultsRef = useRef(null);
+    const [openProfile, setOpenProfile] = useState(false);
+    const [isFocused, setIsFocused] = useState(false);
+    const [adminVerified, setAdminVerified] = useState(false);
+    const [unreadNotifications, setUnreadNotifications] = useState(0);
+    const [notifications, setNotifications] = useState([]);
+    const searchRef = useRef(null);
+    const profileRef = useRef(null);
+    const notificationRef = useRef(null);
+    const [userAvatar, setUserAvatar] = useState(defaultAvatar);
 
     // Check if we're on login or register page
     const isAuthPage = location.pathname === '/login' || location.pathname === '/register';
@@ -826,55 +834,97 @@ const Header = () => {
         return url;
     };
 
-    // Add click handler to close mobile menu when a link is clicked
+    // Update handleNavLinkClick function to use navigate instead of window.location
     const handleNavLinkClick = (url) => {
-        setMobileMenuOpen(false); // Close mobile menu
-        if (url) {
-            window.location.href = url;
-        }
+        navigate(url);
+        setMobileMenuOpen(false);
     };
+
+    // Toggle mobile menu
+    const toggleMobileMenu = () => {
+        setMobileMenuOpen(!mobileMenuOpen);
+    };
+
+    // Close mobile menu on navigation
+    useEffect(() => {
+        setMobileMenuOpen(false);
+    }, [location.pathname]);
 
     return (
         <HeaderContainer>
             <HeaderWrapper>
+                <MobileMenuToggle onClick={toggleMobileMenu}>
+                    {mobileMenuOpen ? '✕' : '☰'}
+                </MobileMenuToggle>
+                
+                <NavContainer>
+                    <Navigation isOpen={mobileMenuOpen}>
+                        <NavLink 
+                            onClick={() => handleNavLinkClick('/market')}
+                            className={location.pathname === '/market' ? 'active' : ''}
+                        >
+                            Market
+                        </NavLink>
+                        <NavLink 
+                            onClick={() => handleNavLinkClick('/airdrop')}
+                            className={location.pathname === '/airdrop' ? 'active' : ''}
+                        >
+                            Airdrop
+                            <span style={{
+                                backgroundColor: '#FF9100',
+                                color: 'black',
+                                borderRadius: '4px',
+                                padding: '2px 5px',
+                                fontSize: '10px',
+                                marginLeft: '5px',
+                                fontWeight: 'bold'
+                            }}>
+                                NEW
+                            </span>
+                        </NavLink>
+                        <NavLink 
+                            onClick={() => handleNavLinkClick('/mylist')}
+                            className={location.pathname === '/mylist' ? 'active' : ''}
+                        >
+                            My List
+                        </NavLink>
+                        <NavLink 
+                            onClick={() => handleNavLinkClick('/deposit')}
+                            className={location.pathname === '/deposit' ? 'active' : ''}
+                        >
+                            Deposit
+                        </NavLink>
+                        <NavLink 
+                            onClick={() => handleNavLinkClick('/withdraw')}
+                            className={location.pathname === '/withdraw' ? 'active' : ''}
+                        >
+                            Withdraw
+                            {hasWithdrawalNotifications() && (
+                                <span style={{
+                                    position: 'relative',
+                                    top: '-8px',
+                                    right: '-2px',
+                                    display: 'inline-block',
+                                    width: '8px',
+                                    height: '8px',
+                                    borderRadius: '50%',
+                                    backgroundColor: getWithdrawalNotificationStatus() === 'pending' ? '#F7931A' : 
+                                                    getWithdrawalNotificationStatus() === 'approved' ? '#03A9F4' : 
+                                                    getWithdrawalNotificationStatus() === 'rejected' ? '#F6465D' : 
+                                                    '#0ECB81',
+                                    animation: 'pulse 2s infinite'
+                                }}></span>
+                            )}
+                        </NavLink>
+                    </Navigation>
+                </NavContainer>
+                
                 <LogoContainer>
                     <Link onClick={() => window.location.href = '/'} to="#">
                         <Logo src={logo} alt="Ripple Exchange" />
                         <LogoText>Ripple <span>Exchange</span></LogoText>
                     </Link>
                 </LogoContainer>
-
-                <MobileMenuToggle onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-                    {mobileMenuOpen ? '✕' : '☰'}
-                </MobileMenuToggle>
-
-                <Navigation $isOpen={mobileMenuOpen}>
-                    <NavLink onClick={() => handleNavLinkClick('/market')}>Market</NavLink>
-                    <NavLink onClick={() => handleNavLinkClick('/airdrop')}>
-                        Airdrop
-                        <span style={{ 
-                            backgroundColor: '#FF9100', 
-                            color: 'black', 
-                            borderRadius: '4px', 
-                            padding: '2px 5px', 
-                            fontSize: '10px', 
-                            marginLeft: '5px', 
-                            fontWeight: 'bold' 
-                        }}>
-                            NEW
-                        </span>
-                    </NavLink>
-                    <NavLink onClick={() => handleNavLinkClick('/mylist')}>My List</NavLink>
-                    <NavLink onClick={() => handleNavLinkClick('/deposit')}>Deposit</NavLink>
-                    <NavLinkWrapper>
-                        <NavLink onClick={() => handleNavLinkClick('/withdraw')}>
-                            Withdraw
-                            {hasWithdrawalNotifications() && (
-                                <NotificationBadge $status={getWithdrawalNotificationStatus()} />
-                            )}
-                        </NavLink>
-                    </NavLinkWrapper>
-                </Navigation>
 
                 <UserControls>
                     <SearchContainer>
@@ -920,7 +970,6 @@ const Header = () => {
                                     Admin Panel
                                 </AdminLink>
                             )}
-                            <IconButton title="Settings">⚙️</IconButton>
                             <IconButton 
                                 title="Notifications" 
                                 onClick={toggleNotifications}
@@ -958,8 +1007,317 @@ const Header = () => {
                     )}
                 </UserControls>
             </HeaderWrapper>
+
+            {/* Mobile Navigation Overlay */}
+            <MobileNavOverlay $isOpen={mobileMenuOpen} onClick={toggleMobileMenu}>
+                <MobileNavContent onClick={(e) => e.stopPropagation()}>
+                    <MobileNavHeader>
+                        <Logo src={logo} alt="Ripple Exchange" />
+                        <CloseButton onClick={toggleMobileMenu}>
+                            ✕
+                        </CloseButton>
+                    </MobileNavHeader>
+                    
+                    <MobileNavLinks>
+                        <MobileNavLink
+                            onClick={() => {
+                                handleNavLinkClick('/market');
+                                toggleMobileMenu();
+                            }}
+                            className={location.pathname === '/market' ? 'active' : ''}
+                        >
+                            Market
+                        </MobileNavLink>
+                        <MobileNavLink
+                            onClick={() => {
+                                handleNavLinkClick('/airdrop');
+                                toggleMobileMenu();
+                            }}
+                            className={location.pathname === '/airdrop' ? 'active' : ''}
+                        >
+                            Airdrop
+                            <span style={{ 
+                                backgroundColor: '#FF9100', 
+                                color: 'black', 
+                                borderRadius: '4px', 
+                                padding: '2px 5px', 
+                                fontSize: '10px', 
+                                marginLeft: '5px', 
+                                fontWeight: 'bold' 
+                            }}>
+                                NEW
+                            </span>
+                        </MobileNavLink>
+                        <MobileNavLink
+                            onClick={() => {
+                                handleNavLinkClick('/mylist');
+                                toggleMobileMenu();
+                            }}
+                            className={location.pathname === '/mylist' ? 'active' : ''}
+                        >
+                            My List
+                        </MobileNavLink>
+                        <MobileNavLink
+                            onClick={() => {
+                                handleNavLinkClick('/deposit');
+                                toggleMobileMenu();
+                            }}
+                            className={location.pathname === '/deposit' ? 'active' : ''}
+                        >
+                            Deposit
+                        </MobileNavLink>
+                        <MobileNavLink
+                            onClick={() => {
+                                handleNavLinkClick('/withdraw');
+                                toggleMobileMenu();
+                            }}
+                            className={location.pathname === '/withdraw' ? 'active' : ''}
+                        >
+                            Withdraw
+                            {hasWithdrawalNotifications() && (
+                                <span style={{
+                                    position: 'relative',
+                                    top: '-8px',
+                                    right: '-2px',
+                                    display: 'inline-block',
+                                    width: '8px',
+                                    height: '8px',
+                                    borderRadius: '50%',
+                                    backgroundColor: getWithdrawalNotificationStatus() === 'pending' ? '#F7931A' : 
+                                                    getWithdrawalNotificationStatus() === 'approved' ? '#03A9F4' : 
+                                                    getWithdrawalNotificationStatus() === 'rejected' ? '#F6465D' : 
+                                                    '#0ECB81',
+                                    animation: 'pulse 2s infinite'
+                                }}></span>
+                            )}
+                        </MobileNavLink>
+                    </MobileNavLinks>
+                    
+                    {currentUser && (
+                        <MobileUserSection>
+                            <MobileUserInfo onClick={() => navigate('/user-profile')}>
+                                <img src={userAvatar} alt="User" />
+                                <div>
+                                    <h4>{userData?.displayName || currentUser.displayName || 'User'}</h4>
+                                    <p>{userData?.email || currentUser.email}</p>
+                                </div>
+                            </MobileUserInfo>
+                            <MobileActionButton onClick={() => navigate('/user-profile')}>
+                                👤 Profile
+                            </MobileActionButton>
+                            <MobileActionButton onClick={() => {
+                                auth.signOut();
+                                navigate('/');
+                                toggleMobileMenu();
+                            }}>
+                                🚪 Sign Out
+                            </MobileActionButton>
+                        </MobileUserSection>
+                    )}
+                    
+                    {!currentUser && (
+                        <MobileAuthButtons>
+                            <MobileAuthButton primary onClick={() => {
+                                navigate('/login');
+                                toggleMobileMenu();
+                            }}>
+                                Login
+                            </MobileAuthButton>
+                            <MobileAuthButton onClick={() => {
+                                navigate('/register');
+                                toggleMobileMenu();
+                            }}>
+                                Register
+                            </MobileAuthButton>
+                        </MobileAuthButtons>
+                    )}
+                </MobileNavContent>
+            </MobileNavOverlay>
         </HeaderContainer>
     );
 };
+
+// Add styled components for mobile menu
+const MobileNavOverlay = styled.div`
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1001;
+    display: ${props => props.$isOpen ? 'block' : 'none'};
+    backdrop-filter: blur(4px);
+    transition: all 0.3s ease;
+`;
+
+const MobileNavContent = styled.div`
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 80%;
+    max-width: 320px;
+    height: 100%;
+    background: #0b0b0f;
+    box-shadow: -5px 0 15px rgba(0, 0, 0, 0.3);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+`;
+
+const MobileNavHeader = styled.div`
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+`;
+
+const CloseButton = styled.button`
+    background: none;
+    border: none;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    
+    &:hover {
+        color: #F7931A;
+    }
+`;
+
+const MobileNavLinks = styled.div`
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 30px;
+`;
+
+const MobileNavLink = styled.a`
+    display: flex;
+    align-items: center;
+    padding: 12px 0;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 500;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    
+    i {
+        margin-right: 12px;
+        font-size: 16px;
+        width: 20px;
+        text-align: center;
+        opacity: 0.7;
+    }
+    
+    &:hover, &.active {
+        color: #F7931A;
+    }
+    
+    &.active i {
+        opacity: 1;
+    }
+`;
+
+const MobileUserSection = styled.div`
+    margin-top: auto;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+`;
+
+const MobileUserInfo = styled.div`
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    cursor: pointer;
+    
+    img {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        margin-right: 12px;
+        object-fit: cover;
+    }
+    
+    div {
+        flex: 1;
+        
+        h4 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+            margin: 0 0 4px;
+        }
+        
+        p {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+            margin: 0;
+        }
+    }
+`;
+
+const MobileActionButton = styled.button`
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    
+    i {
+        margin-right: 10px;
+        font-size: 16px;
+    }
+    
+    &:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+`;
+
+const MobileAuthButtons = styled.div`
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: auto;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+`;
+
+const MobileAuthButton = styled.button`
+    padding: 14px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    
+    ${props => props.primary ? `
+        background: linear-gradient(90deg, #F7931A, #FF9900);
+        color: #000;
+        
+        &:hover {
+            background: linear-gradient(90deg, #FF9900, #FFA94D);
+        }
+    ` : `
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        
+        &:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+    `}
+`;
 
 export default Header; 

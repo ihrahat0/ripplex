@@ -1070,6 +1070,120 @@ const ShineEffect = styled.div`
   }
 `;
 
+// Improve the CryptoSelectContainer styling for better icon display
+const CryptoSelectContainer = styled.div`
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 20px;
+    
+    @media (max-width: 480px) {
+        grid-template-columns: repeat(2, 1fr);
+    }
+`;
+
+// Enhance the CryptoOption styling for better icon display
+const CryptoOption = styled.div`
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 16px 10px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+    
+    img {
+        width: 40px;
+        height: 40px;
+        margin-bottom: 12px;
+        border-radius: 50%;
+        object-fit: contain;
+        background-color: rgba(0, 0, 0, 0.2);
+        padding: 5px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    span {
+        font-size: 14px;
+        font-weight: 500;
+        color: #fff;
+    }
+    
+    &:hover {
+        background: rgba(255, 255, 255, 0.1);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    }
+`;
+
+// Define a high z-index Modal component
+const Modal = ({ isOpen, onClose, children }) => {
+    if (!isOpen) return null;
+    
+    useEffect(() => {
+        // Prevent body scrolling when modal is open
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = 'auto';
+        };
+    }, []);
+    
+    return (
+        <div
+            style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                backdropFilter: 'blur(4px)',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                zIndex: 99999,
+            }}
+            onClick={onClose}
+        >
+            <div
+                style={{
+                    backgroundColor: '#1a1b23',
+                    borderRadius: '16px',
+                    width: '90%',
+                    maxWidth: '480px',
+                    padding: '24px',
+                    position: 'relative',
+                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    maxHeight: '90vh',
+                    overflowY: 'auto',
+                }}
+                onClick={e => e.stopPropagation()}
+            >
+                <button
+                    style={{
+                        position: 'absolute',
+                        top: '16px',
+                        right: '16px',
+                        background: 'none',
+                        border: 'none',
+                        color: 'rgba(255, 255, 255, 0.6)',
+                        fontSize: '24px',
+                        cursor: 'pointer',
+                    }}
+                    onClick={onClose}
+                >
+                    &times;
+                </button>
+                {children}
+            </div>
+        </div>
+    );
+};
+
 function UserProfile(props) {
     const navigate = useNavigate();
     const [userData, setUserData] = useState({});
@@ -1178,6 +1292,10 @@ function UserProfile(props) {
     const [referralData, setReferralData] = useState(null);
     const [loadingReferrals, setLoadingReferrals] = useState(true);
     const [copySuccess, setCopySuccess] = useState('');
+
+    // Add these state hooks at the top level of your component (with other useState declarations)
+    const [showDepositModal, setShowDepositModal] = useState(false);
+    const [showWithdrawModal, setShowWithdrawModal] = useState(false);
 
     const calculateTotalBalance = useMemo(() => {
         return Object.entries(balances).reduce((total, [asset, balance]) => {
@@ -2402,14 +2520,223 @@ function UserProfile(props) {
             <ActionButton onClick={() => setShowConvertModal(true)}>
                 Convert
             </ActionButton>
-            <ActionButton>
+            <ActionButton onClick={() => setShowDepositModal(true)}>
                 Deposit
             </ActionButton>
-            <ActionButton>
+            <ActionButton onClick={() => setShowWithdrawModal(true)}>
                 Withdraw
             </ActionButton>
+            
+            {/* Deposit Modal */}
+            {showDepositModal && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                    backdropFilter: 'blur(5px)',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    zIndex: 999999,
+                }} onClick={() => setShowDepositModal(false)}>
+                    <div style={{
+                        backgroundColor: '#1a1b23',
+                        borderRadius: '16px',
+                        width: '90%',
+                        maxWidth: '480px',
+                        padding: '24px',
+                        position: 'relative',
+                        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        maxHeight: '90vh',
+                        overflowY: 'auto',
+                    }} onClick={e => e.stopPropagation()}>
+                        <button style={{
+                            position: 'absolute',
+                            top: '16px',
+                            right: '16px',
+                            background: 'none',
+                            border: 'none',
+                            color: 'rgba(255, 255, 255, 0.6)',
+                            fontSize: '24px',
+                            cursor: 'pointer',
+                        }} onClick={() => setShowDepositModal(false)}>
+                            &times;
+                        </button>
+                        <h3 style={{ fontSize: '22px', marginBottom: '16px', color: '#fff', fontWeight: 'bold' }}>Deposit Funds</h3>
+                        <p style={{ color: 'rgba(255, 255, 255, 0.7)', marginBottom: '20px' }}>Select a cryptocurrency to deposit:</p>
+                        <div style={{ 
+                            display: 'grid', 
+                            gridTemplateColumns: 'repeat(3, 1fr)', 
+                            gap: '16px',
+                            marginTop: '20px' 
+                        }}>
+                            {Object.keys(COIN_LOGOS).map(coin => (
+                                <div 
+                                    key={coin} 
+                                    onClick={() => handleDeposit(coin)}
+                                    style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        background: 'rgba(255, 255, 255, 0.05)',
+                                        padding: '16px 10px',
+                                        borderRadius: '12px',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease',
+                                        textAlign: 'center',
+                                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                                        "&:hover": {
+                                            background: 'rgba(255, 255, 255, 0.1)',
+                                            transform: 'translateY(-2px)'
+                                        }
+                                    }}
+                                >
+                                    <img 
+                                        src={COIN_LOGOS[coin]} 
+                                        alt={coin}
+                                        style={{
+                                            width: '40px',
+                                            height: '40px',
+                                            marginBottom: '12px',
+                                            borderRadius: '50%',
+                                            objectFit: 'contain',
+                                            backgroundColor: 'rgba(0, 0, 0, 0.2)',
+                                            padding: '5px',
+                                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)'
+                                        }}
+                                        onError={(e) => {
+                                            e.target.onerror = null;
+                                            e.target.src = `https://coinicons-api.vercel.app/api/icon/${coin.toLowerCase()}`;
+                                        }}
+                                    />
+                                    <span style={{
+                                        fontSize: '14px',
+                                        fontWeight: '500',
+                                        color: '#fff'
+                                    }}>{coin}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {/* Withdraw Modal */}
+            {showWithdrawModal && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                    backdropFilter: 'blur(5px)',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    zIndex: 999999,
+                }} onClick={() => setShowWithdrawModal(false)}>
+                    <div style={{
+                        backgroundColor: '#1a1b23',
+                        borderRadius: '16px',
+                        width: '90%',
+                        maxWidth: '480px',
+                        padding: '24px',
+                        position: 'relative',
+                        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        maxHeight: '90vh',
+                        overflowY: 'auto',
+                    }} onClick={e => e.stopPropagation()}>
+                        <button style={{
+                            position: 'absolute',
+                            top: '16px',
+                            right: '16px',
+                            background: 'none',
+                            border: 'none',
+                            color: 'rgba(255, 255, 255, 0.6)',
+                            fontSize: '24px',
+                            cursor: 'pointer',
+                        }} onClick={() => setShowWithdrawModal(false)}>
+                            &times;
+                        </button>
+                        <h3 style={{ fontSize: '22px', marginBottom: '16px', color: '#fff', fontWeight: 'bold' }}>Withdraw Funds</h3>
+                        <p style={{ color: 'rgba(255, 255, 255, 0.7)', marginBottom: '20px' }}>Select a cryptocurrency to withdraw:</p>
+                        <div style={{ 
+                            display: 'grid', 
+                            gridTemplateColumns: 'repeat(3, 1fr)', 
+                            gap: '16px',
+                            marginTop: '20px' 
+                        }}>
+                            {Object.keys(COIN_LOGOS).map(coin => (
+                                <div 
+                                    key={coin} 
+                                    onClick={() => handleWithdraw(coin)}
+                                    style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        background: 'rgba(255, 255, 255, 0.05)',
+                                        padding: '16px 10px',
+                                        borderRadius: '12px',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease',
+                                        textAlign: 'center',
+                                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                                        "&:hover": {
+                                            background: 'rgba(255, 255, 255, 0.1)',
+                                            transform: 'translateY(-2px)'
+                                        }
+                                    }}
+                                >
+                                    <img 
+                                        src={COIN_LOGOS[coin]} 
+                                        alt={coin}
+                                        style={{
+                                            width: '40px',
+                                            height: '40px',
+                                            marginBottom: '12px',
+                                            borderRadius: '50%',
+                                            objectFit: 'contain',
+                                            backgroundColor: 'rgba(0, 0, 0, 0.2)',
+                                            padding: '5px',
+                                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)'
+                                        }}
+                                        onError={(e) => {
+                                            e.target.onerror = null;
+                                            e.target.src = `https://coinicons-api.vercel.app/api/icon/${coin.toLowerCase()}`;
+                                        }}
+                                    />
+                                    <span style={{
+                                        fontSize: '14px',
+                                        fontWeight: '500',
+                                        color: '#fff'
+                                    }}>{coin}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
         </BalanceActionsContainer>
     );
+
+    // Add handler functions for deposit and withdraw
+    const handleDeposit = (coin) => {
+        // Navigate to the deposit page with the selected coin
+        navigate(`/deposit?coin=${coin}`);
+    };
+
+    const handleWithdraw = (coin) => {
+        // Navigate to the withdraw page with the selected coin
+        navigate(`/withdraw?coin=${coin}`);
+    };
 
     return (
         <div>
