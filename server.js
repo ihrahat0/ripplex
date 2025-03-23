@@ -476,6 +476,31 @@ app.post('/api/admin/scan-blockchain-deposits', async (req, res) => {
 // Mount API router first - all API routes go through this
 app.use('/api', apiRouter);
 
+// Also add direct access to send-verification-code as a fallback
+app.options('/send-verification-code', cors(corsOptions));
+app.post('/send-verification-code', cors(corsOptions), async (req, res) => {
+  console.log('Direct endpoint access for verification code, redirecting to API route');
+  
+  try {
+    // Forward to the actual API endpoint
+    const { email, code } = req.body;
+    const result = await emailService.sendVerificationEmail(email, code || null);
+    
+    if (result.success) {
+      return res.json({ success: true, message: 'Verification code sent successfully' });
+    } else {
+      console.error('Email service error in direct endpoint:', result.error);
+      return res.status(500).json({ success: false, error: result.error || 'Failed to send verification code' });
+    }
+  } catch (error) {
+    console.error('Error in direct verification endpoint:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: `Internal server error: ${error.message}` 
+    });
+  }
+});
+
 // Serve static files from build directory with proper MIME types
 app.use(express.static(path.join(__dirname, 'build'), {
   setHeaders: (res, filePath) => {

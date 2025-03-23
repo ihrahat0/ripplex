@@ -31,7 +31,7 @@ Register.propTypes = {
 };
 
 // Base API URL for server requests
-const API_BASE_URL = process.env.REACT_APP_API_URL || '';
+const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
 
 function Register(props) {
     const { signup } = useAuth();
@@ -457,9 +457,13 @@ function Register(props) {
             
             // Send verification email via server API
             try {
-                const response = await axios.post('/send-verification-code', { 
+                const response = await axios.post(`${API_BASE_URL}/send-verification-code`, { 
                     email,
                     code: newOtp
+                }, {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
                 });
                 
                 if (response.data.success) {
@@ -538,14 +542,22 @@ function Register(props) {
 
     const handleSendVerificationCode = async () => {
         try {
-            const response = await axios.post('/send-verification-code', { email });
+            const response = await axios.post(`${API_BASE_URL}/send-verification-code`, { 
+                email,
+                code: generateOTP()
+            }, {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
             if (response.data.success) {
                 // Just show a message to check email
                 setVerificationSent(true);
                 // Code will be entered by user from their email
             }
         } catch (error) {
-            // ...
+            console.error('Error sending verification code:', error);
+            setError(error.response?.data?.error || 'Failed to send verification code');
         }
     };
 

@@ -18241,3 +18241,24 @@ Caused by: Error
 [2025-03-23T11:11:53.084Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
 [2025-03-23T11:11:53.815Z] Running blockchain deposit check at 3/23/2025, 5:11:53 PM
 [2025-03-23T11:12:01.255Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:13:42.860Z] Running blockchain deposit check at 3/23/2025, 5:13:42 PM
+[2025-03-23T11:13:50.326Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:13:53.815Z] Running blockchain deposit check at 3/23/2025, 5:13:53 PM
+[2025-03-23T11:14:03.122Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:15:42.872Z] Running blockchain deposit check at 3/23/2025, 5:15:42 PM
+[2025-03-23T11:15:50.607Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:15:53.814Z] Running blockchain deposit check at 3/23/2025, 5:15:53 PM
+[2025-03-23T11:16:04.183Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:17:42.866Z] Running blockchain deposit check at 3/23/2025, 5:17:42 PM
+[2025-03-23T11:17:50.710Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:17:53.814Z] Running blockchain deposit check at 3/23/2025, 5:17:53 PM
+[2025-03-23T11:18:01.482Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:19:42.861Z] Running blockchain deposit check at 3/23/2025, 5:19:42 PM
+[2025-03-23T11:19:51.921Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:19:53.816Z] Running blockchain deposit check at 3/23/2025, 5:19:53 PM
+[2025-03-23T11:20:01.218Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:20:20.764Z] Loaded alternative service account key
+[2025-03-23T11:20:20.793Z] Firebase initialized
+[2025-03-23T11:20:20.794Z] Starting blockchain deposit scanner with check interval of 120 seconds
+[2025-03-23T11:20:20.832Z] Running blockchain deposit check at 3/23/2025, 5:20:20 PM
+[2025-03-23T11:20:30.896Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
