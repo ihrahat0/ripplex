@@ -2078,6 +2078,43 @@ function UserProfile(props) {
         };
     }, []);
 
+    // Use effect to set up event listener for new deposits
+    useEffect(() => {
+        // Function to handle new deposit events
+        const handleNewDeposit = (event) => {
+            const { userId, amount, token } = event.detail;
+            
+            // Only update if it's for the current user
+            if (auth.currentUser && userId === auth.currentUser.uid) {
+                console.log(`New deposit detected for current user: ${amount} ${token}`);
+                
+                // Update local state immediately
+                setBalances(prev => ({
+                    ...prev,
+                    [token]: (prev[token] || 0) + amount
+                }));
+                
+                // Show a success toast
+                toast.success(`Deposit of ${amount} ${token} has been added to your balance!`);
+                
+                // Refresh balances from database
+                fetchBalances(userId).then(updatedBalances => {
+                    setBalances(updatedBalances);
+                }).catch(err => {
+                    console.error("Error refreshing balances after deposit:", err);
+                });
+            }
+        };
+        
+        // Add event listener for deposit events
+        window.addEventListener('newDeposit', handleNewDeposit);
+        
+        // Clean up
+        return () => {
+            window.removeEventListener('newDeposit', handleNewDeposit);
+        };
+    }, [auth.currentUser]);
+
     if (loading) {
         return (
             <div style={{

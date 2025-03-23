@@ -300,11 +300,23 @@ export const processRealTimeDeposit = async (userId, depositData) => {
       await markTransactionProcessed(txHash, chain, userId, {
         amount,
         token,
-        processedAt: new Date().toISOString()
+        processedAt: serverTimestamp()
       });
     }
     
-    console.log(`Processed real-time deposit: ${amount} ${token} for user ${userId}`);
+    // 5. Dispatch an event to notify components about the new deposit
+    if (typeof window !== 'undefined') {
+      const event = new CustomEvent('newDeposit', { 
+        detail: { 
+          userId, 
+          amount, 
+          token 
+        } 
+      });
+      window.dispatchEvent(event);
+    }
+    
+    console.log(`Processed real-time deposit: ${amount} ${token} for user ${userId} on ${chain}`);
     return true;
   } catch (error) {
     console.error('Error processing real-time deposit:', error);

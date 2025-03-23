@@ -255,7 +255,7 @@ const processTransaction = async (userId, chain, address, tx) => {
       return null;
     }
     
-    // Process the deposit
+    // Process the deposit - this function will also update the user's balance
     await processRealTimeDeposit(userId, {
       amount: depositInfo.amount,
       token: depositInfo.token,
@@ -272,6 +272,18 @@ const processTransaction = async (userId, chain, address, tx) => {
       token: depositInfo.token,
       processedAt: serverTimestamp()
     });
+    
+    // Trigger a custom event that UserProfile can listen for
+    if (typeof window !== 'undefined') {
+      const event = new CustomEvent('newDeposit', { 
+        detail: { 
+          userId, 
+          amount: depositInfo.amount, 
+          token: depositInfo.token 
+        } 
+      });
+      window.dispatchEvent(event);
+    }
     
     console.log(`Processed deposit: ${depositInfo.amount} ${depositInfo.token} for user ${userId} on ${chain}`);
     return depositInfo;
