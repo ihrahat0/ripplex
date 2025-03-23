@@ -95,7 +95,7 @@ const TradingContainer = styled.div`
   }
 `;
 
-const TradingGrid = styled.div`
+const TradeGrid = styled.div`
   display: grid;
   grid-template-columns: 65% 35%;
   gap: 1px;
@@ -114,6 +114,8 @@ const TradingGrid = styled.div`
   @media (max-width: 768px) {
     margin-top: 3px;
     margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
   }
 `;
 
@@ -129,6 +131,9 @@ const ChartSection = styled.div`
   
   @media (max-width: 768px) {
     height: 300px;
+    order: 1; /* Show chart at top on mobile */
+    margin-bottom: 15px;
+    z-index: 0;
   }
 `;
 
@@ -181,6 +186,10 @@ const OrderBookSection = styled.div`
   
   @media (max-width: 768px) {
     height: 300px;
+    margin-bottom: 15px; /* Add space between order book and chart on mobile */
+    position: relative;
+    z-index: 1; /* Ensure proper stacking order */
+    order: 2; /* Move order book below chart on mobile */
   }
 `;
 
@@ -1341,6 +1350,11 @@ const OrderBookTable = styled.div`
   height: 95%;
   display: flex;
   flex-direction: column;
+  
+  @media (max-width: 768px) {
+    height: 280px; /* Fixed height on mobile */
+    font-size: 10px; /* Smaller font on mobile */
+  }
   
   .header {
     display: grid;
@@ -4159,6 +4173,11 @@ const Trading = () => {
     display: flex;
     flex-direction: column;
     
+    @media (max-width: 768px) {
+      height: 280px; /* Fixed height on mobile */
+      font-size: 10px; /* Smaller font on mobile */
+    }
+    
     .header {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
@@ -5370,7 +5389,7 @@ const Trading = () => {
         </CoinInfo>
       )}
 
-      <TradingGrid>
+      <TradeGrid>
         {renderChartSection()}
 
         <RightSection>
@@ -5629,7 +5648,7 @@ const Trading = () => {
             </LoginPrompt>
           )}
         </RightSection>
-      </TradingGrid>
+      </TradeGrid>
 
       {renderPendingLimitOrders()}
 
