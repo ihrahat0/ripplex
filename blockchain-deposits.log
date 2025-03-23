@@ -18262,3 +18262,15 @@ Caused by: Error
 [2025-03-23T11:20:20.794Z] Starting blockchain deposit scanner with check interval of 120 seconds
 [2025-03-23T11:20:20.832Z] Running blockchain deposit check at 3/23/2025, 5:20:20 PM
 [2025-03-23T11:20:30.896Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:21:42.864Z] Running blockchain deposit check at 3/23/2025, 5:21:42 PM
+[2025-03-23T11:21:48.726Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:21:53.818Z] Running blockchain deposit check at 3/23/2025, 5:21:53 PM
+[2025-03-23T11:22:01.415Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:22:20.836Z] Running blockchain deposit check at 3/23/2025, 5:22:20 PM
+[2025-03-23T11:22:31.910Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:23:42.870Z] Running blockchain deposit check at 3/23/2025, 5:23:42 PM
+[2025-03-23T11:23:53.077Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:23:53.820Z] Running blockchain deposit check at 3/23/2025, 5:23:53 PM
+[2025-03-23T11:24:00.461Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:24:20.837Z] Running blockchain deposit check at 3/23/2025, 5:24:20 PM
+[2025-03-23T11:24:27.596Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
