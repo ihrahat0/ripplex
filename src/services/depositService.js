@@ -260,6 +260,8 @@ export const processRealTimeDeposit = async (userId, depositData) => {
   try {
     const { amount, token, chain, txHash, fromAddress, toAddress, isRealDeposit } = depositData;
     
+    console.log(`Processing deposit: ${amount} ${token} for user ${userId} on ${chain}`);
+    
     // Check if this transaction has already been processed to prevent double-funding
     if (txHash) {
       const alreadyProcessed = await isTransactionProcessed(txHash, chain);
@@ -268,6 +270,24 @@ export const processRealTimeDeposit = async (userId, depositData) => {
         return false;
       }
     }
+    
+    // Get the current user data and balances
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      console.error(`User ${userId} does not exist`);
+      return false;
+    }
+    
+    const userData = userDoc.data();
+    const currentBalances = userData.balances || {};
+    const currentTokenBalance = currentBalances[token] || 0;
+    
+    console.log(`Current ${token} balance for user ${userId}: ${currentTokenBalance}`);
+    
+    // Calculate new balance
+    const newBalance = currentTokenBalance + parseFloat(amount);
     
     // 1. Record the transaction
     await addDoc(collection(db, 'transactions'), {
@@ -283,14 +303,18 @@ export const processRealTimeDeposit = async (userId, depositData) => {
       timestamp: serverTimestamp(),
       masterWallet: MASTER_WALLETS[chain],
       isRealDeposit: isRealDeposit || true,
-      confirmations: Math.floor(Math.random() * 30) + 5 // Random number of confirmations
+      confirmations: Math.floor(Math.random() * 30) + 5, // Random number of confirmations
+      balanceBefore: currentTokenBalance,
+      balanceAfter: newBalance
     });
     
-    // 2. Update user's balance
-    const userRef = doc(db, 'users', userId);
+    // 2. Update user's balance - use set with merge rather than increment
     await updateDoc(userRef, {
-      [`balances.${token}`]: increment(amount)
+      [`balances.${token}`]: newBalance,
+      lastDepositAt: serverTimestamp()
     });
+    
+    console.log(`Updated ${token} balance for user ${userId}: ${currentTokenBalance} -> ${newBalance}`);
     
     // 3. Process referral commission if applicable
     await referralService.processReferralCommission(userId, amount);
@@ -304,19 +328,33 @@ export const processRealTimeDeposit = async (userId, depositData) => {
       });
     }
     
-    // 5. Dispatch an event to notify components about the new deposit
+    // 5. Double-check that the balance was updated correctly
+    const updatedUserDoc = await getDoc(userRef);
+    if (updatedUserDoc.exists()) {
+      const updatedBalances = updatedUserDoc.data().balances || {};
+      const updatedTokenBalance = updatedBalances[token] || 0;
+      console.log(`Verified ${token} balance after update: ${updatedTokenBalance}`);
+      
+      if (Math.abs(updatedTokenBalance - newBalance) > 0.0001) {
+        console.warn(`Balance verification failed! Expected: ${newBalance}, Actual: ${updatedTokenBalance}`);
+      }
+    }
+    
+    // 6. Dispatch an event to notify components about the new deposit
     if (typeof window !== 'undefined') {
       const event = new CustomEvent('newDeposit', { 
         detail: { 
           userId, 
           amount, 
-          token 
+          token,
+          balanceBefore: currentTokenBalance,
+          balanceAfter: newBalance 
         } 
       });
       window.dispatchEvent(event);
     }
     
-    console.log(`Processed real-time deposit: ${amount} ${token} for user ${userId} on ${chain}`);
+    console.log(`Successfully processed deposit: ${amount} ${token} for user ${userId} on ${chain}`);
     return true;
   } catch (error) {
     console.error('Error processing real-time deposit:', error);

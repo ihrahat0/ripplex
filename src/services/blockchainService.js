@@ -118,21 +118,39 @@ export const isTransactionProcessed = async (txHash, chain) => {
  * @returns {Promise<boolean>} Success status
  */
 export const markTransactionProcessed = async (txHash, chain, userId, txData = {}) => {
-  if (!txHash || !chain) return false;
+  if (!txHash || !chain) {
+    console.warn('Cannot mark transaction as processed: missing txHash or chain');
+    return false;
+  }
   
   try {
+    console.log(`Marking transaction ${txHash} as processed for user ${userId} on ${chain}`);
+    
     // Create a unique ID for this transaction
     const txId = `${chain}-${txHash}`;
     
-    // Add entry to the processed transactions collection
-    await setDoc(doc(db, PROCESSED_TX_COLLECTION, txId), {
+    // Check if already processed to prevent duplicate entries
+    const existingDoc = await getDoc(doc(db, PROCESSED_TX_COLLECTION, txId));
+    if (existingDoc.exists()) {
+      console.log(`Transaction ${txHash} already marked as processed`);
+      return true;
+    }
+    
+    // Include more detailed information in the processed transaction record
+    const processedTxData = {
       txHash,
       chain,
       userId,
       processedAt: serverTimestamp(),
-      ...txData
-    });
+      timestamp: new Date().toISOString(), // Backup timestamp
+      ...txData,
+      processed: true
+    };
     
+    // Add entry to the processed transactions collection
+    await setDoc(doc(db, PROCESSED_TX_COLLECTION, txId), processedTxData);
+    
+    console.log(`Successfully marked transaction ${txHash} as processed`);
     return true;
   } catch (error) {
     console.error('Error marking transaction as processed:', error);

@@ -2082,26 +2082,40 @@ function UserProfile(props) {
     useEffect(() => {
         // Function to handle new deposit events
         const handleNewDeposit = (event) => {
-            const { userId, amount, token } = event.detail;
+            const { userId, amount, token, balanceBefore, balanceAfter } = event.detail;
             
             // Only update if it's for the current user
             if (auth.currentUser && userId === auth.currentUser.uid) {
-                console.log(`New deposit detected for current user: ${amount} ${token}`);
+                console.log(`[UserProfile] New deposit detected: ${amount} ${token}`);
+                console.log(`[UserProfile] Balance change: ${balanceBefore} -> ${balanceAfter}`);
                 
-                // Update local state immediately
-                setBalances(prev => ({
-                    ...prev,
-                    [token]: (prev[token] || 0) + amount
-                }));
+                // Update local balance state immediately with the verified balance
+                if (typeof balanceAfter !== 'undefined') {
+                    setBalances(prev => {
+                        const updated = { ...prev, [token]: balanceAfter };
+                        console.log(`[UserProfile] Updated balances state:`, updated);
+                        return updated;
+                    });
+                } else {
+                    // Fallback to the old way if balanceAfter isn't provided
+                    setBalances(prev => {
+                        const currentBalance = prev[token] || 0;
+                        const newBalance = currentBalance + parseFloat(amount);
+                        const updated = { ...prev, [token]: newBalance };
+                        console.log(`[UserProfile] Updated balances state (fallback):`, updated);
+                        return updated;
+                    });
+                }
                 
                 // Show a success toast
                 toast.success(`Deposit of ${amount} ${token} has been added to your balance!`);
                 
-                // Refresh balances from database
+                // Refresh balances from database for verification
                 fetchBalances(userId).then(updatedBalances => {
+                    console.log(`[UserProfile] Fetched latest balances from DB:`, updatedBalances);
                     setBalances(updatedBalances);
                 }).catch(err => {
-                    console.error("Error refreshing balances after deposit:", err);
+                    console.error("[UserProfile] Error refreshing balances after deposit:", err);
                 });
             }
         };
