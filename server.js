@@ -120,7 +120,9 @@ const allowedOrigins = [
   'http://localhost:3001', 
   'https://rippleexchange.org',
   'https://www.rippleexchange.org',
-  'http://rippleexchange.org'
+  'http://rippleexchange.org',
+  'https://rippleexchange.web.app',
+  '*' // Allow all origins temporarily while testing
 ];
 
 // Add master wallet addresses used for deposits
@@ -140,19 +142,33 @@ const corsOptions = {
     // Allow requests with no origin (like mobile apps, curl, Postman)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
       callback(null, true);
     } else {
       console.warn(`Origin ${origin} not allowed by CORS: ${origin}`);
-      callback(null, false);
+      // Return true for now to debug
+      callback(null, true);
     }
   },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   optionsSuccessStatus: 200
 };
 
 // Middleware
 app.use(cors(corsOptions));
+
+// Enable pre-flight for all routes
+app.options('*', cors(corsOptions));
+
+// Additional headers to help with CORS
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  next();
+});
 
 // Increase json size limit to handle large requests
 app.use(bodyParser.json({ limit: '50mb' }));
@@ -174,7 +190,8 @@ apiRouter.get('/health', (req, res) => {
 });
 
 // Email API endpoints
-apiRouter.post('/send-verification-code', async (req, res) => {
+apiRouter.options('/send-verification-code', cors(corsOptions));
+apiRouter.post('/send-verification-code', cors(corsOptions), async (req, res) => {
   try {
     const { email, code } = req.body;
     
@@ -503,7 +520,50 @@ app.get('*', (req, res) => {
 const serverKey = Math.random().toString(36).substring(2, 15);
 app.listen(port, () => {
   console.log(`Server running on port ${port} (key: ${serverKey})`);
+  console.log(`API available at: http://localhost:${port}/api`);
 });
+
+// Add HTTPS server for local development
+if (process.env.NODE_ENV === 'development') {
+  try {
+    const https = require('https');
+    const fs = require('fs');
+    const path = require('path');
+    
+    // Check if certificates exist, if not, create self-signed certificates
+    const certDir = path.join(__dirname, 'certs');
+    const keyPath = path.join(certDir, 'key.pem');
+    const certPath = path.join(certDir, 'cert.pem');
+    
+    if (!fs.existsSync(certDir)) {
+      fs.mkdirSync(certDir, { recursive: true });
+      console.log('Created directory for SSL certificates:', certDir);
+    }
+    
+    // If certificates don't exist, log instructions to create them
+    if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
+      console.log('\n=== SSL Certificates Not Found ===');
+      console.log('To create self-signed certificates, run these commands:');
+      console.log(`mkdir -p ${certDir}`);
+      console.log(`openssl req -newkey rsa:2048 -new -nodes -x509 -days 365 -keyout ${keyPath} -out ${certPath}`);
+      console.log('\nThen restart the server to enable HTTPS.\n');
+    } else {
+      // Start HTTPS server with existing certificates
+      const httpsOptions = {
+        key: fs.readFileSync(keyPath),
+        cert: fs.readFileSync(certPath)
+      };
+      
+      const httpsPort = 3443;
+      https.createServer(httpsOptions, app).listen(httpsPort, () => {
+        console.log(`HTTPS server running on port ${httpsPort}`);
+        console.log(`Secure API available at: https://localhost:${httpsPort}/api`);
+      });
+    }
+  } catch (error) {
+    console.error('Failed to start HTTPS server:', error.message);
+  }
+}
 
 // Add blockchain deposit scanner auto-startup
 const { spawn } = require('child_process');

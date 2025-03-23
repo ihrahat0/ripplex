@@ -18212,3 +18212,32 @@ Caused by: Error
 [2025-03-23T10:50:29.561Z] Running blockchain deposit check at 3/23/2025, 4:50:29 PM
 [2025-03-23T10:50:38.663Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
 [2025-03-23T10:51:17.556Z] Running blockchain deposit check at 3/23/2025, 4:51:17 PM
+[2025-03-23T10:51:27.189Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T10:52:29.570Z] Running blockchain deposit check at 3/23/2025, 4:52:29 PM
+[2025-03-23T10:52:39.066Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T10:53:17.553Z] Running blockchain deposit check at 3/23/2025, 4:53:17 PM
+[2025-03-23T10:53:25.818Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T10:54:29.582Z] Running blockchain deposit check at 3/23/2025, 4:54:29 PM
+[2025-03-23T10:54:37.590Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T10:55:17.556Z] Running blockchain deposit check at 3/23/2025, 4:55:17 PM
+[2025-03-23T10:55:24.510Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T10:56:29.573Z] Running blockchain deposit check at 3/23/2025, 4:56:29 PM
+[2025-03-23T10:56:38.855Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T10:57:17.557Z] Running blockchain deposit check at 3/23/2025, 4:57:17 PM
+[2025-03-23T10:57:27.816Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T10:58:29.574Z] Running blockchain deposit check at 3/23/2025, 4:58:29 PM
+[2025-03-23T10:58:37.131Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T10:59:17.558Z] Running blockchain deposit check at 3/23/2025, 4:59:17 PM
+[2025-03-23T10:59:27.893Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:09:53.746Z] Loaded alternative service account key
+[2025-03-23T11:09:53.775Z] Firebase initialized
+[2025-03-23T11:09:53.776Z] Starting blockchain deposit scanner with check interval of 120 seconds
+[2025-03-23T11:09:53.811Z] Running blockchain deposit check at 3/23/2025, 5:09:53 PM
+[2025-03-23T11:10:04.375Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:11:42.797Z] Loaded alternative service account key
+[2025-03-23T11:11:42.830Z] Firebase initialized
+[2025-03-23T11:11:42.830Z] Starting blockchain deposit scanner with check interval of 120 seconds
+[2025-03-23T11:11:42.857Z] Running blockchain deposit check at 3/23/2025, 5:11:42 PM
+[2025-03-23T11:11:53.084Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
+[2025-03-23T11:11:53.815Z] Running blockchain deposit check at 3/23/2025, 5:11:53 PM
+[2025-03-23T11:12:01.255Z] Error checking deposits: 8 RESOURCE_EXHAUSTED: Quota exceeded.
