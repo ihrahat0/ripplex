@@ -27,7 +27,7 @@
     "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.7",
-    "ethers": "^5.7.2",
+    "ethers": "^5.8.0",
     "express": "^4.18.3",
     "express-async-handler": "^1.2.0",
     "faker": "^5.5.3",
@@ -97,16 +97,19 @@
     "buffer": "^6.0.3",
     "concurrently": "^9.1.2",
     "crypto-browserify": "^3.12.1",
+    "events": "^3.3.0",
     "firebase-tools": "^13.32.0",
     "https-browserify": "^1.0.0",
     "nodemon": "^3.1.9",
     "os-browserify": "^0.3.0",
     "path-browserify": "^1.0.1",
     "process": "^0.11.10",
+    "querystring-es3": "^0.2.1",
     "serve": "^14.2.4",
     "stream-browserify": "^3.0.0",
     "stream-http": "^3.2.0",
     "url": "^0.11.4",
-    "util": "^0.12.5"
+    "util": "^0.12.5",
+    "webpack": "^5.98.0"
   }
 }

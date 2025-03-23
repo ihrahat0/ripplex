@@ -14,6 +14,8 @@ const { Connection, PublicKey } = require('@solana/web3.js');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
 
 // Set up logging with timestamps
 const logToFile = (message) => {
@@ -25,29 +27,46 @@ const logToFile = (message) => {
   fs.appendFileSync('blockchain-deposits.log', logMessage);
 };
 
-// Initialize Firebase Admin SDK for user data lookup
-let serviceAccount;
+// Initialize Firebase
+let app;
+let db;
+
 try {
-  serviceAccount = require('./serviceAccountKey.json');
-  logToFile('Loaded primary service account key');
+  // Try loading from serviceAccountKey.json
+  const serviceAccount = require('./serviceAccountKey.json');
+  app = initializeApp({
+    credential: cert(serviceAccount)
+  });
+  logToFile('Firebase initialized with service account key');
 } catch (error) {
+  logToFile('Failed to initialize Firebase with service account key: ' + error.message);
+  logToFile('Falling back to environment variables...');
+  
   try {
-    serviceAccount = require('./src/firebase/new-private-key.json');
-    logToFile('Loaded alternative service account key');
-  } catch (err) {
-    logToFile('Failed to load service account keys: ' + err.message);
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+    
+    if (!projectId || !clientEmail || !privateKey) {
+      throw new Error('Missing required Firebase environment variables');
+    }
+    
+    app = initializeApp({
+      credential: cert({
+        projectId,
+        clientEmail,
+        privateKey
+      })
+    });
+    logToFile('Firebase initialized with environment variables');
+  } catch (envError) {
+    logToFile('Failed to initialize Firebase with environment variables: ' + envError.message);
     process.exit(1);
   }
 }
 
-// Initialize Firebase
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: process.env.FIREBASE_DATABASE_URL || 'https://ripple2-app.firebaseio.com'
-});
-
-const db = admin.firestore();
-logToFile('Firebase initialized');
+// Get Firestore instance
+db = getFirestore(app);
 
 // Use reliable public RPC endpoints
 const rpcEndpoints = {

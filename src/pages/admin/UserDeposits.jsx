@@ -658,21 +658,43 @@ const UserDeposits = () => {
       
       {scanResults && (
         <ScanResultsCard>
-          <h4>Blockchain Scan Results</h4>
-          <ResultItem>
-            <ResultLabel>Scan Time:</ResultLabel>
-            <ResultValue>{scanResults.scannedAt.toLocaleString()}</ResultValue>
-          </ResultItem>
-          <ResultItem>
-            <ResultLabel>Deposits Found:</ResultLabel>
-            <ResultValue>{scanResults.depositsFound}</ResultValue>
-          </ResultItem>
-          {scanResults.message && (
-            <ResultItem>
-              <ResultLabel>Message:</ResultLabel>
-              <ResultValue>{scanResults.message}</ResultValue>
-            </ResultItem>
-          )}
+          <h4>Blockchain Scan Results - {scanResults.scannedAt.toLocaleString()}</h4>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '15px' }}>
+            <div style={{ padding: '10px', background: 'var(--bg)', borderRadius: '4px', flex: '1' }}>
+              <div style={{ fontSize: '13px', color: 'var(--text-light)' }}>Deposits Found</div>
+              <div style={{ fontSize: '20px', fontWeight: '600', color: '#0ECB81' }}>
+                {scanResults.depositsFound}
+              </div>
+            </div>
+            <div style={{ padding: '10px', background: 'var(--bg)', borderRadius: '4px', flex: '1' }}>
+              <div style={{ fontSize: '13px', color: 'var(--text-light)' }}>Addresses Scanned</div>
+              <div style={{ fontSize: '20px', fontWeight: '600' }}>
+                {Object.keys(userWallets).length}
+              </div>
+            </div>
+          </div>
+          
+          <h4>Wallet Addresses Scanned</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '10px', marginBottom: '15px' }}>
+            {Object.entries(userWallets).map(([chain, address]) => (
+              <div key={chain} style={{ padding: '10px', background: 'var(--bg)', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <NetworkBadge network={chain}>{chain}</NetworkBadge>
+                  <div style={{ marginTop: '5px', fontSize: '12px', wordBreak: 'break-all' }}>
+                    {truncateAddress(address)}
+                  </div>
+                </div>
+                <a 
+                  href={getExplorerUrl(address, chain, 'address')} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  style={{ fontSize: '16px', color: 'var(--primary)' }}
+                >
+                  <i className="bi bi-box-arrow-up-right"></i>
+                </a>
+              </div>
+            ))}
+          </div>
           
           {foundDeposits.length > 0 && (
             <>

@@ -838,12 +838,34 @@ const AllDeposits = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState({
     status: 'all',
     timeRange: 'all',
     network: 'all',
     direction: 'all'
   });
+  
+  // Add filters state and filterOpen state
+  const [filters, setFilters] = useState({
+    network: null,
+    status: null,
+    timeRange: 'all'
+  });
+  const [filterOpen, setFilterOpen] = useState(false);
+  
+  // Add lastRefresh and blockchainLastCheck state
+  const [lastRefresh, setLastRefresh] = useState(new Date());
+  const [blockchainLastCheck, setBlockchainLastCheck] = useState(null);
+  
+  // Variables for deposit details modal
+  const [selectedDeposit, setSelectedDeposit] = useState(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  
+  // Pagination variables
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(20);
+  const [showAllDeposits, setShowAllDeposits] = useState(false);
   
   // References to unsubscribe functions
   const depositsUnsubscribeRef = useRef(null);
@@ -856,14 +878,6 @@ const AllDeposits = () => {
     pendingDeposits: 0,
     completedDeposits: 0
   });
-  
-  const [selectedDeposit, setSelectedDeposit] = useState(null);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
-  
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const [depositsPerPage] = useState(20);
-  const [totalPages, setTotalPages] = useState(1);
   
   const [scanning, setScanning] = useState(false);
   const [scanSummary, setScanSummary] = useState(null);
@@ -985,7 +999,7 @@ const AllDeposits = () => {
       setStats(statsData);
       
       // Calculate total pages
-      setTotalPages(Math.ceil(depositsList.length / depositsPerPage));
+      setTotalPages(Math.ceil(depositsList.length / itemsPerPage));
       
     } catch (error) {
       console.error('Error fetching deposits:', error);
@@ -1099,6 +1113,45 @@ const AllDeposits = () => {
     }
   };
 
+  // Get current deposits for pagination
+  const indexOfLastDeposit = currentPage * itemsPerPage;
+  const indexOfFirstDeposit = indexOfLastDeposit - itemsPerPage;
+  const currentDeposits = filteredDeposits.slice(indexOfFirstDeposit, indexOfLastDeposit);
+  
+  // Pagination handlers
+  const handleNextPage = () => {
+    if (currentDeposits.length === itemsPerPage) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+  
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+  
+  // Handle view deposit details
+  const handleViewDetails = (deposit) => {
+    setSelectedDeposit(deposit);
+    setShowDetailsModal(true);
+  };
+  
+  // Close details modal
+  const closeDetailsModal = () => {
+    setShowDetailsModal(false);
+    setSelectedDeposit(null);
+  };
+  
+  // Add missing resetFilters function
+  const resetFilters = () => {
+    setFilters({
+      network: null,
+      status: null,
+      timeRange: 'all'
+    });
+  };
+  
   if (loading) {
     return (
       <Container>
@@ -1445,6 +1498,59 @@ const AllDeposits = () => {
           <p>There are no deposits matching your filter criteria.</p>
         </EmptyState>
       )}
+
+      <StatsContainer>
+        {/* ... existing stat cards ... */}
+      </StatsContainer>
+      
+      {scanSummary && (
+        <ScanSummaryCard>
+          <ScanSummaryTitle>
+            Blockchain Scan Results {scanSummary.processed ? '(Processed)' : '(Dry Run)'}
+          </ScanSummaryTitle>
+          
+          <SummaryGrid>
+            <SummaryItem>
+              <SummaryLabel>Scan Time</SummaryLabel>
+              <SummaryValue>{scanSummary.scanTime.toLocaleString()}</SummaryValue>
+            </SummaryItem>
+            <SummaryItem>
+              <SummaryLabel>Users Scanned</SummaryLabel>
+              <SummaryValue>{scanSummary.totalUsersScanned}</SummaryValue>
+            </SummaryItem>
+            <SummaryItem>
+              <SummaryLabel>Users with Deposits</SummaryLabel>
+              <SummaryValue>{scanSummary.usersWithDeposits}</SummaryValue>
+            </SummaryItem>
+            <SummaryItem>
+              <SummaryLabel>Total Deposits Found</SummaryLabel>
+              <SummaryValue>{scanSummary.totalDepositsFound}</SummaryValue>
+            </SummaryItem>
+          </SummaryGrid>
+          
+          {scanSummary.usersWithDeposits > 0 && Object.keys(scanSummary.depositsByUser).length > 0 && (
+            <div style={{ marginTop: '20px' }}>
+              <ScanSummaryTitle>Deposits by User</ScanSummaryTitle>
+              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                {Object.entries(scanSummary.depositsByUser).map(([userId, count]) => (
+                  <UserDepositItem key={userId}>
+                    <div>
+                      <Link to={`/admin/deposits/${userId}`} style={{ color: 'var(--primary)' }}>
+                        {userId}
+                      </Link>
+                    </div>
+                    <div>{count} deposits</div>
+                  </UserDepositItem>
+                ))}
+              </div>
+            </div>
+          )}
+        </ScanSummaryCard>
+      )}
+
+      <FilterContainer>
+        {/* ... existing filters ... */}
+      </FilterContainer>
     </Container>
   );
 };

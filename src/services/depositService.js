@@ -211,39 +211,37 @@ export const monitorWalletAddresses = (onWalletDeposit) => {
             const token = getDefaultTokenForChain(chain);
             const amount = (Math.random() * 0.5 + 0.1).toFixed(6);
             
-            // Check if this deposit was already processed
-            const lastProcessed = processedDeposits[chain]?.lastBalance || 0;
-            const thisDepositKey = `${chain}-${token}-${amount}`;
+            // Generate a unique transaction hash
+            const txHash = `tx-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
             
-            if (!processedDeposits[thisDepositKey]) {
-              // Process the deposit
-              await processRealTimeDeposit(userId, {
-                amount: parseFloat(amount),
+            // Check if this transaction has already been processed
+            const alreadyProcessed = await isTransactionProcessed(txHash, chain);
+            if (alreadyProcessed) {
+              console.log(`Skipping already processed transaction ${txHash} for user ${userId}`);
+              return;
+            }
+            
+            // Process the deposit
+            const processResult = await processRealTimeDeposit(userId, {
+              amount: parseFloat(amount),
+              token,
+              chain,
+              txHash,
+              fromAddress: generateRandomAddress(chain),
+              toAddress: address,
+              isRealDeposit: true
+            });
+            
+            // Notify the caller only if successfully processed
+            if (processResult && onWalletDeposit) {
+              onWalletDeposit({
+                userId,
+                amount,
                 token,
                 chain,
-                txHash: `tx-${Date.now()}-${Math.floor(Math.random() * 1000000)}`,
-                fromAddress: generateRandomAddress(chain),
-                toAddress: address,
-                isRealDeposit: true
+                address,
+                txHash
               });
-              
-              // Update the processed deposits to prevent duplicate processing
-              await updateDoc(doc(db, 'users', userId), {
-                [`processedDeposits.${thisDepositKey}`]: {
-                  timestamp: serverTimestamp()
-                }
-              });
-              
-              // Notify the caller
-              if (onWalletDeposit) {
-                onWalletDeposit({
-                  userId,
-                  amount,
-                  token,
-                  chain,
-                  address
-                });
-              }
             }
           }
         });

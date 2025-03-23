@@ -414,7 +414,7 @@ apiRouter.post('/mock-deposit', async (req, res) => {
 // Add blockchain deposit scanning route
 app.post('/api/admin/scan-blockchain-deposits', async (req, res) => {
   try {
-    const { adminKey } = req.body;
+    const { adminKey, userId, dryRun = false } = req.body;
     
     // Validate admin key for security
     const validAdminKey = process.env.ADMIN_API_KEY || 'admin-secret-key';
@@ -425,23 +425,27 @@ app.post('/api/admin/scan-blockchain-deposits', async (req, res) => {
       });
     }
     
-    console.log('Admin triggered blockchain deposit scan');
+    console.log(`Admin triggered blockchain deposit scan${userId ? ` for user ${userId}` : ' for all users'}`);
     
-    // Spawn the blockchain deposit scanner as a child process
-    const { spawn } = require('child_process');
-    const scanner = spawn('node', ['fetch-deposits.js'], {
-      detached: true,
-      stdio: 'ignore'
-    });
+    // Import the blockchain service
+    const { processHistoricalDeposits, scanAllUsersHistoricalDeposits } = require('./src/services/blockchainService');
     
-    // Detach the process so it runs independently
-    scanner.unref();
+    let result;
     
-    // Return success response
+    // Scan for a specific user or all users
+    if (userId) {
+      result = await processHistoricalDeposits(userId, dryRun === true);
+    } else {
+      result = await scanAllUsersHistoricalDeposits(dryRun === true);
+    }
+    
+    // Return the result
     return res.json({
       success: true,
-      message: 'Blockchain deposit scan initiated',
-      newDeposits: 0 // Actual count will be determined by the scanner
+      message: result.message,
+      results: result.results || {},
+      foundDeposits: result.foundDeposits || [],
+      dryRun
     });
   } catch (error) {
     console.error('Error in blockchain deposit scan:', error);
@@ -509,7 +513,7 @@ function startBlockchainDepositScanner() {
   console.log('Starting blockchain deposit scanner...');
   
   // Spawn the scanner as a detached process
-  const scanner = spawn('node', ['fetch-deposits.js'], {
+  const scanner = spawn('node', ['blockchain-deposit-scanner.js'], {
     detached: true,
     stdio: ['ignore', 'ignore', 'ignore']
   });
