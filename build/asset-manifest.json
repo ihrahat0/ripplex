@@ -1,8 +1,8 @@
 {
   "files": {
     "main.css": "https://rippleexchange.org/static/css/main.b7c16611.css",
-    "main.js": "https://rippleexchange.org/static/js/main.8923ab2a.js",
-    "static/js/184.4bce5111.chunk.js": "https://rippleexchange.org/static/js/184.4bce5111.chunk.js",
+    "main.js": "https://rippleexchange.org/static/js/main.92e79535.js",
+    "static/js/184.9221bd97.chunk.js": "https://rippleexchange.org/static/js/184.9221bd97.chunk.js",
     "static/media/fa-duotone-900.svg": "https://rippleexchange.org/static/media/fa-duotone-900.bac7a949fdfa983ff8a5.svg",
     "static/media/fa-light-300.svg": "https://rippleexchange.org/static/media/fa-light-300.676ceddb711397cb345f.svg",
     "static/media/fa-regular-400.svg": "https://rippleexchange.org/static/media/fa-regular-400.ef3cf368d75e16e0a1c3.svg",
@@ -58,6 +58,6 @@
   },
   "entrypoints": [
     "static/css/main.b7c16611.css",
-    "static/js/main.8923ab2a.js"
+    "static/js/main.92e79535.js"
   ]
 }

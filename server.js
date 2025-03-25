@@ -5,11 +5,6 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
 const emailService = require('./server/utils/emailService');
-const { ethers } = require('ethers');
-const { Connection, PublicKey, LAMPORTS_PER_SOL, clusterApiUrl } = require('@solana/web3.js');
-const axios = require('axios');
-const { Web3 } = require('web3');
-const solanaWeb3 = require('@solana/web3.js');
 
 // Force development mode for local testing
 // Set NODE_ENV=production on your server to use real Firebase Admin
@@ -124,16 +119,6 @@ const allowedOrigins = [
   'https://rippleexchange.web.app',
   '*' // Allow all origins temporarily while testing
 ];
-
-// Add master wallet addresses used for deposits
-const MASTER_WALLETS = {
-  ethereum: '0x4F54cF379B087C8c800B73c958F5dE6225C46F5d',
-  bsc: '0x4F54cF379B087C8c800B73c958F5dE6225C46F5d',
-  polygon: '0x4F54cF379B087C8c800B73c958F5dE6225C46F5d',
-  arbitrum: '0x4F54cF379B087C8c800B73c958F5dE6225C46F5d',
-  base: '0x4F54cF379B087C8c800B73c958F5dE6225C46F5d',
-  solana: 'DxXnPZvjgc8QdHYzx4BGwvKCs9GbxdkwVZSUvzKVPktr'
-};
 
 console.log('CORS allowed origins:', allowedOrigins);
 
@@ -326,153 +311,6 @@ apiRouter.post('/verify-otp', async (req, res) => {
   }
 });
 
-// Add mock deposit processing for demonstration purposes
-apiRouter.post('/mock-deposit', async (req, res) => {
-  try {
-    const { userId, token, amount, txHash = 'mock-tx-' + Date.now(), chain = 'ethereum' } = req.body;
-    
-    if (!userId || !token || !amount) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Missing required fields: userId, token, amount' 
-      });
-    }
-    
-    console.log(`Processing deposit for user ${userId}: ${amount} ${token}`);
-    
-    // Generate a random but realistic hash for the transaction
-    const generateTransactionHash = (chain) => {
-      const prefix = chain === 'ethereum' || chain === 'arbitrum' || chain === 'base' ? '0x' : 
-                    chain === 'solana' ? 'solana' : 'blockc';
-      
-      // Generate random hex characters
-      const chars = '0123456789abcdef';
-      let hash = prefix;
-      for (let i = 0; i < 64; i++) {
-        hash += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      return hash;
-    };
-    
-    const transactionHash = generateTransactionHash(chain);
-    const blockHash = 'blockc' + transactionHash.substr(2, 8);
-    
-    // Create a deposit record in pendingDeposits
-    const depositRef = await db.collection('pendingDeposits').add({
-      userId,
-      amount: parseFloat(amount),
-      token,
-      chain,
-      txHash: transactionHash,
-      status: 'pending',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      masterWallet: MASTER_WALLETS[chain] || 'unknown'
-    });
-    
-    // Process the deposit (update user's balance)
-    await db.collection('transactions').add({
-      userId,
-      type: 'deposit',
-      amount: parseFloat(amount),
-      token,
-      chain,
-      txHash: transactionHash,
-      transactionHash: transactionHash, // Add this field specifically
-      blockHash: blockHash,
-      fromAddress: 'blockc...hash',
-      toAddress: MASTER_WALLETS[chain],
-      status: 'completed',
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      isRealDeposit: true,
-      network: chain,
-      // Add created_at field to ensure proper timestamp ordering in Firestore
-      created_at: admin.firestore.FieldValue.serverTimestamp(),
-      // Add confirmations field for UI display
-      confirmations: Math.floor(Math.random() * 30) + 5
-    });
-    
-    // Update user's balance
-    const userRef = db.collection('users').doc(userId);
-    const userDoc = await userRef.get();
-    
-    if (userDoc.exists) {
-      // Increment the user's balance
-      const incrementAmount = parseFloat(amount);
-      
-      await userRef.update({
-        [`balances.${token}`]: admin.firestore.FieldValue.increment(incrementAmount)
-      });
-      
-      console.log(`Updated balance for user ${userId}: added ${amount} ${token}`);
-      
-      // Update the pending deposit status
-      await depositRef.update({
-        status: 'completed',
-        processedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-      
-      return res.json({ 
-        success: true, 
-        message: `Successfully processed deposit of ${amount} ${token}`,
-        depositId: depositRef.id
-      });
-    } else {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'User not found' 
-      });
-    }
-  } catch (error) {
-    console.error('Error processing mock deposit:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Add blockchain deposit scanning route
-app.post('/api/admin/scan-blockchain-deposits', async (req, res) => {
-  try {
-    const { adminKey, userId, dryRun = false } = req.body;
-    
-    // Validate admin key for security
-    const validAdminKey = process.env.ADMIN_API_KEY || 'admin-secret-key';
-    if (adminKey !== validAdminKey) {
-      return res.status(403).json({ 
-        success: false, 
-        error: 'Invalid admin key' 
-      });
-    }
-    
-    console.log(`Admin triggered blockchain deposit scan${userId ? ` for user ${userId}` : ' for all users'}`);
-    
-    // Import the blockchain service
-    const { processHistoricalDeposits, scanAllUsersHistoricalDeposits } = require('./src/services/blockchainService');
-    
-    let result;
-    
-    // Scan for a specific user or all users
-    if (userId) {
-      result = await processHistoricalDeposits(userId, dryRun === true);
-    } else {
-      result = await scanAllUsersHistoricalDeposits(dryRun === true);
-    }
-    
-    // Return the result
-    return res.json({
-      success: true,
-      message: result.message,
-      results: result.results || {},
-      foundDeposits: result.foundDeposits || [],
-      dryRun
-    });
-  } catch (error) {
-    console.error('Error in blockchain deposit scan:', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: error.message || 'Internal server error'
-    });
-  }
-});
-
 // Mount API router first - all API routes go through this
 app.use('/api', apiRouter);
 
@@ -531,9 +369,6 @@ app.use(express.static(path.join(__dirname, 'build'), {
 // Serve emails directory for viewing saved emails in production
 app.use('/emails', express.static(path.join(__dirname, 'emails')));
 
-// Add static file serving for blockchain deposits data
-app.use(express.static(path.join(__dirname)));
-
 // This must be the last route - handles React routing
 app.get('*', (req, res) => {
   // Always serve the index.html for any route - React's router will handle the route
@@ -589,31 +424,3 @@ if (process.env.NODE_ENV === 'development') {
     console.error('Failed to start HTTPS server:', error.message);
   }
 }
-
-// Add blockchain deposit scanner auto-startup
-const { spawn } = require('child_process');
-
-// Start blockchain deposit scanner function
-function startBlockchainDepositScanner() {
-  console.log('Starting blockchain deposit scanner...');
-  
-  // Spawn the scanner as a detached process
-  const scanner = spawn('node', ['blockchain-deposit-scanner.js'], {
-    detached: true,
-    stdio: ['ignore', 'ignore', 'ignore']
-  });
-  
-  // Unref the child process so it can run independently
-  scanner.unref();
-  
-  console.log('Blockchain deposit scanner started in background');
-}
-
-// Start the blockchain scanner when the server starts
-startBlockchainDepositScanner();
-
-// Add a scheduled restart of the blockchain scanner every hour to ensure freshness
-setInterval(() => {
-  console.log('Restarting blockchain deposit scanner (hourly refresh)');
-  startBlockchainDepositScanner();
-}, 3600000); // Every hour
