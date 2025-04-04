@@ -1,0 +1,50 @@
+  margin-right: 4px;
+  font-size: 14px;
+`;
+
+const OrderBookFlag = styled.span`
+  color: #F0B90B;
+  margin-left: 4px;
+  font-size: 12px;
+`;
+
+const OrderBookRatio = styled.div`
+  display: flex;
+  align-items: center;
+  height: 28px;
+  background: linear-gradient(
+    to right,
+    rgba(14, 203, 129, 0.2) ${props => props.$buyPercent}%,
+    rgba(246, 70, 93, 0.2) ${props => props.$buyPercent}%
+  );
+  margin-top: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+`;
+
+const RatioIndicator = styled.div`
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  padding: 0 8px;
+  align-items: center;
+  
+  span {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 3px 6px;
+    border-radius: 4px;
+    
+    &:first-child {
+      background: rgba(14, 203, 129, 0.3);
+      color: #0ECB81;
+    }
+    
+    &:last-child {
+      background: rgba(246, 70, 93, 0.3);
+      color: #F6465D;
+    }
+  }
+`;
+
+export default Trading; 

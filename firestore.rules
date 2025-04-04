@@ -1,0 +1,197 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Helper function to check if user owns the document
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // Allow users to read and write their own data
+    match /users/{userId} {
+      // CRITICAL: Allow users to create their own document when they sign up
+      // This is necessary because Firebase Auth creates the auth user before Firestore document
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow update: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow delete: if isAdmin();
+      
+      // IMPORTANT: Allow any authenticated user to update referral fields on any user document
+      // This is needed for the referral system to work properly
+      allow update: if isAuthenticated() && 
+        (request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['referrals', 'referralStats', 'referredBy', 'joinedViaReferral', 'balances', 'referralCode', 'referralLink']));
+          
+      // NEW: Allow users to look up other users by email for P2P transfers
+      allow read: if isAuthenticated() && 
+        ('email' in resource.data && resource.data.email != null);
+        
+      // CRITICAL: Special rule for P2P transfers to update balances field only
+      allow update: if isAuthenticated() &&
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balances', 'updatedAt'])) &&
+        // Only allow incrementing token balances (not decrementing other user balances)
+        (request.resource.data.balances.diff(resource.data.balances || {}).affectedKeys().size() <= 1) &&
+        // Make sure other fields haven't changed
+        (request.resource.data.keys().removeAll(['balances', 'updatedAt']).size() == resource.data.keys().removeAll(['balances', 'updatedAt']).size());
+
+      // Allow updating individual balance fields directly (this is more permissive but specific to a path)
+      allow update: if isAuthenticated() && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balances']) &&
+        request.writeFields.size() == 1;
+    }
+    
+    // Allow users to read notification counts
+    match /notificationCounts/{userId} {
+      allow read, write: if isAuthenticated() && (isOwner(userId) || isAdmin());
+    }
+    
+    // Allow users to manage custom tokens in their list
+    match /userTokens/{docId} {
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow update: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow delete: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+    }
+    
+    // Allow users to manage their wallet data
+    // MODIFIED: Allow server access (no auth) for the deposit checker
+    match /walletAddresses/{userId} {
+      // Allow users to create their wallet when they register
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow read: if true; // Allow read without authentication for deposit checker
+      allow update: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Allow wallet backups to be created and read by the user
+    match /walletBackups/{userId} {
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Allow security logs to be created
+    match /securityLogs/{logId} {
+      allow create: if isAuthenticated();
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+    }
+
+    // Allow users to manage their balances
+    match /balances/{userId} {
+      allow create, read, update: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow delete: if isAdmin();
+    }
+    
+    // Allow users to read their own transactions
+    // MODIFIED: Allow server access for creating transactions for deposits
+    match /transactions/{transactionId} {
+      allow create: if true; // Allow creation without authentication for deposit processing
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow update, delete: if isAdmin();
+    }
+
+    // Allow tracking of processed transactions
+    // NEW: Allow server access for the processedTransactions collection
+    match /processedTransactions/{txId} {
+      allow read, write: if true; // Allow read/write without authentication for deposit checker
+    }
+
+    // Allow users to read their notifications
+    match /notifications/{notificationId} {
+      allow create: if isAuthenticated() && (
+        request.resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow update: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Main positions collection rules
+    match /positions/{positionId} {
+      allow read: if isAuthenticated() && (
+        !exists(/databases/$(database)/documents/positions/$(positionId))
+        || resource.data.userId == request.auth.uid
+        || isAdmin()
+      );
+      
+      allow create: if isAuthenticated() 
+        && (request.resource.data.userId == request.auth.uid || isAdmin());
+      
+      allow update: if isAuthenticated() 
+        && (resource.data.userId == request.auth.uid || isAdmin());
+      
+      allow delete: if isAuthenticated() 
+        && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // Update coins collection rules
+    match /coins/{coinId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Allow airdrops to be read and written by the user or admin
+    match /airdrops/{userId} {
+      allow create: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow update: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Public collections anyone can read
+    match /{path=**}/tokens/{tokenId} {
+      allow read: if true;
+    }
+    
+    match /{path=**}/pairs/{pairId} {
+      allow read: if true;
+    }
+    
+    match /{path=**}/marketData/{dataId} {
+      allow read: if true;
+    }
+
+    // P2P transfers collection
+    match /p2pTransfers/{transferId} {
+      // Allow users to create transfers
+      allow create: if isAuthenticated() && request.resource.data.senderUid == request.auth.uid;
+      
+      // Allow sender to read their transfers
+      allow read: if isAuthenticated() && resource.data.senderUid == request.auth.uid;
+      
+      // Allow sender to update status of their transfers
+      allow update: if isAuthenticated() && 
+        resource.data.senderUid == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'completedAt']);
+    }
+
+    // Rules for other collections
+    match /{collection}/{docId} {
+      // Default rule - admins can read/write all other collections
+      allow read, write: if isAdmin();
+    }
+  }
+} 

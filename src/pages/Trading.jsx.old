@@ -1,0 +1,3816 @@
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import styled, { css, keyframes, useTheme } from 'styled-components';
+import { Tab, Tabs, TabList, TabPanel } from 'react-tabs';
+import 'react-tabs/style/react-tabs.css';
+import { db } from '../firebase';
+import { 
+  collection, 
+  addDoc, 
+  getDocs, 
+  deleteDoc, 
+  doc, 
+  query, 
+  where,
+  updateDoc,
+  writeBatch,
+  getDoc,
+  runTransaction,
+  setDoc,
+  onSnapshot,
+  increment,
+  serverTimestamp
+} from 'firebase/firestore';
+import { useAuth } from '../contexts/AuthContext';
+import axios from 'axios';
+import { v4 as uuidv4 } from 'uuid';
+import TradingChartComponent from '../components/TradingChart';
+import { tradingService } from '../services/tradingService';
+import btcIcon from '../assets/images/coin/btc.png';
+import LightweightChartComponent from '../components/LightweightChartComponent';
+import soundEffect from '../assets/sound/sound-effect.wav';
+
+// Simple notification function using console.log
+const addNotification = ({ title, message, type, playSound = false }) => {
+  console.log(`[${type || 'info'}] ${title}: ${message}`);
+  // Play sound if requested
+  if (playSound) {
+    try {
+      const audio = new Audio(soundEffect);
+      audio.play().catch(error => {
+        console.warn('Error playing notification sound:', error);
+      });
+    } catch (error) {
+      console.warn('Error initializing notification sound:', error);
+    }
+  }
+  // In a real app, we would use a proper notification library
+};
+
+const TradingContainer = styled.div`
+  padding: 20px;
+  background: var(--bg1);
+  min-height: calc(100vh - 100px);
+  margin-top: 0;
+  
+  @media (max-width: 768px) {
+    padding: 10px;
+    margin-top: 0;
+  }
+`;
+
+const SearchContainer = styled.div`
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+`;
+
+const TradingHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+`;
+
+const TradingGrid = styled.div`
+  display: grid;
+  grid-template-columns: 65% 35%;
+  gap: 1px;
+  margin-top: 5px;
+  margin-bottom: 30px;
+  background: var(--bg);
+  
+  @media (max-width: 1200px) {
+    grid-template-columns: 60% 40%;
+  }
+  
+  @media (max-width: 992px) {
+    grid-template-columns: 1fr;
+  }
+  
+  @media (max-width: 768px) {
+    margin-top: 3px;
+    margin-bottom: 20px;
+  }
+`;
+
+const ChartSection = styled.div`
+  background: var(--bg);
+  border-right: 1px solid var(--line);
+  height: 350px;
+  
+  @media (max-width: 992px) {
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+  
+  @media (max-width: 768px) {
+    height: 300px;
+  }
+`;
+
+const RightSection = styled.div`
+  width: 100%;
+  background: var(--bg);
+  display: grid;
+  grid-template-rows: auto;
+  height: 350px;
+  
+  @media (max-width: 992px) {
+    width: 100%;
+  }
+  
+  @media (max-width: 768px) {
+    height: auto;
+  }
+`;
+
+const TradingInterface = styled.div`
+  display: grid;
+  grid-template-columns: 50% 50%;
+  width: 100%;
+  
+  @media (max-width: 992px) {
+    grid-template-columns: 1fr 1fr;
+    border-left: none;
+  }
+  
+  @media (max-width: 576px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const OrderBookSection = styled.div`
+  // height: 350px;
+  border-right: 1px solid var(--line);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #D4AF37;
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.2);
+  border-radius: 12px;
+  margin: 3px;
+  overflow: hidden;
+  
+  @media (max-width: 992px) {
+    height: 330px;
+  }
+  
+  @media (max-width: 768px) {
+    height: 300px;
+  }
+`;
+
+const OrderFormSection = styled.div`
+  padding: 6px;
+  height: 400px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #D4AF37;
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.2);
+  border-radius: 12px;
+  margin: 3px;
+  
+  @media (max-width: 992px) {
+    height: 330px;
+  }
+  
+  @media (max-width: 768px) {
+    height: 300px;
+  }
+`;
+
+const ChartCard = styled.div`
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+  
+  @media (max-width: 768px) {
+    padding: 12px;
+    border-radius: 8px;
+  }
+`;
+
+const OrderCard = styled.div`
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+  height: 100%;
+  overflow-y: auto;
+  
+  @media (max-width: 768px) {
+    padding: 12px;
+    border-radius: 8px;
+  }
+`;
+
+const CoinInfo = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  
+  @media (max-width: 768px) {
+    gap: 8px;
+    margin-bottom: 15px;
+  }
+`;
+
+const CoinIcon = styled.img`
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: contain;
+  background: ${props => props.$theme === 'dark' ? '#2A2A3C' : '#fff'};
+  padding: 2px;
+  
+  @media (max-width: 768px) {
+    width: 32px;
+    height: 32px;
+  }
+`;
+
+const CoinDetails = styled.div`
+  display: flex;
+  flex-direction: column;
+`;
+
+const CoinName = styled.h2`
+  color: #fff;
+  margin: 0;
+  font-size: 24px;
+  
+  @media (max-width: 768px) {
+    font-size: 20px;
+  }
+`;
+
+const CoinSymbol = styled.span`
+  color: #7A7A7A;
+  font-size: 16px;
+  
+  @media (max-width: 768px) {
+    font-size: 14px;
+  }
+`;
+
+const PriceInfo = styled.div`
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+  
+  @media (max-width: 768px) {
+    gap: 12px;
+    margin-bottom: 15px;
+    flex-direction: column;
+  }
+`;
+
+const Price = styled.div`
+  color: #fff;
+  font-size: 24px;
+  font-weight: 500;
+  
+  @media (max-width: 768px) {
+    font-size: 20px;
+  }
+`;
+
+const Change = styled.span`
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  background: ${props => props.$isPositive ? 'rgba(14, 203, 129, 0.2)' : 'rgba(246, 70, 93, 0.2)'};
+  color: ${props => props.$isPositive ? '#0ECB81' : '#F6465D'};
+  margin-left: 8px;
+  
+  @media (max-width: 768px) {
+    font-size: 12px;
+    padding: 1px 6px;
+  }
+`;
+
+const OrderForm = styled.form`
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+  gap: 6px;
+  height: 100%;
+  
+  @media (max-width: 768px) {
+    padding: 4px 0;
+    gap: 4px;
+  }
+`;
+
+const TabGroup = styled.div`
+  display: flex;
+  margin-bottom: 6px;
+  gap: 6px;
+  
+  @media (max-width: 768px) {
+    margin-bottom: 4px;
+    gap: 3px;
+  }
+`;
+
+const OrderTab = styled.button`
+  background: ${props => props.$active ? 'var(--primary)' : 'var(--bg2)'};
+  color: ${props => props.$active ? 'var(--text-white)' : 'var(--text)'};
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex: 1;
+  outline: none;
+  
+  &:hover {
+    background: ${props => props.$active ? 'var(--primary)' : 'var(--bg3)'};
+  }
+  
+  @media (max-width: 768px) {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+`;
+
+const AmountInput = styled.input`
+  background: var(--bg2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 8px;
+  outline: none;
+  transition: all 0.2s;
+  width: 100%;
+  margin: 2px 0;
+  
+  &:focus {
+    border-color: #D4AF37;
+    box-shadow: 0 0 4px rgba(212, 175, 55, 0.3);
+  }
+  
+  @media (max-width: 768px) {
+    padding: 5px 8px;
+    font-size: 12px;
+    margin: 1px 0;
+  }
+`;
+
+const Button = styled.button`
+  background: ${props => props.$variant === 'buy' ? 'var(--success)' : props.$variant === 'sell' ? 'var(--danger)' : 'var(--primary)'};
+  color: white;
+  border: none;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 5px;
+  border: 1px solid ${props => {
+    if (props.$variant === 'buy') return 'rgba(212, 175, 55, 0.5)';
+    if (props.$variant === 'sell') return 'rgba(212, 175, 55, 0.5)';
+    return '#D4AF37';
+  }};
+  box-shadow: 0 0 4px ${props => {
+    if (props.$variant === 'buy') return 'rgba(52, 199, 89, 0.3)';
+    if (props.$variant === 'sell') return 'rgba(255, 59, 48, 0.3)';
+    return 'rgba(212, 175, 55, 0.3)';
+  }};
+  
+  &:hover {
+    filter: brightness(1.1);
+  }
+  
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 6px;
+    font-size: 13px;
+  }
+`;
+
+// Update the TIMEFRAMES object
+const TIMEFRAMES = {
+  '1D': { label: '1D', value: '1' },
+  '1W': { label: '1W', value: '7' }
+};
+
+// Update the styled component for the chart
+const ChartEmbed = styled.iframe`
+  width: 100%;
+  height: 600px;
+  border: none;
+  border-radius: 8px;
+  background: var(--bg2);
+`;
+
+const CurrentPrice = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 16px;
+  padding: 8px 0;
+  margin: 5px 0;
+  position: relative;
+  color: ${props => props.$isUp ? '#0ECB81' : '#F6465D'};
+  background: ${props => props.$isUp ? 'rgba(14, 203, 129, 0.15)' : 'rgba(246, 70, 93, 0.15)'};
+  border-top: 1px solid ${props => props.$isUp ? 'rgba(14, 203, 129, 0.3)' : 'rgba(246, 70, 93, 0.3)'};
+  border-bottom: 1px solid ${props => props.$isUp ? 'rgba(14, 203, 129, 0.3)' : 'rgba(246, 70, 93, 0.3)'};
+  letter-spacing: 0.5px;
+`;
+
+// Replace the InternalTradingChart function
+function InternalTradingChart({ symbol, theme }) {
+  return (
+    <TradingChartComponent
+      symbol={`BINANCE:${symbol}`}
+      theme={theme}
+      container_id="tradingview_chart"
+      autosize={true}
+      timeframe="15"
+      allow_symbol_change={false}
+    />
+  );
+}
+
+// Define accurate coin IDs for CoinGecko
+const hardcodedPrices = {
+  'btc': 90812.45,
+  'bitcoin': 90812.45,
+  'eth': 3452.67,
+  'ethereum': 3452.67,
+  'sol': 142.56,
+  'bnb': 567.89,
+  'doge': 0.12
+};
+
+// Define accurate coin IDs for CoinGecko
+const COINGECKO_IDS = {
+  'btc': 'bitcoin',
+  'bitcoin': 'bitcoin',
+  'eth': 'ethereum', 
+  'ethereum': 'ethereum',
+  'sol': 'solana',
+  'bnb': 'binancecoin',
+  'doge': 'dogecoin',
+  'xrp': 'ripple',
+  'ada': 'cardano',
+  'dot': 'polkadot',
+  'matic': 'matic-network',
+  'avax': 'avalanche-2',
+  'link': 'chainlink',
+  'uni': 'uniswap',
+  'atom': 'cosmos'
+};
+
+const fetchHistoricalData = async (coinId, days = '1', interval = 'minute') => {
+  try {
+    const response = await fetch(
+      `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=${days}&interval=${interval}`
+    );
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+    
+    // Convert the data to candlestick format
+    const candlesticks = [];
+    const prices = data.prices;
+    
+    for (let i = 0; i < prices.length; i += 1) {
+      const candle = {
+        time: prices[i][0] / 1000, // Convert to seconds
+        open: prices[i][1],
+        high: prices[i][1],
+        low: prices[i][1],
+        close: prices[i][1]
+      };
+      
+      if (i > 0) {
+        candle.open = prices[i-1][1];
+        candle.high = Math.max(candle.open, candle.close);
+        candle.low = Math.min(candle.open, candle.close);
+      }
+      
+      candlesticks.push(candle);
+    }
+    
+    return candlesticks;
+  } catch (error) {
+    console.error('Error fetching historical data:', error);
+    return null;
+  }
+};
+
+// Add these new styled components
+const OrderTypeSelector = styled.div`
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+`;
+
+const leverageOptions = [10, 20, 25, 30, 40];  // Updated leverage options
+
+const LeverageSlider = styled.input`
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg2);
+  outline: none;
+  margin: 10px 0;
+  
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: ${props => props.$value >= 30 ? '#F6465D' : 'var(--primary)'};
+    cursor: pointer;
+  }
+  
+  &::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: ${props => props.$value >= 30 ? '#F6465D' : 'var(--primary)'};
+    cursor: pointer;
+    border: none;
+  }
+`;
+
+const LeverageDisplay = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 12px;
+`;
+
+const QuickLeverageButtons = styled.div`
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+`;
+
+const QuickLeverageButton = styled.button`
+  padding: 4px 8px;
+  margin: 0 4px;
+  border-radius: 4px;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+  background: ${props => props.$active ? 'var(--primary)' : 'var(--bg1)'};
+  color: ${props => props.$active ? '#fff' : 'var(--text)'};
+  
+  &:hover {
+    background: var(--primary);
+    color: #fff;
+  }
+`;
+
+const OrderDetails = styled.div`
+  margin-top: 5px;
+  margin-bottom: 5px;
+`;
+
+const DetailRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  color: var(--text);
+  font-size: 12px;
+`;
+
+// Add these new styled components
+const OrderBook = styled.div`
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg2);
+  border-radius: 12px;
+  border: 1px solid #D4AF37; /* Golden border color */
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.2); /* Subtle golden glow */
+  overflow: hidden;
+  
+  @media (max-width: 768px) {
+    max-height: 300px;
+    overflow-y: auto;
+  }
+`;
+
+const OrderBookHeader = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  padding: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  
+  span:first-child {
+    text-align: left;
+  }
+  
+  @media (max-width: 768px) {
+    padding: 6px;
+    font-size: 11px;
+  }
+`;
+
+const OrderBookRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  position: relative;
+  text-align: right;
+  transition: background 0.1s;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    ${props => props.$side === 'buy' ? 'right' : 'left'}: 0;
+    height: 100%;
+    width: ${props => props.$depth || 0}%;
+    background: ${props => props.$side === 'buy' 
+      ? 'rgba(52, 199, 89, 0.1)' 
+      : 'rgba(255, 59, 48, 0.1)'};
+    z-index: 0;
+    pointer-events: none;
+  }
+  
+  span {
+    position: relative;
+    z-index: 1;
+  }
+  
+  span:first-child {
+    text-align: left;
+  }
+  
+  &.flash {
+    animation: flash 0.5s;
+  }
+  
+  @keyframes flash {
+    0% { background-color: rgba(255, 255, 255, 0.1); }
+    100% { background-color: transparent; }
+  }
+  
+  @media (max-width: 768px) {
+    padding: 3px 6px;
+    font-size: 11px;
+  }
+`;
+
+// Update OrderCard to include buy/sell colors
+const OrderButton = styled.button`
+  background: ${props => props.$orderType === 'buy' ? '#0ECB81' : '#F6465D'};
+  color: white;
+  border: none;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  width: 100%;
+  font-weight: 500;
+  font-size: 13px;
+  border: 1px solid ${props => props.$orderType === 'buy' ? 'rgba(14, 203, 129, 0.5)' : 'rgba(246, 70, 93, 0.5)'};
+  box-shadow: 0 0 4px ${props => props.$orderType === 'buy' ? 'rgba(14, 203, 129, 0.3)' : 'rgba(246, 70, 93, 0.3)'};
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  
+  &:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+  
+  @media (max-width: 768px) {
+    padding: 6px;
+    font-size: 12px;
+  }
+`;
+
+// Add a new container for the right side
+const RightPanel = styled.div`
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 20px;
+  height: 600px; // Match chart height
+`;
+
+// Update the positions table styling
+const PositionsTable = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 0 12px rgba(212, 175, 55, 0.4);
+  border: 1px solid #D4AF37;
+  animation: fadeIn 1s ease-in-out;
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  @media (max-width: 768px) {
+    /* Mobile-specific styles */
+    font-size: 12px;
+  }
+`;
+
+const TableHeader = styled.th`
+  background: rgba(212, 175, 55, 0.2);
+  color: #D4AF37;
+  padding: 8px;
+  font-size: 12px;
+  text-align: left;
+  
+  @media (max-width: 768px) {
+    /* Hide specific columns on mobile */
+    &:nth-child(2), /* Amount */
+    &:nth-child(3), /* Entry Price */
+    &:nth-child(4), /* Mark Price */
+    &:nth-child(5), /* Liquidation */
+    &:nth-child(6) { /* Leverage */
+      display: none;
+    }
+  }
+`;
+
+const TableCell = styled.td`
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--text);
+  border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+  
+  @media (max-width: 768px) {
+    /* Hide specific columns on mobile */
+    &:nth-child(2), /* Amount */
+    &:nth-child(3), /* Entry Price */
+    &:nth-child(4), /* Mark Price */
+    &:nth-child(5), /* Liquidation */
+    &:nth-child(6) { /* Leverage */
+      display: none;
+    }
+    
+    /* Style for the symbol that appears next to the type on mobile */
+    .mobile-only-symbol {
+      display: inline-block;
+      font-size: 12px;
+      opacity: 1;
+      margin-left: 6px;
+      color: #D4AF37; /* Gold color for better visibility */
+      font-weight: bold;
+    }
+  }
+  
+  /* Hide the symbol on desktop */
+  .mobile-only-symbol {
+    display: none;
+  }
+`;
+
+const PnLValue = styled.span`
+  color: ${props => props.value >= 0 ? '#0ECB81' : '#F6465D'};
+  font-weight: bold;
+`;
+
+// Add these styled components at the top with your other styled components
+const TradeInfo = styled.div`
+  margin-top: 5px;
+  background: rgba(30, 41, 59, 0.4);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+`;
+
+const InfoItem = styled.div`
+  display: flex;
+  justify-content: space-between;
+  color: ${props => props.$highlight ? 'var(--primary)' : 'var(--text-secondary)'};
+  margin-bottom: 3px;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+// Add this helper function before the Trading component
+const calculateRequiredMargin = (amount, price, leverage) => {
+  if (!amount || !price || !leverage) return 0;
+  return (parseFloat(amount) * price) / leverage;
+};
+
+// Update the leverage buttons handling
+const LeverageButtons = styled.div`
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+`;
+
+const LeverageInput = styled.input`
+  width: 100%;
+  padding: 8px;
+  margin-top: 8px;
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 4px;
+`;
+
+// Add these styled components
+const ChartContainer = styled.div`
+  position: relative;
+  background: var(--bg1);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border: 1px solid #D4AF37; /* Golden border color */
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.2); /* Subtle golden glow */
+`;
+
+const DexLink = styled.a`
+  display: inline-block;
+  padding: 8px 12px;
+  background: rgba(30, 34, 45, 0.8);
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-decoration: none;
+  border-radius: 4px;
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  transition: all 0.2s;
+  
+  &:hover {
+    background: var(--primary);
+    color: white;
+  }
+  
+  i {
+    margin-left: 5px;
+    font-size: 12px;
+  }
+`;
+
+const TimeframeSelector = styled.div`
+  display: flex;
+  gap: 4px;
+  padding: 8px;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  background: rgba(30, 34, 45, 0.8);
+  border-radius: 4px;
+`;
+
+const TimeButton = styled.button`
+  padding: 4px 12px;
+  background: ${props => props.$active ? 'var(--primary)' : 'transparent'};
+  color: ${props => props.$active ? 'white' : '#7a7a7a'};
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+
+  &:hover {
+    color: white;
+    background: ${props => props.$active ? 'var(--primary)' : 'rgba(71, 77, 87, 0.7)'};
+  }
+`;
+
+// Add this styled component
+const DexScreenerChart = styled.iframe`
+  width: 100%;
+  height: 500px;
+  border: none;
+  border-radius: 8px;
+  background: var(--bg2);
+`;
+
+// Add these new styled components after the existing styled components
+const TradesList = styled.div`
+  max-height: 80px;
+  overflow-y: auto;
+  padding: 4px 0;
+  background: var(--bg);
+  border-top: none;
+  border-bottom: none;
+  &::-webkit-scrollbar {
+    width: 5px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(128, 128, 128, 0.3);
+    border-radius: 4px;
+  }
+`;
+
+const TradeRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  padding: 4px 8px;
+  font-size: 12px;
+  animation: fadeIn 0.3s ease-in-out;
+  
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateX(${props => props.$isBuy ? '-10px' : '10px'});
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  & > span {
+    &:first-child {
+      color: ${props => props.$isBuy ? '#0ECB81' : '#F6465D'};
+    }
+    &:nth-child(2),
+    &:last-child {
+      text-align: right;
+    }
+  }
+`;
+
+// Add these styled components after the existing styled components
+const OrderBookContent = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: calc(100% - 32px);
+`;
+
+const AsksContainer = styled.div`
+  flex: 1;
+  overflow-y: auto;
+  /* Use more subtle background with less opacity */
+  background: var(--bg); 
+  display: flex;
+  flex-direction: column-reverse;
+  min-height: 200px;
+  &::-webkit-scrollbar {
+    width: 5px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(246, 70, 93, 0.1);
+    border-radius: 4px;
+  }
+`;
+
+const BidsContainer = styled.div`
+  flex: 1;
+  overflow-y: auto;
+  /* Use same background as AsksContainer */
+  background: var(--bg);
+  min-height: 200px;
+  &::-webkit-scrollbar {
+    width: 5px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(14, 203, 129, 0.1);
+    border-radius: 4px;
+  }
+`;
+
+// Fix the calculatePnL function
+const calculatePnL = (position, currentMarketPrice) => {
+  if (!position || !position.entryPrice || !currentMarketPrice) return 0;
+  
+  const { type, entryPrice, leverage, margin } = position;
+  
+  try {
+    // Ensure all values are proper numbers
+    const entryPriceNum = parseFloat(entryPrice);
+    const currentMarketPriceNum = parseFloat(currentMarketPrice);
+    const leverageNum = parseFloat(leverage);
+    const marginNum = parseFloat(margin);
+    
+    // Validation
+    if (isNaN(entryPriceNum) || isNaN(currentMarketPriceNum) || isNaN(leverageNum) || isNaN(marginNum)) {
+      console.error('Invalid values for PnL calculation:', { entryPrice, currentMarketPrice, leverage, margin });
+      return 0;
+    }
+    
+    if (type === 'buy') {
+      const priceDiff = currentMarketPriceNum - entryPriceNum;
+      const percentageChange = (priceDiff / entryPriceNum) * 100;
+      return +(marginNum * (percentageChange / 100) * leverageNum).toFixed(2);
+    } else {
+      const priceDiff = entryPriceNum - currentMarketPriceNum;
+      const percentageChange = (priceDiff / entryPriceNum) * 100;
+      return +(marginNum * (percentageChange / 100) * leverageNum).toFixed(2);
+    }
+  } catch (error) {
+    console.error('Error calculating PnL:', error);
+    return 0;
+  }
+};
+
+// Generate random quantity based on price range
+const generateRandomQty = (price) => {
+  // For very low-priced tokens (< $0.01), use much larger quantities
+  if (price < 0.01) {
+    // For micro-priced tokens, quantities typically range from 10,000 to 100,000
+    return (Math.random() * 90000 + 10000).toFixed(4);
+  }
+  // For low-priced tokens ($0.01-$1), use large quantities 
+  else if (price < 1) {
+    // For very low-priced assets, quantities typically range from 1,000 to 10,000
+    return (Math.random() * 9000 + 1000).toFixed(4);
+  }
+  // For medium-low priced tokens ($1-$10)
+  else if (price < 10) {
+    // For low-priced assets, quantities typically range from 100 to 1,000
+    return (Math.random() * 900 + 100).toFixed(4);
+  }
+  // For medium-priced assets ($10-$100), use moderate quantities
+  else if (price < 100) {
+    // For medium-priced assets, quantities range from 10 to 100
+    return (Math.random() * 90 + 10).toFixed(4);
+  }
+  // For mid-high priced tokens ($100-$500) 
+  else if (price < 500) {
+    // Medium quantities between 0.1 and 5
+    return (Math.random() * 4.9 + 0.1).toFixed(4);
+  } 
+  // For high-priced assets (>$500)
+  else {
+    // Smaller quantities between 0.05 and 2
+    return (Math.random() * 1.95 + 0.05).toFixed(4);
+  }
+};
+
+// Generate realistic order book data based on current price
+const generateOrderBook = (currentPrice, bidAskSpread = 0.002) => {
+  // Ensure we have a valid price to work with
+  const validPrice = currentPrice && !isNaN(currentPrice) && currentPrice > 0 
+    ? Number(currentPrice) // Ensure it's converted to a number 
+    : 100;
+  
+  console.log('Using valid price for order book:', validPrice);
+  
+  // Adjust price step based on the current price to keep orders close to actual market price
+  let priceStep;
+  
+  if (validPrice < 0.0001) {
+    // For ultra-micro-priced tokens, use 0.2% of price as step
+    priceStep = validPrice * 0.002;
+  } else if (validPrice < 0.001) {
+    // For micro-priced tokens, use 0.3% of price as step
+    priceStep = validPrice * 0.003;
+  } else if (validPrice < 0.01) {
+    // For very low-priced tokens, use 0.4% of price as step
+    priceStep = validPrice * 0.004;
+  } else if (validPrice < 0.1) {
+    // For low-priced tokens, use 0.5% of price as step
+    priceStep = validPrice * 0.005;
+  } else if (validPrice < 1) {
+    // For medium-low priced tokens, use 0.2% step
+    priceStep = validPrice * 0.002;
+  } else {
+    // For higher-priced tokens, use 0.1% step
+    priceStep = validPrice * 0.001;
+  }
+  
+  const asks = [];
+  const bids = [];
+  const numOrders = 8; // Reduced number of asks and bids to generate to fit without scrolling
+  
+  // Calculate the spread based on the actual price to ensure it's proportional
+  const spreadAmount = Math.max(validPrice * 0.0005, Number.EPSILON); // Min 0.05% spread, ensure it's never 0
+  
+  // Calculate starting prices for asks and bids
+  const askStartPrice = validPrice + (spreadAmount / 2);
+  const bidStartPrice = validPrice - (spreadAmount / 2);
+  
+  console.log('Ask start price:', askStartPrice, 'Bid start price:', bidStartPrice, 'Step:', priceStep);
+  
+  // Generate ask prices (sells above current price)
+  for (let i = 0; i < numOrders; i++) {
+    const price = Number((askStartPrice + (i * priceStep)).toFixed(10));
+    
+    // Generate random volume based on price range
+    const quantity = parseFloat(generateRandomQty(price));
+    const total = Number((price * quantity).toFixed(10));
+    
+    asks.push({
+      price,
+      quantity,
+      total
+    });
+  }
+  
+  // Generate bid prices (buys below current price)
+  for (let i = 0; i < numOrders; i++) {
+    // Ensure price doesn't go negative for low-priced tokens
+    let price;
+    if (bidStartPrice < priceStep * (i + 1)) {
+      // If subtracting would make price negative, use a percentage of current price
+      price = Number((bidStartPrice * Math.pow(0.99, i + 1)).toFixed(10));
+    } else {
+      price = Number((bidStartPrice - (i * priceStep)).toFixed(10));
+    }
+    
+    // Ensure price is always positive
+    price = Math.max(Number.EPSILON, price);
+    
+    // Generate random volume based on price range
+    const quantity = parseFloat(generateRandomQty(price));
+    const total = Number((price * quantity).toFixed(10));
+    
+    bids.push({
+      price,
+      quantity, 
+      total
+    });
+  }
+  
+  // Sort asks in descending order (highest sell at top)
+  asks.sort((a, b) => b.price - a.price);
+  
+  // Return formatted order book data
+  return {
+    asks,
+    bids,
+    marketPrice: validPrice
+  };
+};
+
+// Export a single function for order book data that everyone will use
+const createOrderBookData = (marketPrice, symbol, buyRatio = 0.5) => {
+  if (!marketPrice || isNaN(marketPrice)) {
+    console.warn('Invalid market price for order book:', marketPrice);
+    return { asks: [], bids: [] };
+  }
+
+  // Log the actual market price used for debugging
+  console.log('Creating order book with market price:', marketPrice);
+
+  // Ensure we're working with the actual price, not an arbitrary value
+  const validPrice = parseFloat(marketPrice);
+  
+  // Use very tight spread for all assets as requested
+  const bidAskSpread = validPrice * 0.001; // 0.1% spread
+
+  // Generate consistent order book data
+  const orderBook = generateOrderBook(validPrice, bidAskSpread);
+  
+  return orderBook;
+};
+
+// Replace all existing functions with this single implementation
+const generateMockOrderBookData = createOrderBookData;
+const generateDummyOrders = createOrderBookData;
+
+// Format the price displayed in the order book
+const formatOrderPrice = (price) => {
+  if (typeof price !== 'number' && typeof price !== 'string') {
+    return '0.00';
+  }
+  
+  const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+  
+  if (isNaN(numPrice)) {
+    return '0.00';
+  }
+  
+  // Format based on price ranges
+  if (numPrice < 0.000001) {
+    // Scientific notation for extremely small prices
+    return numPrice.toExponential(6);
+  } else if (numPrice < 0.00001) {
+    return numPrice.toFixed(9);
+  } else if (numPrice < 0.0001) {
+    return numPrice.toFixed(8);
+  } else if (numPrice < 0.001) {
+    return numPrice.toFixed(7);
+  } else if (numPrice < 0.01) {
+    return numPrice.toFixed(6);
+  } else if (numPrice < 0.1) {
+    return numPrice.toFixed(5);
+  } else if (numPrice < 1) {
+    return numPrice.toFixed(4);
+  } else if (numPrice < 10) {
+    return numPrice.toFixed(3);
+  } else if (numPrice < 1000) {
+    return numPrice.toFixed(2);
+  } else {
+    return Math.floor(numPrice).toLocaleString();
+  }
+};
+
+// Helper function to safely cleanup resources
+const safelyCleanup = (resource) => {
+  if (resource && typeof resource === 'function') {
+    try {
+      resource();
+    } catch (error) {
+      console.error('Error during cleanup:', error);
+    }
+  } else if (resource && typeof resource.destroy === 'function') {
+    try {
+      resource.destroy();
+    } catch (error) {
+      console.error('Error destroying resource:', error);
+    }
+  } else if (resource && typeof resource.close === 'function') {
+    try {
+      resource.close();
+    } catch (error) {
+      console.error('Error closing resource:', error);
+    }
+  }
+};
+
+/**
+ * Generates a random updated price based on the current price with realistic volatility
+ * @param {number} currentPrice - The current market price
+ * @returns {number} - A new price with slight random variation
+ */
+const getRandomUpdatedPrice = (currentPrice) => {
+  if (!currentPrice || currentPrice <= 0) return 0.04;
+  
+  // Smaller price changes for more stable updates
+  const volatilityPercentage = 0.002; // Max 0.2% change per update
+  const changePercent = (Math.random() * 2 - 1) * volatilityPercentage;
+  
+  // Calculate new price
+  let newPrice = currentPrice * (1 + changePercent);
+  
+  // Ensure price doesn't drop below minimum values
+  if (newPrice < 0.01) {
+    newPrice = Math.max(newPrice, 0.01);
+  }
+  
+  // Round appropriately based on price magnitude
+  if (newPrice < 0.1) {
+    return Math.round(newPrice * 100000) / 100000;
+  } else if (newPrice < 1) {
+    return Math.round(newPrice * 10000) / 10000;
+  } else if (newPrice < 10) {
+    return Math.round(newPrice * 1000) / 1000;
+  } else if (newPrice < 100) {
+    return Math.round(newPrice * 100) / 100;
+  }
+  
+  return Math.round(newPrice * 10) / 10;
+};
+
+// Add a function to play sound effect
+const playTradeSound = () => {
+  try {
+    const audio = new Audio(soundEffect);
+    audio.play().catch(error => {
+      console.warn('Error playing trade sound:', error);
+    });
+  } catch (error) {
+    console.warn('Error initializing trade sound:', error);
+  }
+};
+
+// Move these styled components outside the Trading component function
+const OrderPrice = styled.div`
+  color: ${props => props.type === 'ask' ? 'var(--red)' : 'var(--green)'};
+  font-family: 'Roboto Mono', monospace;
+  
+  sub {
+    color: rgba(255, 255, 255, 0.5);
+  }
+`;
+
+const OrderBookTable = styled.div`
+  width: 100%;
+  font-size: 11px;
+  border: 1px solid #D4AF37;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.2);
+  height: 95%;
+  display: flex;
+  flex-direction: column;
+  
+  .header {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    padding: 3px 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: #666;
+    font-size: 10px;
+    position: sticky;
+    top: 0;
+    background: var(--bg2);
+    z-index: 1;
+  }
+  
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    padding: 2px 4px;
+    cursor: pointer;
+    transition: background 0.1s;
+    
+    &:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+  }
+`;
+
+// Restore the formatSmallNumber function since other parts of the code may be using it
+const formatSmallNumber = (num) => {
+  // Convert string to number if needed
+  const number = typeof num === 'string' ? parseFloat(num) : num;
+  
+  if (isNaN(number) || number === null) return '0.00';
+  
+  // For extremely small numbers (less than 0.00000001)
+  if (number < 0.00000001 && number > 0) {
+    return '<0.00000001';
+  }
+  
+  // For very small numbers (less than 0.0001)
+  if (number < 0.0001 && number > 0) {
+    // Display all significant digits for very small numbers
+    const scientificNotation = number.toExponential();
+    if (scientificNotation.includes('e-')) {
+      // Format with appropriate decimal places based on the exponent
+      const exponent = parseInt(scientificNotation.split('e-')[1], 10);
+      return number.toFixed(exponent + 2).replace(/\.?0+$/, '');
+    }
+    return number.toFixed(8);
+  }
+  
+  // For small numbers (0.0001 to 0.001)
+  if (number < 0.001) {
+    return number.toFixed(7);
+  }
+  
+  // For numbers between 0.001 and 0.01
+  if (number < 0.01) {
+    return number.toFixed(6);
+  }
+  
+  // For numbers between 0.01 and 0.1
+  if (number < 0.1) {
+    return number.toFixed(5);
+  }
+  
+  // For numbers between 0.1 and 1
+  if (number < 1) {
+    return number.toFixed(4);
+  }
+  
+  // For numbers between 1 and 100
+  if (number < 100) {
+    return number.toFixed(2);
+  }
+  
+  // For larger numbers like Bitcoin (typically > 1000)
+  // Always use toLocaleString with both minimumFractionDigits and maximumFractionDigits
+  // This ensures we have proper formatting with commas AND always show .00
+  return number.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+};
+
+// Trading component function
+const Trading = () => {
+  const { cryptoId } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [theme] = useState('dark');
+  const { currentUser } = useAuth();
+  const [cryptoData, setCryptoData] = useState(location.state?.cryptoData || null);
+  const [timeframe, setTimeframe] = useState('1H');
+  const [orderType, setOrderType] = useState('buy');
+  const [amount, setAmount] = useState('');
+  const [chartKey, setChartKey] = useState(0);
+  const [orderMode, setOrderMode] = useState('market');
+  const [leverage, setLeverage] = useState(1);
+  const [limitPrice, setLimitPrice] = useState('');
+  const [positions, setPositions] = useState({
+    open: [],
+    closed: []
+  });
+  const [userPnL, setUserPnL] = useState(0);
+  const [error, setError] = useState('');
+  const [currentPrice, setCurrentPrice] = useState(0);
+  const [userBalance, setUserBalance] = useState(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isPending, setIsPending] = useState(false);
+  const [openPositions, setOpenPositions] = useState([]);
+  const [closedPositions, setClosedPositions] = useState([]);
+  const [pendingLimitOrders, setPendingLimitOrders] = useState([]);
+  const [inputKey, setInputKey] = useState(0);
+  const [lastPrice, setLastPrice] = useState(0);
+  const [marketPrice, setMarketPrice] = useState(0);
+  const [closingPositionId, setClosingPositionId] = useState(null);
+  const [isLoadingPositions, setIsLoadingPositions] = useState(true);
+  const [isLoadingBalance, setIsLoadingBalance] = useState(true);
+  const [priceData, setPriceData] = useState([]);
+  const [recentTrades, setRecentTrades] = useState([]);
+  const [showDebug, setShowDebug] = useState(false);
+  const [buyRatio, setBuyRatio] = useState(0.5); // Default 50/50 ratio
+  const [orderBookFlash, setOrderBookFlash] = useState({});
+  const [orderBook, setOrderBook] = useState({ bids: [], asks: [] });
+  // Add a state to track the last checked price to avoid too frequent checks
+  const [lastCheckedPrice, setLastCheckedPrice] = useState(0);
+  // Add a state to track orders being executed to prevent duplicates
+  const [ordersBeingExecuted, setOrdersBeingExecuted] = useState([]);
+  // Add a state variable for the order being edited
+  const [editingOrderId, setEditingOrderId] = useState(null);
+  const [editTargetPrice, setEditTargetPrice] = useState('');
+  // Add a state to track price status
+  const [isPriceValidated, setIsPriceValidated] = useState(true);
+  const [symbol, setSymbol] = useState('btcusdt');
+  // Add these after the isPriceValidated state variable declaration
+  const [lastValidatedPrice, setLastValidatedPrice] = useState(0);
+  const [priceHistory, setPriceHistory] = useState([]);
+  const [isPriceConsistent, setIsPriceConsistent] = useState(true);
+
+  // Refs for cleanup
+  const ws = useRef(null);
+  const priceUpdateInterval = useRef(null);
+  const orderUpdateInterval = useRef(null);
+  const unsubscribeOrders = useRef(null);
+  const unsubscribePositions = useRef(null);
+
+  // Function to fetch user balances
+  const fetchUserBalances = async () => {
+    if (!currentUser) return;
+    
+    try {
+      setIsLoadingBalance(true);
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        if (userData.balances) {
+          setUserBalance(userData.balances);
+        } else {
+          // For legacy users, check the separate balances collection
+          const balanceDoc = await getDoc(doc(db, 'balances', currentUser.uid));
+          if (balanceDoc.exists()) {
+            setUserBalance(balanceDoc.data());
+          }
+        }
+        }
+      } catch (error) {
+      console.error('Error fetching user balances:', error);
+    } finally {
+      setIsLoadingBalance(false);
+    }
+  };
+
+  // Function to fetch pending limit orders for the current symbol
+  const fetchPendingLimitOrders = useCallback(async () => {
+    if (!currentUser || !cryptoData?.token?.symbol) return;
+    
+    try {
+      console.log('Fetching pending limit orders for:', currentUser.uid, cryptoData?.token?.symbol);
+      const limitOrders = await tradingService.getLimitOrders(currentUser.uid, cryptoData?.token?.symbol);
+      console.log('Received limit orders:', limitOrders);
+      setPendingLimitOrders(limitOrders);
+        } catch (error) {
+      console.error('Error fetching limit orders:', error);
+    }
+  }, [currentUser, cryptoData?.token?.symbol]);
+
+  // Function to fetch positions
+  const fetchPositions = useCallback(async () => {
+    if (!currentUser) return;
+    
+    try {
+      setIsLoadingPositions(true);
+      
+      // Query for open positions
+      const openPositionsQuery = query(
+        collection(db, 'positions'),
+        where('userId', '==', currentUser.uid),
+        where('status', '==', 'OPEN')
+      );
+      
+      // Fetch both open positions
+      const openPositionsSnapshot = await getDocs(openPositionsQuery);
+      const openPositionsData = openPositionsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Set the positions
+      setOpenPositions(openPositionsData);
+    } catch (error) {
+      console.error('Error fetching positions:', error);
+    } finally {
+      setIsLoadingPositions(false);
+    }
+  }, [currentUser]);
+
+  // Effect to fetch positions on mount and when user changes
+  useEffect(() => {
+    if (currentUser) {
+      fetchPositions();
+      fetchPendingLimitOrders(); // Also fetch pending limit orders when user changes
+    }
+  }, [currentUser]);
+
+  // Move ensureUserBalances here, at the top level of the component
+  const ensureUserBalances = useCallback(async () => {
+    if (!currentUser) return;
+    
+    try {
+      // Check if user has balances field
+      const userRef = doc(db, 'users', currentUser.uid);
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        
+        // If balances field doesn't exist or is invalid, create it
+        if (!userData.balances || typeof userData.balances !== 'object') {
+          console.log('User missing balances field, adding default balances');
+          
+          // Try to get any existing balances from the old location
+          let existingBalances = { USDT: 1000 }; // Default to 1000 USDT
+          
+          try {
+            const oldBalanceDoc = await getDoc(doc(db, 'balances', currentUser.uid));
+            if (oldBalanceDoc.exists()) {
+              const oldBalances = oldBalanceDoc.data();
+              if (oldBalances.USDT !== undefined) {
+                existingBalances.USDT = oldBalances.USDT;
+              }
+              if (oldBalances.BTC !== undefined) {
+                existingBalances.BTC = oldBalances.BTC;
+              }
+              // Add other coins as needed
+    }
+  } catch (error) {
+            console.warn('Error fetching old balances:', error);
+          }
+          
+          // Update user document with balances
+          await updateDoc(userRef, {
+            balances: existingBalances
+          });
+          
+          console.log('Updated user with balances:', existingBalances);
+        }
+      }
+    } catch (error) {
+      console.error('Error ensuring user balances:', error);
+    }
+  }, [currentUser]);
+  
+  // Call the ensureUserBalances function when component mounts and user is available
+  useEffect(() => {
+    if (currentUser) {
+      ensureUserBalances();
+    }
+  }, [currentUser, ensureUserBalances]);
+
+  // WebSocket setup
+  const setupWebSocket = useCallback(() => {
+    if (!isOnline) return null;
+
+    try {
+      // Close existing connection if any
+      if (ws.current) {
+        ws.current.close();
+      }
+
+      const symbol = cryptoData?.token?.symbol?.toLowerCase() || 'btc';
+      const wsSymbol = `${symbol}usdt@ticker`;
+      const newWs = new WebSocket(`wss://stream.binance.com:9443/ws/${wsSymbol}`);
+      
+      newWs.onopen = () => {
+        console.log('WebSocket connected');
+      };
+
+      newWs.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          // Handle the message data
+          console.log('WebSocket message:', data);
+        } catch (error) {
+          console.error('Error processing WebSocket message:', error);
+        }
+      };
+
+      newWs.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      newWs.onclose = () => {
+        console.log('WebSocket disconnected');
+      };
+
+      ws.current = newWs;
+      return () => {
+        if (ws.current) {
+          ws.current.close();
+          ws.current = null;
+        }
+      };
+    } catch (error) {
+      console.error('Error setting up WebSocket:', error);
+      return null;
+    }
+  }, [isOnline, cryptoData?.token?.symbol]);
+
+  // Price update function
+  const updatePrice = useCallback(async () => {
+    try {
+      // Your price update logic here
+      const newPrice = currentPrice * (1 + (Math.random() - 0.5) * 0.001);
+      setCurrentPrice(newPrice);
+      
+      // Also update market price for limit order checking
+      setMarketPrice(newPrice.toLocaleString());
+      
+      console.log(`💰 PRICE UPDATE: ${newPrice.toLocaleString()} USDT`);
+      
+      // If we have pending limit orders, log that we're checking them with the new price
+      if (pendingLimitOrders.length > 0) {
+        console.log(`💰 Checking ${pendingLimitOrders.length} pending orders with new price: ${newPrice.toLocaleString()}`);
+      }
+    } catch (error) {
+      console.error('Error updating price:', error);
+    }
+  }, [currentPrice, pendingLimitOrders.length]);
+
+  // Cleanup effect
+  useEffect(() => {
+    return () => {
+      // Cleanup WebSocket
+      if (ws.current) {
+        ws.current.close();
+        ws.current = null;
+      }
+
+      // Clear intervals
+      if (priceUpdateInterval.current) {
+        clearInterval(priceUpdateInterval.current);
+        priceUpdateInterval.current = null;
+      }
+
+      // Clear any other intervals or timeouts
+      if (orderUpdateInterval.current) {
+        clearInterval(orderUpdateInterval.current);
+        orderUpdateInterval.current = null;
+      }
+
+      // Unsubscribe from any Firestore listeners
+      if (typeof unsubscribeOrders.current === 'function') {
+        unsubscribeOrders.current();
+      }
+      if (typeof unsubscribePositions.current === 'function') {
+        unsubscribePositions.current();
+      }
+    };
+  }, []);
+
+  // WebSocket connection effect
+  useEffect(() => {
+    const cleanup = setupWebSocket();
+    return () => {
+      if (cleanup && typeof cleanup === 'function') {
+        cleanup();
+      }
+    };
+  }, [setupWebSocket]);
+
+  // Price update interval effect
+  useEffect(() => {
+    const intervalId = setInterval(updatePrice, 5000);
+    priceUpdateInterval.current = intervalId;
+    
+    return () => {
+      clearInterval(intervalId);
+      priceUpdateInterval.current = null;
+    };
+  }, [updatePrice]);
+
+  // Order update interval effect
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setOrderBook(generateMockOrderBookData(currentPrice));
+    }, 3000);
+    orderUpdateInterval.current = intervalId;
+    
+    return () => {
+      clearInterval(intervalId);
+      orderUpdateInterval.current = null;
+    };
+  }, [currentPrice]);
+
+  // TradingView widget cleanup
+  useEffect(() => {
+    const tradingViewContainer = document.getElementById('tradingview_chart');
+    
+    return () => {
+      try {
+        if (tradingViewContainer) {
+          while (tradingViewContainer.firstChild) {
+            tradingViewContainer.removeChild(tradingViewContainer.firstChild);
+          }
+        }
+        
+        if (window.TradingView && typeof window.TradingView === 'object') {
+          if (window.TradingView._binders) {
+            window.TradingView._binders = [];
+          }
+        }
+      } catch (error) {
+        console.error('Error cleaning up TradingView widget:', error);
+      }
+    };
+  }, []);
+
+  // Order book interval management
+  useEffect(() => {
+    let orderBookInterval = null;
+    
+    if (isOnline) {
+      orderBookInterval = setInterval(() => {
+        try {
+          if (marketPrice) {
+            const newOrders = generateDummyOrders(marketPrice);
+            setOrderBook(newOrders);
+            
+            const newBuyRatio = Math.floor(Math.random() * 40) + 10;
+            setBuyRatio(newBuyRatio);
+            
+            const newFlash = {};
+            newOrders.asks.forEach((_, i) => {
+              if (Math.random() > 0.7) {
+                newFlash[`ask-${i}`] = true;
+              }
+            });
+            
+            newOrders.bids.forEach((_, i) => {
+              if (Math.random() > 0.7) {
+                newFlash[`bid-${i}`] = true;
+              }
+            });
+            
+            setOrderBookFlash(newFlash);
+            
+            setTimeout(() => {
+              setOrderBookFlash({});
+            }, 600);
+          }
+        } catch (error) {
+          console.error('Error updating order book:', error);
+        }
+      }, 4000);
+    }
+    
+    return () => {
+      if (orderBookInterval) {
+        clearInterval(orderBookInterval);
+      }
+    };
+  }, [marketPrice, isOnline]);
+
+  // Effect for online/offline status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Update the validatePrice function
+  const validatePrice = (price, symbol = 'BTC') => {
+    if (!price || isNaN(price) || price <= 0) return false;
+    
+    // Define reasonable price ranges for common cryptocurrencies
+    const priceRanges = {
+      'BTC': { min: 10000, max: 200000 },    // Bitcoin reasonable range $10k-$200k
+      'ETH': { min: 500, max: 20000 },       // Ethereum reasonable range $500-$20k
+      'BNB': { min: 50, max: 2000 },         // Binance Coin reasonable range $50-$2k
+      'SOL': { min: 10, max: 1000 },         // Solana reasonable range $10-$1k
+      'XRP': { min: 0.1, max: 10 },          // Ripple reasonable range $0.1-$10
+      'ADA': { min: 0.05, max: 10 },         // Cardano reasonable range $0.05-$10
+      'DOGE': { min: 0.001, max: 5 },        // Dogecoin reasonable range $0.001-$5
+      'SHIB': { min: 0.000001, max: 0.01 }   // Shiba Inu reasonable range $0.000001-$0.01
+    };
+    
+    // Default reasonable range for other coins
+    const defaultRange = { min: 0.0001, max: 500000 };
+    
+    // Get the appropriate range based on symbol
+    const normalizedSymbol = symbol.replace(/usdt$/i, '').toUpperCase();
+    const range = priceRanges[normalizedSymbol] || defaultRange;
+    
+    // Basic range check
+    const isInRange = price >= range.min && price <= range.max;
+    
+    // Price consistency check (if we have a history)
+    const isConsistent = trackPrice(price, normalizedSymbol);
+    
+    // A price is only valid if it's both in a reasonable range AND consistent with recent prices
+    const isValid = isInRange && isConsistent;
+    
+    // If the price is valid, update the last validated price
+    if (isValid) {
+      setLastValidatedPrice(price);
+    }
+    
+    // If the validation result changed, log it
+    if (isValid !== isPriceValidated) {
+      console.log(
+        `Price validation ${isValid ? 'passed' : 'failed'} for ${normalizedSymbol}: ` +
+        `${price} (range check: ${isInRange}, consistency check: ${isConsistent})`
+      );
+    }
+    
+    return isValid;
+  };
+
+  // Effect for price updates
+  useEffect(() => {
+    if (!cryptoData) return;
+
+    let ws;
+    let lastValidPrice = null; // Track the last known valid price
+    
+    const updatePrice = async () => {
+      if (cryptoData?.token?.type === 'dex') {
+        // DEX price update logic
+        if (cryptoData?.token?.address && cryptoData?.token?.chainId) {
+          try {
+            const response = await axios.get(`https://api.dexscreener.com/latest/dex/pairs/${cryptoData.token.chainId}/${cryptoData.token.address}`);
+            if (response.data?.pair?.priceUsd) {
+              const price = parseFloat(response.data.pair.priceUsd);
+              console.log('Raw DEX price from API:', price);
+              
+              const symbol = cryptoData?.token?.symbol?.toUpperCase() || 'BTC';
+              const isValidPrice = validatePrice(price, symbol);
+              
+              // Update validation state
+              setIsPriceValidated(isValidPrice);
+              
+              if (!isNaN(price) && price > 0 && isValidPrice) {
+                // Store the exact price from the API
+                lastValidPrice = price;
+                setMarketPrice(price);
+                setLastPrice(price);
+                setCurrentPrice(price);
+                
+                // Generate order book with exactly the same price
+                console.log('Generating order book with exact DEX price:', price);
+                const newOrderBook = generateDummyOrders(price);
+                setOrderBook(newOrderBook);
+              } else {
+                console.warn('Anomalous price detected from DEX API:', price);
+                // Use last valid price if available, otherwise don't update
+                if (lastValidPrice) {
+                  console.log('Using last valid price instead:', lastValidPrice);
+                  setMarketPrice(lastValidPrice);
+                  setLastPrice(lastValidPrice);
+                  setCurrentPrice(lastValidPrice);
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching DEX price:', error);
+          }
+        }
+      } else {
+        // Use CoinGecko API for reliable CEX prices
+        try {
+          const symbol = cryptoData?.token?.symbol?.toLowerCase() || 'btc';
+          let coinId;
+          
+          // Map symbols to CoinGecko IDs
+          switch (symbol) {
+            case 'btc':
+            case 'btcusdt':
+              coinId = 'bitcoin';
+              break;
+            case 'eth':
+            case 'ethusdt':
+              coinId = 'ethereum';
+              break;
+            default:
+              // Try to use symbol as coinId for other tokens
+              coinId = symbol.replace('usdt', '');
+          }
+          
+          console.log(`Fetching price for ${coinId} from CoinGecko`);
+          const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd`);
+          
+          if (response.data[coinId] && response.data[coinId].usd) {
+            const newPrice = parseFloat(response.data[coinId].usd);
+            console.log('Raw price from CoinGecko:', newPrice);
+            
+            const normalizedSymbol = symbol.replace(/usdt$/i, '').toUpperCase();
+            const isValidPrice = validatePrice(newPrice, normalizedSymbol);
+            
+            // Update validation state
+            setIsPriceValidated(isValidPrice);
+            
+            if (!isNaN(newPrice) && newPrice > 0 && isValidPrice) {
+              console.log(`Received price update for ${coinId}:`, newPrice);
+              lastValidPrice = newPrice;
+              setMarketPrice(newPrice);
+              setLastPrice(newPrice);
+              setCurrentPrice(newPrice);
+              
+              // Generate order book with the exact same price
+              console.log('Generating order book with exact price:', newPrice);
+              const newOrderBook = generateDummyOrders(newPrice);
+              setOrderBook(newOrderBook);
+              
+              // Also set up a WebSocket for real-time updates if available
+              setupWebSocketConnection(symbol.toLowerCase());
+            } else {
+              console.warn('Anomalous price detected from CoinGecko:', newPrice);
+              // Use last valid price if available, otherwise don't update
+              if (lastValidPrice) {
+                console.log('Using last valid price instead:', lastValidPrice);
+                setMarketPrice(lastValidPrice);
+                setLastPrice(lastValidPrice);
+                setCurrentPrice(lastValidPrice);
+              }
+            }
+          } else {
+            console.warn('Failed to get price from CoinGecko, falling back to Binance WebSocket');
+            setupWebSocketConnection(symbol.toLowerCase());
+          }
+        } catch (error) {
+          console.error('Error fetching price from CoinGecko:', error);
+          
+          // Fallback to Binance WebSocket
+        const symbol = cryptoData?.token?.symbol?.toLowerCase() || 'btcusdt';
+          setupWebSocketConnection(symbol.toLowerCase());
+        }
+      }
+    };
+    
+    const setupWebSocketConnection = (symbol) => {
+      // Ensure symbol has usdt suffix
+      const formattedSymbol = symbol.endsWith('usdt') ? symbol : `${symbol}usdt`;
+      
+      console.log('Setting up WebSocket for symbol:', formattedSymbol);
+      
+      // Close existing connection
+      if (ws) {
+        ws.close();
+      }
+      
+      // Create new connection
+      ws = new WebSocket(`wss://stream.binance.com:9443/ws/${formattedSymbol}@trade`);
+        
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.p) {
+              const newPrice = parseFloat(data.p);
+              
+              const normalizedSymbol = symbol.replace(/usdt$/i, '').toUpperCase();
+              
+              // First validate price is within reasonable range 
+              const isValidPrice = validatePrice(newPrice, normalizedSymbol);
+              
+              // Also track price consistency
+              const isConsistent = trackPrice(newPrice, normalizedSymbol);
+              
+              // Set the validation state
+              setIsPriceValidated(isValidPrice);
+              
+              // Only update prices if they pass validation, otherwise use last validated price
+              if (isValidPrice && isConsistent) {
+                console.log(`Received WebSocket price update for ${formattedSymbol}: ${newPrice} (valid and consistent)`);
+                // Use exactly the same price for all state updates
+                setLastValidatedPrice(newPrice);
+                setMarketPrice(newPrice);
+                setLastPrice(newPrice);
+                setCurrentPrice(newPrice);
+                
+                // Generate order book with the exact same price
+                console.log('Generating order book with exact WebSocket price:', newPrice);
+                const newOrderBook = generateDummyOrders(newPrice);
+                setOrderBook(newOrderBook);
+              } else {
+                // When price is invalid, log it but don't update trading price
+                console.warn(`Anomalous price received from WebSocket: ${newPrice} - validation: ${isValidPrice}, consistency: ${isConsistent}`);
+                
+                // Show the price in the UI but mark it as invalid
+                // This shows users what's happening without affecting their trades
+                setMarketPrice(newPrice);
+                
+                // Check if we have a previous validated price to use
+                if (lastValidatedPrice > 0) {
+                  console.log(`Using last validated price instead: ${lastValidatedPrice}`);
+                  // Keep using the last valid price for trading operations
+                  setCurrentPrice(lastValidatedPrice);
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error processing WebSocket message:', error);
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error);
+        };
+      
+      ws.onclose = () => {
+        console.log('WebSocket connection closed');
+      };
+    };
+
+    // Initialize price update
+    updatePrice();
+
+    // Set up periodic updates every 30 seconds as a fallback
+    const interval = setInterval(updatePrice, 30000);
+
+    return () => {
+      if (ws) {
+        ws.close();
+      }
+        clearInterval(interval);
+    };
+  }, [cryptoData]);
+
+  // Define fetchUserData function before it's used in any useEffect
+  const fetchUserData = useCallback(async () => {
+    if (!currentUser) return () => {};  // Return empty cleanup function
+    
+    try {
+      // Listen to user balance changes
+      const userUnsubscribe = onSnapshot(
+        doc(db, 'users', currentUser.uid),
+        {
+          includeMetadataChanges: true
+        },
+        (doc) => {
+          if (doc.exists()) {
+            const userData = doc.data();
+            console.log('Full user data:', userData);
+            
+            // Check if balances exist in the user document
+            if (userData.balances) {
+              console.log('User balances from document:', userData.balances);
+              console.log('USDT balance type:', typeof userData.balances.USDT, 'value:', userData.balances.USDT);
+              
+              // Ensure USDT exists and is a valid number
+              if (userData.balances.USDT === undefined || userData.balances.USDT === null || isNaN(userData.balances.USDT)) {
+                console.warn('Invalid USDT balance in user document, setting to 0');
+                userData.balances.USDT = 0;
+              }
+              
+              setUserBalance(userData.balances);
+            } else {
+              // No balances in user document
+              console.warn('No balances field in user document, will be fixed by ensureUserBalances');
+              setUserBalance({ USDT: 0, BTC: 0, ETH: 0 });
+            }
+            
+            setIsLoadingBalance(false);
+          }
+        },
+        (error) => console.error('User snapshot error:', error)
+      );
+
+      // Listen to positions
+      const positionsUnsubscribe = onSnapshot(
+        query(collection(db, 'positions'), where('userId', '==', currentUser.uid)),
+        {
+          includeMetadataChanges: true
+        },
+        (snapshot) => {
+          const openPos = [];
+          const closedPos = [];
+          
+          snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            const position = {
+        id: doc.id,
+              ...data,
+              openTime: data.openTime?.toDate?.() || new Date(data.openTime),
+              closeTime: data.closeTime?.toDate?.() || (data.closeTime ? new Date(data.closeTime) : null),
+              lastUpdated: data.lastUpdated?.toDate?.() || new Date(data.lastUpdated)
+            };
+
+            if (position.status === 'OPEN') {
+              openPos.push(position);
+            } else if (position.status === 'CLOSED') {
+              closedPos.push(position);
+            }
+          });
+
+          setOpenPositions(openPos.sort((a, b) => b.openTime - a.openTime));
+          setClosedPositions(closedPos.sort((a, b) => b.closeTime - a.closeTime));
+      setIsLoadingPositions(false);
+        },
+        (error) => console.error('Positions snapshot error:', error)
+      );
+
+      // Return a cleanup function that calls both unsubscribe functions
+      return () => {
+        userUnsubscribe();
+        positionsUnsubscribe();
+      };
+    } catch (error) {
+      console.error('Error in fetchUserData:', error);
+      return () => {}; // Return empty cleanup function
+    }
+  }, [currentUser]);
+
+  // Define fetchPriceData function before any useEffect that uses it
+  const fetchPriceData = useCallback(async () => {
+    if (!cryptoData?.token) {
+      console.warn('No token data available for fetchPriceData');
+      return;
+    }
+
+    try {
+      if (cryptoData.token.type === 'dex') {
+        // For DEX tokens, use DexScreener API's standard pairs endpoint
+        const chain = cryptoData.token.chainId?.toLowerCase() || 'ethereum';
+        const pairAddress = cryptoData.pairInfo?.address?.toLowerCase();
+        
+        if (!pairAddress) {
+          console.error('No pair address available for DEX token');
+          setPriceData([]);
+          return;
+        }
+        
+        console.log(`Fetching price data for ${chain}/${pairAddress}`);
+        
+        // Try both format options to ensure we get data
+        let response;
+        try {
+          // First attempt: Use pairs/{chain}/{pairAddress} format
+          response = await axios.get(
+            `https://api.dexscreener.com/latest/dex/pairs/${chain}/${pairAddress}`
+          );
+          console.log('DexScreener API response (pairs endpoint):', response.data);
+        } catch (error) {
+          console.error('Error fetching from DexScreener pairs endpoint:', error);
+          
+          // Second attempt: Use direct address endpoint
+          try {
+            response = await axios.get(
+              `https://api.dexscreener.com/latest/dex/search?q=${pairAddress}`
+            );
+            console.log('DexScreener API response (search endpoint):', response.data);
+          } catch (searchError) {
+            console.error('Error fetching from DexScreener search endpoint:', searchError);
+            throw new Error('Failed to fetch data from DexScreener');
+          }
+        }
+        
+        // Check if we have valid data from either attempt
+        const pairs = response.data?.pairs || [response.data?.pair].filter(Boolean);
+        if (pairs && pairs.length > 0) {
+          const pair = pairs[0];
+          console.log('Found pair data:', pair);
+          
+          // Update market price with the latest price
+          if (pair.priceUsd) {
+            const priceUsd = Number(parseFloat(pair.priceUsd));
+            if (!isNaN(priceUsd) && priceUsd > 0) {
+              setMarketPrice(priceUsd);
+              setCurrentPrice(priceUsd);
+            } else {
+              console.warn('Invalid price from DexScreener:', pair.priceUsd);
+            }
+          }
+          
+          // Update pairInfo with any additional data we got from DexScreener
+          if (!cryptoData.pairInfo || !cryptoData.pairInfo.dexId) {
+            const updatedCryptoData = {
+              ...cryptoData,
+              pairInfo: {
+                ...cryptoData.pairInfo,
+                address: pair.pairAddress || cryptoData.pairInfo?.address,
+                dexId: pair.dexId || cryptoData.pairInfo?.dexId || 'unknown',
+                baseToken: pair.baseToken || cryptoData.pairInfo?.baseToken,
+                quoteToken: pair.quoteToken || cryptoData.pairInfo?.quoteToken,
+                priceUsd: pair.priceUsd || cryptoData.pairInfo?.priceUsd
+              }
+            };
+            setCryptoData(updatedCryptoData);
+            console.log('Updated cryptoData with pair info:', updatedCryptoData);
+          }
+          
+          // For price history, we need to create a simple dataset
+          // DexScreener doesn't provide candlestick data through this endpoint
+          
+          // Create a minimal dataset with the current price
+          const currentTime = Math.floor(Date.now() / 1000);
+          
+          // Use priceChange data if available to estimate an "open" price
+          const priceChangeH24 = pair.priceChange?.h24 ? parseFloat(pair.priceChange.h24) : 0;
+          const closePrice = parseFloat(pair.priceUsd || 0);
+          const openPrice = closePrice / (1 + (priceChangeH24 / 100));
+          
+          // Estimate high and low based on price change
+          const priceChange = Math.abs(closePrice - openPrice);
+          const high = Math.max(openPrice, closePrice) + (priceChange * 0.1); // Add 10% buffer
+          const low = Math.min(openPrice, closePrice) - (priceChange * 0.1);  // Subtract 10% buffer
+          
+          // Create a simple dataset for the chart
+          setPriceData([{
+            time: currentTime,
+            open: openPrice,
+            high: high,
+            low: low,
+            close: closePrice,
+            volume: parseFloat(pair.volume?.h24 || 0)
+          }]);
+          
+          console.log('Created simplified price data for chart');
+        } else {
+          // No valid pair data
+          console.error('No valid pair data found for', pairAddress);
+          console.log('Full response:', response.data);
+          setPriceData([]);
+        }
+      } else {
+        // For CEX tokens, use existing Binance API
+        const interval = TIMEFRAMES[timeframe].binanceInterval;
+        const symbol = `${cryptoData.token.symbol}USDT`;
+
+        const response = await axios.get(
+          `https://api.binance.com/api/v3/klines`,
+          {
+            params: {
+              symbol: symbol,
+              interval: interval,
+              limit: 500
+            }
+          }
+        );
+
+        const formattedData = response.data.map(candle => ({
+          time: candle[0] / 1000,
+          open: parseFloat(candle[1]),
+          high: parseFloat(candle[2]),
+          low: parseFloat(candle[3]),
+          close: parseFloat(candle[4]),
+          volume: parseFloat(candle[5])
+        }));
+
+        setPriceData(formattedData);
+      }
+    } catch (error) {
+      console.error('Error fetching price data:', error);
+      setPriceData([]);
+    }
+  }, [cryptoData?.token?.id, cryptoData?.token?.type, cryptoData?.pairInfo?.address, timeframe]);
+
+  // Update user data useEffect
+  useEffect(() => {
+    if (currentUser) {
+      return fetchUserData();
+    }
+  }, [currentUser, fetchUserData]);
+
+  // Update price data useEffect
+  useEffect(() => {
+    // Always call the hook, but conditionally run the logic inside
+    if (cryptoData?.token?.id) {
+      fetchPriceData();
+    }
+  }, [cryptoData?.token?.id, fetchPriceData]);
+
+  // Improved market price update effect - always call this hook unconditionally
+  useEffect(() => {
+    // Move the conditional logic inside the effect but always call the hook
+    const updateMarketPriceFromCryptoData = () => {
+      let priceToUse = null;
+      
+      // Try to get price from different sources in priority order
+      if (cryptoData?.token?.price && !isNaN(parseFloat(cryptoData.token.price))) {
+        priceToUse = parseFloat(cryptoData.token.price);
+        console.log('📊 Using token price:', priceToUse);
+      } else if (cryptoData?.chartData?.price && !isNaN(parseFloat(cryptoData.chartData.price))) {
+        priceToUse = parseFloat(cryptoData.chartData.price);
+        console.log('📊 Using chart price:', priceToUse);
+      } else if (cryptoData?.lastPrice && !isNaN(parseFloat(cryptoData.lastPrice))) {
+        priceToUse = parseFloat(cryptoData.lastPrice);
+        console.log('📊 Using last price:', priceToUse);
+      }
+      
+      // If we found a valid price, update market price and order book
+      if (priceToUse !== null && priceToUse > 0) {
+        // Ensure the price is a valid number
+        priceToUse = Number(priceToUse);
+        setMarketPrice(priceToUse);
+        
+        // Generate a new order book with the updated price
+        const newOrderBook = generateOrderBook(priceToUse);
+        setOrderBook(newOrderBook);
+        
+        // Check limit orders immediately whenever price updates
+        if (pendingLimitOrders.length > 0) {
+          console.log('📊 Price updated, checking pending orders...');
+          checkPendingLimitOrders();
+        }
+      } else {
+        console.warn('No valid price found in crypto data:', cryptoData);
+      }
+    };
+    
+    // Always call this function, whether cryptoData exists or not
+    updateMarketPriceFromCryptoData();
+    
+  }, [cryptoData, pendingLimitOrders.length]);
+
+  // Update the chart initialization useEffect
+  useEffect(() => {
+    if (!priceData.length) return;
+
+    const handleResize = () => {
+      // Handle chart resize logic
+    };
+
+    try {
+      // Create chart instance with IChartApi type
+      // const chartInstance = createChart(chartContainerRef.current, {
+      //   width: chartContainerRef.current.clientWidth,
+      //   height: chartContainerRef.current.clientHeight,
+      //   layout: {
+      //     background: { type: ColorType.Solid, color: '#1E222D' },
+      //     textColor: '#7a7a7a',
+      //   },
+      //   grid: {
+      //     vertLines: { color: 'rgba(42, 46, 57, 0.2)' },
+      //     horzLines: { color: 'rgba(42, 46, 57, 0.2)' },
+      //   },
+      //   timeScale: {
+      //     timeVisible: true,
+      //     secondsVisible: false,
+      //     borderColor: 'rgba(42, 46, 57, 0.5)',
+      //   },
+      //   rightPriceScale: {
+      //     borderColor: 'rgba(42, 46, 57, 0.5)',
+      //   },
+      //   crosshair: {
+      //     mode: 1,
+      //     vertLine: {
+      //       color: '#758696',
+      //       width: 1,
+      //       style: 3,
+      //     },
+      //     horzLine: {
+      //       color: '#758696',
+      //       width: 1,
+      //       style: 3,
+      //     },
+      //   },
+      // });
+
+      // // Create candlestick series with proper type
+      // const mainSeries = chartInstance.addCandlestickSeries({
+      //   upColor: '#0ECB81',
+      //   downColor: '#F6465D',
+      //   borderUpColor: '#0ECB81',
+      //   borderDownColor: '#F6465D',
+      //   wickUpColor: '#0ECB81',
+      //   wickDownColor: '#F6465D',
+      // });
+
+      // // Create volume series with proper type
+      // const volumeSeries = chartInstance.addHistogramSeries({
+      //   color: '#26a69a',
+      //   priceFormat: {
+      //     type: 'volume',
+      //   },
+      //   priceScaleId: '', // Set as overlay
+      //   scaleMargins: {
+      //     top: 0.8,
+      //     bottom: 0,
+      //   },
+      // });
+
+      // // Format data for candlestick series
+      // const candleData = priceData.map(d => ({
+      //   time: d.time,
+      //   open: d.open,
+      //   high: d.high,
+      //   low: d.low,
+      //   close: d.close,
+      // }));
+
+      // // Format data for volume series
+      // const volumeData = priceData.map(d => ({
+      //   time: d.time,
+      //   value: d.volume,
+      //   color: d.close > d.open ? 'rgba(14, 203, 129, 0.3)' : 'rgba(246, 70, 93, 0.3)',
+      // }));
+
+      // // Set data to series
+      // mainSeries.setData(candleData);
+      // volumeSeries.setData(volumeData);
+
+      // // Fit content
+      // chartInstance.timeScale().fitContent();
+
+      // // Save chart reference
+      // chartRef.current = chartInstance;
+
+      // // Add resize listener
+      // window.addEventListener('resize', handleResize);
+
+      // // Cleanup
+      // return () => {
+      //   window.removeEventListener('resize', handleResize);
+      //   if (chartRef.current) {
+      //     chartRef.current.remove();
+      //     chartRef.current = null;
+      //   }
+      // };
+    } catch (error) {
+      console.error('Error creating chart:', error);
+    }
+  }, [priceData]);
+
+  // Fetch data when timeframe changes
+  useEffect(() => {
+    fetchPriceData();
+  }, [timeframe, cryptoData?.token?.id, fetchPriceData]); // Add fetchPriceData as a dependency
+
+  // Function to handle canceling a limit order
+  const handleCancelLimitOrder = async (orderId) => {
+    if (isPending) return;
+    
+    try {
+      setIsPending(true);
+      
+      // Find the order in the list
+      const orderToCancel = pendingLimitOrders.find(order => order.id === orderId);
+      if (!orderToCancel) {
+        throw new Error('Order not found');
+      }
+      
+      // Optimistically remove from UI
+      setPendingLimitOrders(prev => prev.filter(order => order.id !== orderId));
+      
+      // Call service to cancel the order
+      await tradingService.cancelLimitOrder(currentUser.uid, orderId);
+      
+      // Notify user
+      addNotification({
+        title: 'Order Cancelled',
+        message: `Limit order cancelled successfully`,
+        type: 'success'
+      });
+      
+      // Refresh user's balance
+      fetchUserBalances();
+      
+    } catch (error) {
+      console.error('Error cancelling limit order:', error);
+      
+      // Add back to UI if there was an error
+      if (error.message !== 'Order not found') {
+        fetchPendingLimitOrders();
+      }
+      
+      addNotification({
+        title: 'Cancellation Failed',
+        message: error.message || 'Failed to cancel order',
+        type: 'error'
+      });
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  // Update the handleSubmit function
+  const handleSubmit = async () => {
+    if (!isAuthenticated) {
+      notify('Please connect your wallet to trade', 'error');
+      return;
+    }
+
+    // Prevent trading if price validation fails
+    if (!isPriceValidated) {
+      notify('Cannot execute trade: Price validation failed. Please wait for reliable market data', 'error');
+      console.error('Trade rejected: Price validation failed');
+      return;
+    }
+
+    // Use the validated price for trading
+    const tradePrice = lastValidatedPrice > 0 ? lastValidatedPrice : marketPrice;
+    console.log(`Executing trade at validated price: ${tradePrice}`);
+
+    if (!amount || amount <= 0) {
+      notify('Please enter a valid amount', 'error');
+      return;
+    }
+
+    if (selectedTab === 'limit' && (!limitPrice || limitPrice <= 0)) {
+      notify('Please enter a valid limit price', 'error');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      
+      // Calculate required margin based on leverage
+      const requiredMargin = calculateRequiredMargin(amount, tradePrice, leverage);
+      
+      // Check if user has sufficient balance
+      if (userBalance?.USDT < requiredMargin) {
+        notify('Insufficient balance for this trade', 'error');
+        return;
+      }
+      
+      // Create trade data object
+      const tradeData = {
+        symbol: cryptoData.token.symbol,
+        type: orderType,
+        side: orderType,
+        amount: parseFloat(amount),
+        leverage: parseInt(leverage),
+        entryPrice: tradePrice,
+        margin: requiredMargin,
+        orderMode: orderMode
+      };
+      
+      // For limit orders, add target price
+      if (orderMode === 'limit') {
+        tradeData.targetPrice = parseFloat(limitPrice);
+      }
+      
+      // Execute the trade based on order type
+      if (orderMode === 'market') {
+        // Create provisional position for optimistic UI update
+        const provisionalId = `temp-${Date.now()}`;
+        const now = new Date();
+        const provisionalPosition = {
+          id: provisionalId,
+          userId: currentUser.uid,
+          symbol: tradeData.symbol,
+          type: tradeData.type,
+          side: tradeData.side,
+          amount: tradeData.amount,
+          leverage: tradeData.leverage,
+          entryPrice: tradeData.entryPrice,
+          margin: tradeData.margin,
+          orderMode: tradeData.orderMode,
+          status: 'OPEN',
+          openTime: now,
+          currentPnL: 0,
+          lastUpdated: now,
+          closePrice: null,
+          closeTime: null,
+          finalPnL: null
+        };
+        
+        // Update UI optimistically
+        setOpenPositions(prev => [provisionalPosition, ...prev]);
+        
+        // Send to trading service
+        const result = await tradingService.openPosition(currentUser.uid, tradeData);
+        
+        if (!result.success) {
+          // Roll back optimistic update if failed
+          setOpenPositions(prev => prev.filter(p => p.id !== provisionalId));
+          throw new Error(result.error || 'Failed to create position');
+        } else {
+          // Play success sound
+          playTradeSound();
+          notify(`${orderType.toUpperCase()} position opened successfully`, 'success');
+        }
+      } else if (orderMode === 'limit') {
+        // Handle limit order creation
+        console.log('Creating limit order:', tradeData);
+        
+        const result = await tradingService.createLimitOrder(currentUser.uid, tradeData);
+        
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to create limit order');
+        } else {
+          notify(`Limit order created successfully`, 'success');
+          // Refresh pending orders
+          fetchPendingLimitOrders();
+        }
+      }
+      
+      // Reset form fields after successful submission
+      setAmount('');
+      setLimitPrice('');
+      setLeverage(1);
+      
+      // Refresh user balances
+      fetchUserBalances();
+      
+    } catch (error) {
+      console.error('Error during trade submission:', error);
+      notify('Failed to submit order. Please try again later.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Update handleClosePosition to use validated prices and add isLiquidation parameter
+  const handleClosePosition = async (position, isLiquidation = false) => {
+    try {
+      if (!position) return;
+      
+      if (!currentUser) {
+        addNotification({
+          title: 'Authentication Required',
+          message: 'Please log in to close positions',
+          type: 'error'
+        });
+        return;
+      }
+      
+      setClosingPositionId(position.id);
+      
+      // For normal closes (not liquidations), verify the market price is valid
+      if (!isLiquidation) {
+        const symbol = position.symbol?.toUpperCase() || cryptoData?.token?.symbol?.toUpperCase() || 'BTC';
+        const isValidPrice = validatePrice(marketPrice, symbol) && isPriceConsistent;
+        
+        if (!isValidPrice) {
+          addNotification({
+            title: 'Price Error',
+            message: 'Cannot close position with unreliable price data. Please refresh price.',
+            type: 'error',
+            playSound: true
+          });
+          setClosingPositionId(null);
+          return;
+        }
+      }
+      
+      // Use last validated price if available, otherwise market price
+      // For liquidations, we've already validated the price to use
+      const closePrice = isLiquidation 
+        ? (lastValidatedPrice > 0 ? lastValidatedPrice : marketPrice)
+        : marketPrice;
+      
+      console.log(`Closing position ${position.id} at price: ${closePrice}${isLiquidation ? ' (liquidation)' : ''}`);
+      
+      // Call the trading service to close the position
+      await tradingService.closePosition(currentUser.uid, position.id, closePrice, isLiquidation);
+      
+      // Play sound for position close
+      playTradeSound();
+      
+      // Add notification
+      addNotification({
+        title: isLiquidation ? 'Position Liquidated' : 'Position Closed',
+        message: `${position.symbol} position closed at $${closePrice.toLocaleString()}`,
+        type: isLiquidation ? 'error' : 'success',
+        playSound: !isLiquidation // Don't play sound twice for liquidations
+      });
+      
+      // Update positions
+      fetchPositions();
+      
+      // Update user balance
+      fetchUserBalances();
+    } catch (error) {
+      console.error(`Error closing position:`, error);
+      addNotification({
+        title: 'Error',
+        message: `Failed to close position: ${error.message}`,
+        type: 'error'
+      });
+    } finally {
+      setClosingPositionId(null);
+    }
+  };
+
+  // Check positions for liquidation using validated prices
+  const checkPositionsForLiquidation = async () => {
+    try {
+      // Skip liqudation check if no positions
+      if (!openPositions || openPositions.length === 0) {
+        return;
+      }
+      
+      // Skip if we don't have a valid market price
+      if (!marketPrice || !isPriceValidated || !isPriceConsistent) {
+        console.warn('Skipping liquidation check due to invalid price data:', marketPrice);
+        return;
+      }
+      
+      // Use the last validated price if available, otherwise use current market price
+      const priceToUse = lastValidatedPrice > 0 ? lastValidatedPrice : marketPrice;
+      
+      // Double-check that we're using a valid price - this prevents erroneous liquidations
+      const symbol = cryptoData?.token?.symbol?.toUpperCase() || 'BTC';
+      const isValidPrice = validatePrice(priceToUse, symbol);
+      
+      if (!isValidPrice) {
+        console.warn('Skipping liquidation check due to anomalous market price:', priceToUse);
+        return;
+      }
+      
+      // Check each position
+      for (const position of openPositions) {
+        // Calculate liquidation price
+        const liquidationPrice = calculateLiquidationPrice(position);
+        
+        if (!liquidationPrice) continue;
+        
+        const { type, leverage, id } = position;
+        const positionSymbol = position.symbol || symbol;
+        
+        // Add extra safety margin - only liquidate if price is at least 1% past liquidation point
+        // This prevents liquidation on momentary price spikes
+        const safetyMargin = liquidationPrice * 0.01; 
+        
+        // For longs, liquidate if price falls below liquidation price
+        // For shorts, liquidate if price rises above liquidation price
+        let shouldLiquidate = false;
+        
+        if (type === 'buy' && priceToUse < (liquidationPrice - safetyMargin)) {
+          shouldLiquidate = true;
+          console.warn(`LIQUIDATION: Long position ${id} liquidated. Current price: ${priceToUse}, Liquidation price: ${liquidationPrice}`);
+        } else if (type === 'sell' && priceToUse > (liquidationPrice + safetyMargin)) {
+          shouldLiquidate = true;
+          console.warn(`LIQUIDATION: Short position ${id} liquidated. Current price: ${priceToUse}, Liquidation price: ${liquidationPrice}`);
+        }
+        
+        if (shouldLiquidate) {
+          try {
+            // Log the liquidation event with all details for debugging
+            console.log('Liquidating position:', {
+              id,
+              type,
+              symbol: positionSymbol,
+              leverage,
+              entryPrice: position.entryPrice,
+              currentPrice: priceToUse,
+              liquidationPrice,
+              marketPriceBeforeLiquidation: marketPrice,
+              validatedPrice: lastValidatedPrice,
+              isPriceValidated,
+              isPriceConsistent
+            });
+            
+            // Close the position
+            await handleClosePosition(position, true); // true indicates liquidation
+            
+            // Add notification for user
+            addNotification({
+              title: 'Position Liquidated',
+              message: `Your ${type === 'buy' ? 'long' : 'short'} position for ${positionSymbol} has been liquidated at $${priceToUse.toLocaleString()}`,
+              type: 'error',
+              playSound: true
+            });
+          } catch (error) {
+            console.error('Error liquidating position:', error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error checking for liquidations:", error);
+    }
+  };
+
+  // Calculate liquidation price based on position details
+  const calculateLiquidationPrice = (position) => {
+    if (!position || !position.type || !position.entryPrice || !position.leverage) {
+      return 0;
+    }
+    
+    // Extract position details
+    const { type, entryPrice, leverage, margin } = position;
+    const entryPriceNum = parseFloat(entryPrice);
+    const leverageNum = parseFloat(leverage);
+    const marginNum = parseFloat(margin || 0);
+    
+    if (isNaN(entryPriceNum) || isNaN(leverageNum) || leverageNum === 0 || marginNum === 0) {
+      return 0;
+    }
+    
+    // Calculate the liquidation threshold (percentage of margin that triggers liquidation)
+    // Typically this is around 80% of the margin, but can vary based on exchange rules
+    const liquidationThreshold = 0.8;
+    
+    // Calculate liquidation price based on position type (buy/long or sell/short)
+    if (type.toLowerCase() === 'buy' || type.toLowerCase() === 'long') {
+      // For long positions, liquidation happens when price falls
+      // Formula: entry_price - (entry_price / leverage) * liquidationThreshold
+      return entryPriceNum * (1 - (liquidationThreshold / leverageNum));
+    } else {
+      // For short positions, liquidation happens when price rises
+      // Formula: entry_price + (entry_price / leverage) * liquidationThreshold
+      return entryPriceNum * (1 + (liquidationThreshold / leverageNum));
+    }
+  };
+
+  // Function to refresh accurate cryptocurrency prices
+  const fetchAccuratePrice = async () => {
+    if (!cryptoData?.token) return;
+    
+    try {
+      const symbol = cryptoData.token?.symbol?.toLowerCase() || 'btc';
+      let coinId;
+      
+      // Map symbols to CoinGecko IDs
+      switch (symbol) {
+        case 'btc':
+        case 'btcusdt':
+          coinId = 'bitcoin';
+          break;
+        case 'eth':
+        case 'ethusdt':
+          coinId = 'ethereum';
+          break;
+        default:
+          // Try to use symbol as coinId for other tokens
+          coinId = symbol.replace('usdt', '');
+      }
+      
+      console.log(`🔄 Fetching accurate price for ${coinId} from CoinGecko`);
+      const response = await axios.get(`https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd`);
+      
+      if (response.data[coinId] && response.data[coinId].usd) {
+        const newPrice = parseFloat(response.data[coinId].usd);
+        
+        // Validate the price
+        const normalizedSymbol = symbol.toUpperCase();
+        const isValidPrice = validatePrice(newPrice, normalizedSymbol);
+        
+        // Update validation state
+        setIsPriceValidated(isValidPrice);
+        
+        if (isValidPrice) {
+          console.log(`✅ Received accurate price for ${coinId}:`, newPrice);
+          setMarketPrice(newPrice);
+          setLastPrice(newPrice);
+          setCurrentPrice(newPrice);
+          
+          // Generate order book with the exact same price
+          console.log('Generating order book with accurate price:', newPrice);
+          const newOrderBook = generateDummyOrders(newPrice);
+          setOrderBook(newOrderBook);
+          
+          return true;
+        } else {
+          console.warn(`⚠️ CoinGecko returned potentially invalid price for ${coinId}:`, newPrice);
+          return false;
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error fetching accurate price:', error);
+      return false;
+    }
+  };
+
+  // Handle timeframe changes
+  const handleTimeframeChange = (tf) => {
+    setTimeframe(tf);
+    setChartKey(prev => prev + 1); // Force chart refresh when timeframe changes
+  };
+
+  // Render price validation status
+  const renderPriceValidationStatus = () => {
+    if (!isPriceValidated) {
+      return (
+        <div style={{ 
+          backgroundColor: 'rgba(255, 59, 48, 0.2)', 
+          color: '#ff3b30', 
+          padding: '10px', 
+          borderRadius: '8px', 
+          marginBottom: '15px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between' 
+        }}>
+          <span>⚠️ Warning: Price data appears incorrect. Trading disabled for your protection.</span>
+          <button 
+            onClick={fetchAccuratePrice}
+            style={{
+              backgroundColor: 'rgba(0, 122, 255, 0.8)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '5px 10px',
+              cursor: 'pointer'
+            }}
+          >
+            Refresh Price
+          </button>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  // Functions for TradingView symbol generation
+  const getTradingViewSymbol = () => {
+    if (!cryptoData?.token?.symbol) return 'BINANCE:BTCUSDT';
+    return `BINANCE:${cryptoData.token.symbol.toUpperCase()}USDT`;
+  };
+
+  const getDexTradingViewSymbol = () => {
+    if (!cryptoData?.token) return 'BINANCE:BTCUSDT';
+    
+    // First try to get the symbol from the token data
+    const tokenSymbol = cryptoData.token.symbol?.toUpperCase() || 'ETH';
+    const baseSymbol = cryptoData.pairInfo?.baseAsset?.toUpperCase() || 'USDT';
+    const chainId = cryptoData.token.chainId?.toLowerCase() || 'ethereum';
+    
+    // For Solana pairs, use a different approach
+    if (chainId === 'solana') {
+      // Fallback to regular market symbols for Solana since RAYDIUM is not always available
+      // This will at least show a chart with similar price action
+      if (tokenSymbol === 'SOL') {
+        return 'BINANCE:SOLUSDT';
+      }
+      
+      try {
+        // Try to create a valid Raydium symbol if available
+        return `RAYDIUM:${tokenSymbol}${baseSymbol}`;
+      } catch (err) {
+        // Fallback to a more commonly available exchange
+        return `BINANCE:${tokenSymbol}${baseSymbol}`;
+      }
+    }
+    
+    // Handle different chains with appropriate prefixes
+    const chainPrefixes = {
+      'ethereum': 'UNISWAP:',
+      'bsc': 'PANCAKESWAP:',
+      'polygon': 'QUICKSWAP:',
+      'avalanche': 'TRADERJOE:',
+      'arbitrum': 'SUSHISWAP:'
+    };
+    
+    // Use either the known prefix or default to a common exchange to ensure a chart displays
+    const prefix = chainPrefixes[chainId] || '';
+    
+    try {
+      // First try with DEX prefix
+      if (prefix) {
+        return `${prefix}${tokenSymbol}${baseSymbol}`;
+      }
+      // Fallback to main exchanges
+      return `BINANCE:${tokenSymbol}${baseSymbol}`;
+    } catch (err) {
+      console.log("Error generating TradingView symbol:", err);
+      // Ultimate fallback
+      return 'BINANCE:BTCUSDT';
+    }
+  };
+
+  // Check if our chart type can show TradingView
+  const canShowTradingViewChart = () => {
+    // Don't show TradingView for DEX tokens except major ones
+    if (cryptoData?.token?.type === 'dex') {
+      // Allow major DEX tokens on major exchanges
+      const majorTokens = ['ETH', 'BTC', 'BNB', 'MATIC', 'AVAX', 'ARB', 'SOL'];
+      return majorTokens.includes(cryptoData.token.symbol.toUpperCase());
+    }
+    return true;
+  };
+
+  // Timeframe selector component
+  const renderTimeframeBar = () => (
+    <TimeframeSelector>
+      {Object.keys(TIMEFRAMES).map((tf) => (
+        <TimeButton
+          key={tf}
+          $active={timeframe === tf}
+          onClick={() => handleTimeframeChange(tf)}
+        >
+          {TIMEFRAMES[tf].label}
+        </TimeButton>
+      ))}
+      
+      {/* Debug toggle button - only visible in development */}
+      {process.env.NODE_ENV === 'development' && (
+        <TimeButton
+          $active={showDebug}
+          onClick={() => setShowDebug(!showDebug)}
+          style={{ marginLeft: 'auto', background: showDebug ? '#ff3e3e' : '#555' }}
+        >
+          Debug
+        </TimeButton>
+      )}
+    </TimeframeSelector>
+  );
+
+  // Render chart section
+  const renderChartSection = () => {
+    // Generate a unique container ID for each symbol to prevent conflicts
+    const chartContainerId = `tradingview_${cryptoData?.token?.symbol?.toLowerCase() || 'chart'}_${timeframe}`;
+
+    return (
+      <ChartSection>
+        <ChartContainer>
+          {renderTimeframeBar()}
+          
+          {cryptoData?.token?.type === 'dex' ? (
+            // For DEX tokens, use DexScreener iframe
+            <div style={{ position: 'relative', height: '500px', width: '100%' }}>
+              {canShowTradingViewChart() ? (
+                // For major DEX tokens, try TradingView
+                <div id={chartContainerId} style={{ height: '100%', width: '100%' }}>
+                  <TradingChartComponent
+                    symbol={getDexTradingViewSymbol()}
+                    theme={theme}
+                    timeframe={TIMEFRAMES[timeframe]?.tradingViewInterval || '60'}
+                    autosize={true}
+                    container_id={chartContainerId}
+                    onPriceUpdate={(price) => {
+                      if (price && !isNaN(price)) {
+                        // Synchronize chart price with order book
+                        setMarketPrice(price);
+                        setCurrentPrice(price);
+                        // Update order book with the exact chart price
+                        setOrderBook(generateDummyOrders(price));
+                      }
+                    }}
+                  />
+                </div>
+              ) : (
+                // For other DEX tokens, use DexScreener iframe
+                <iframe
+                  src={getDexScreenerChartEmbedUrl()}
+                  title="DEX Chart"
+                  style={{ 
+                    height: '100%', 
+                    width: '100%', 
+                    border: 'none',
+                    borderRadius: '8px' 
+                  }}
+                  allowFullScreen
+                />
+              )}
+              {showDebug && renderDebugInfo()}
+              
+              <DexLink 
+                href={`${getDexScreenerUrl()}?theme=dark`}
+                target="_blank" 
+                rel="noopener noreferrer"
+              >
+                View on DEXScreener <i className="bi bi-box-arrow-up-right"></i>
+              </DexLink>
+            </div>
+          ) : (
+            // For CEX tokens, use TradingView
+            <div style={{ position: 'relative', height: '500px', width: '100%' }} id={chartContainerId}>
+              <TradingChartComponent 
+                symbol={getChartSymbol()}
+                theme={theme}
+                timeframe={TIMEFRAMES[timeframe]?.tradingViewInterval || '60'}
+                autosize={true}
+                allow_symbol_change={true}
+                container_id={chartContainerId}
+                onPriceUpdate={(price) => {
+                  if (price && !isNaN(price)) {
+                    // Synchronize chart price with order book
+                    setMarketPrice(price);
+                    setCurrentPrice(price);
+                    // Update order book with the exact chart price
+                    setOrderBook(generateDummyOrders(price));
+                  }
+                }}
+              />
+            </div>
+          )}
+        </ChartContainer>
+      </ChartSection>
+    );
+  };
+
+  // Render debug info
+  const renderDebugInfo = () => {
+    if (cryptoData?.token?.type !== 'dex') return null;
+    
+    return (
+      <div style={{ position: 'relative' }}>
+        <button 
+          onClick={() => setShowDebug(!showDebug)}
+          style={{
+            position: 'absolute',
+            bottom: '10px',
+            right: '10px',
+            background: 'rgba(0,0,0,0.5)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '4px',
+            padding: '5px',
+            fontSize: '12px',
+            cursor: 'pointer',
+            zIndex: 11
+          }}
+        >
+          {showDebug ? 'Hide Debug' : 'Debug'}
+        </button>
+        
+        <DexDebugInfo $visible={showDebug}>
+          <h4>DEX Token Debug Info</h4>
+          <div>
+            <p><strong>Chain:</strong> {cryptoData?.token?.chainId || 'unknown'}</p>
+            <p><strong>Token Address:</strong> {cryptoData?.token?.address || 'N/A'}</p>
+            <p><strong>Pair Address:</strong> {cryptoData?.pairInfo?.address || 'N/A'}</p>
+            <p><strong>Symbol:</strong> {cryptoData?.token?.symbol || 'unknown'}</p>
+            <hr/>
+            <p><strong>DexScreener URL:</strong> {getDexScreenerUrl()}</p>
+            <p><strong>Chart Embed URL:</strong> {getDexScreenerChartEmbedUrl()}</p>
+          </div>
+        </DexDebugInfo>
+      </div>
+    );
+  };
+
+  // Get chart symbol
+  const getChartSymbol = () => {
+    if (!cryptoData?.token) return 'BTCUSDT';
+    
+    // Add special handling for Solana tokens if needed
+    if (cryptoData.token.chainId === 'solana') {
+      return `BINANCE:${cryptoData.token.symbol}USDT`;
+    }
+    
+    // Regular logic for other chains
+    return `BINANCE:${cryptoData.token.symbol}USDT`;
+  };
+
+  // Order book rendering
+  const renderOrderBook = () => {
+    // Get the current token symbol from cryptoData
+    const tokenSymbol = cryptoData?.token?.symbol || 'BNB';
+    
+    // Ensure orderBook contains valid data
+    const safeOrderBook = {
+      asks: (orderBook?.asks || []).map(ask => ({
+        price: !isNaN(ask.price) ? ask.price : Number(currentPrice * (1 + Math.random() * 0.02)),
+        quantity: !isNaN(ask.quantity) ? ask.quantity : generateRandomQty(ask.price),
+        total: !isNaN(ask.total) ? ask.total : Number((currentPrice * (1 + Math.random() * 0.02)) * generateRandomQty(ask.price))
+      })),
+      bids: (orderBook?.bids || []).map(bid => ({
+        price: !isNaN(bid.price) ? bid.price : Number(currentPrice * (1 - Math.random() * 0.02)),
+        quantity: !isNaN(bid.quantity) ? bid.quantity : generateRandomQty(bid.price),
+        total: !isNaN(bid.total) ? bid.total : Number((currentPrice * (1 - Math.random() * 0.02)) * generateRandomQty(bid.price))
+      })),
+      marketPrice: !isNaN(orderBook?.marketPrice) ? orderBook.marketPrice : currentPrice
+    };
+    
+    return (
+      <OrderBookTable>
+        <div className="header">
+          <div>Price(USDT)</div>
+          <div>Qty({tokenSymbol})</div>
+          <div>Total</div>
+        </div>
+        
+        <div style={{overflow: 'auto', height: 'calc(100% - 38px)', display: 'flex', flexDirection: 'column'}}>
+          <div style={{flex: 1, overflow: 'auto', maxHeight: '46%'}}>
+            {safeOrderBook.asks.map((ask, index) => (
+              <div key={`ask-${index}`} className="row">
+                <OrderPrice $type="ask">{Number(ask.price).toFixed(2)}</OrderPrice>
+                <div>
+                  {isNaN(parseFloat(ask.amount)) ? 
+                    (ask.price > 500 ? (Math.random() * 1.95 + 0.05).toFixed(4) : 
+                     ask.price > 100 ? (Math.random() * 4.9 + 0.1).toFixed(4) : 
+                     (Math.random() * 20 + 1).toFixed(4)) : 
+                    (typeof ask.amount === 'number' ? 
+                      ask.amount.toFixed(4) : 
+                      parseFloat(ask.amount).toFixed(4))}
+                </div>
+                <div>{Number(ask.total).toFixed(2)}</div>
+              </div>
+            ))}
+          </div>
+          
+          <div style={{ padding: '4px', textAlign: 'center', color: '#666', background: '#1b1b2f', borderTop: '1px solid #333', borderBottom: '1px solid #333' }}>
+            <span style={{ color: '#e63946', marginRight: '5px' }}>↓</span> 
+            <span style={{ color: '#f1faee', fontWeight: 'bold' }}>{Number(safeOrderBook.marketPrice || currentPrice).toFixed(2)}</span>
+          </div>
+          
+          <div style={{flex: 1, overflow: 'auto', maxHeight: '46%'}}>
+            {safeOrderBook.bids.map((bid, index) => (
+              <div key={`bid-${index}`} className="row">
+                <OrderPrice $type="bid">{Number(bid.price).toFixed(2)}</OrderPrice>
+                <div>
+                  {isNaN(parseFloat(bid.amount)) ? 
+                    (bid.price > 500 ? (Math.random() * 1.95 + 0.05).toFixed(4) : 
+                     bid.price > 100 ? (Math.random() * 4.9 + 0.1).toFixed(4) : 
+                     (Math.random() * 20 + 1).toFixed(4)) : 
+                    (typeof bid.amount === 'number' ? 
+                      bid.amount.toFixed(4) : 
+                      parseFloat(bid.amount).toFixed(4))}
+                </div>
+                <div>{Number(bid.total).toFixed(2)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </OrderBookTable>
+    );
+  };
+
+  // Add function to handle editing an order
+  const handleEditOrderClick = (order) => {
+    setEditingOrderId(order.id);
+    setEditTargetPrice(order.targetPrice?.toString() || '');
+  };
+
+  // Add function to save the edited target price
+  const handleSaveTargetPrice = async (orderId) => {
+    if (isPending) return;
+    
+    try {
+      setIsPending(true);
+      
+      // Find the order in question
+      const orderToUpdate = pendingLimitOrders.find(o => o.id === orderId);
+      if (!orderToUpdate) {
+        throw new Error('Order not found');
+      }
+      
+      // Parse the new target price
+      const newTargetPrice = parseFloat(editTargetPrice);
+      if (isNaN(newTargetPrice) || newTargetPrice <= 0) {
+        throw new Error('Invalid price');
+      }
+      
+      // Update the order in Firebase
+      await tradingService.updateLimitOrderPrice(currentUser.uid, orderId, newTargetPrice);
+      
+      // Update local state
+      setPendingLimitOrders(prev => 
+        prev.map(order => 
+          order.id === orderId 
+            ? { ...order, targetPrice: newTargetPrice, price: newTargetPrice } 
+            : order
+        )
+      );
+      
+      // Clear edit state
+      setEditingOrderId(null);
+      setEditTargetPrice('');
+      
+      // Notify user
+      addNotification({
+        title: 'Order Updated',
+        message: `Target price updated to $${newTargetPrice.toLocaleString()}`,
+        type: 'success'
+      });
+    } catch (error) {
+      console.error('Error updating order:', error);
+      addNotification({
+        title: 'Update Failed',
+        message: error.message || 'Failed to update order',
+        type: 'error'
+      });
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  // Render pending limit orders
+  const renderPendingLimitOrders = () => {
+    if (pendingLimitOrders.length === 0) return null;
+    
+    return (
+      <div style={{ 
+        marginTop: '50px', 
+        marginBottom: '30px',
+        background: 'var(--bg)',
+        borderRadius: '12px',
+        border: '2px solid #D4AF37',
+        boxShadow: '0 0 20px rgba(212, 175, 55, 0.3)',
+        padding: '15px',
+        animation: 'fadeIn 0.5s ease-in-out',
+        position: 'relative',
+        zIndex: 5
+      }}>
+        <h3 style={{ 
+          margin: '0 0 15px 0',
+          color: '#D4AF37',
+          fontSize: '20px',
+          fontWeight: '600',
+          textAlign: 'center'
+        }}>Pending Limit Orders</h3>
+        
+        <PositionsTable>
+          <thead>
+            <tr>
+              <TableHeader>Type</TableHeader>
+              <TableHeader>Amount</TableHeader>
+              <TableHeader>Target Price</TableHeader>
+              <TableHeader>Market Price</TableHeader>
+              <TableHeader>Leverage</TableHeader>
+              <TableHeader>Margin</TableHeader>
+              <TableHeader>Created At</TableHeader>
+              <TableHeader>Actions</TableHeader>
+            </tr>
+          </thead>
+          <tbody>
+            {pendingLimitOrders.map(order => {
+              const createdDate = order.createdAt instanceof Date 
+                ? order.createdAt 
+                : order.createdAt?.toDate?.() || new Date();
+                
+              return (
+                <tr key={order.id}>
+                  <TableCell style={{ 
+                    color: order.type === 'buy' ? '#0ECB81' : '#F6465D' 
+                  }}>
+                    {(order.side || order.type)?.toUpperCase() || 'N/A'} <span className="mobile-only-symbol">[{order.symbol}]</span>
+                  </TableCell>
+                  <TableCell>{order.amount || 0} {order.symbol || ''}</TableCell>
+                  <TableCell>
+                    {editingOrderId === order.id ? (
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <input 
+                          type="number"
+                          style={{ 
+                            width: '80px',
+                            background: 'rgba(255,255,255,0.05)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: '4px',
+                            padding: '4px 8px',
+                            color: 'white',
+                            marginRight: '8px'
+                          }}
+                          value={editTargetPrice}
+                          onChange={(e) => setEditTargetPrice(e.target.value)}
+                          min="0.01"
+                          step="0.01"
+                        />
+                        <button
+                          style={{
+                            background: '#2E7D32',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '4px 8px',
+                            color: 'white',
+                            cursor: 'pointer',
+                            marginRight: '4px'
+                          }}
+                          onClick={() => handleSaveTargetPrice(order.id)}
+                          disabled={isPending}
+                        >
+                          ✓
+                        </button>
+                        <button
+                          style={{
+                            background: '#C62828',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '4px 8px',
+                            color: 'white', 
+                            cursor: 'pointer'
+                          }}
+                          onClick={() => setEditingOrderId(null)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        ${order.targetPrice?.toLocaleString() || '0.00'}
+                        <button
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#64B5F6',
+                            cursor: 'pointer',
+                            marginLeft: '8px',
+                            fontSize: '14px'
+                          }}
+                          onClick={() => handleEditOrderClick(order)}
+                          disabled={isPending || order.isProvisional}
+                          title="Edit Target Price"
+                        >
+                          ✎
+                        </button>
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell>${marketPrice >= 1000 ? marketPrice.toLocaleString() : marketPrice.toLocaleString() || '0.00'}</TableCell>
+                  <TableCell>{order.leverage || 1}x</TableCell>
+                  <TableCell>${order.margin?.toLocaleString() || '0.00'}</TableCell>
+                  <TableCell>
+                    {createdDate.toLocaleString()}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      onClick={() => handleCancelLimitOrder(order.id)}
+                      disabled={isPending || order.isProvisional || editingOrderId === order.id}
+                    >
+                      {isPending && order.isProvisional ? 'Processing...' : 'Cancel'}
+                    </Button>
+                  </TableCell>
+                </tr>
+              );
+            })}
+          </tbody>
+        </PositionsTable>
+      </div>
+    );
+  };
+
+  // Update handleClosePosition to enforce minimum price floor and prevent $0 closes
+  const handleClosePosition = async (position, isLiquidation = false) => {
+    try {
+      if (!position) return;
+      
+      if (!currentUser) {
+        addNotification({
+          title: 'Authentication Required',
+          message: 'Please log in to close positions',
+          type: 'error'
+        });
+        return;
+      }
+      
+      setClosingPositionId(position.id);
+      
+      // For normal closes (not liquidations), verify the market price is valid
+      if (!isLiquidation) {
+        const symbol = position.symbol?.toUpperCase() || cryptoData?.token?.symbol?.toUpperCase() || 'BTC';
+        const isValidPrice = validatePrice(marketPrice, symbol) && isPriceConsistent;
+        
+        if (!isValidPrice) {
+          addNotification({
+            title: 'Price Error',
+            message: 'Cannot close position with unreliable price data. Please refresh price.',
+            type: 'error',
+            playSound: true
+          });
+          setClosingPositionId(null);
+          return;
+        }
+      }
+      
+      // Use last validated price if available, otherwise market price
+      // For liquidations, we've already validated the price to use
+      const closePrice = isLiquidation 
+        ? (lastValidatedPrice > 0 ? lastValidatedPrice : marketPrice)
+        : marketPrice;
+      
+      // CRITICAL: Zero and near-zero price protection
+      // Never allow positions to be closed at $0 or extremely low values
+      if (closePrice <= 0 || closePrice < 0.000001) {
+        console.error(`PREVENTED CATASTROPHIC ZERO-PRICE CLOSE: Position ${position.id} attempted to close at $${closePrice}`);
+        
+        // Try to fetch an emergency backup price
+        let emergencyPrice = await fetchBackupPrice(position.symbol);
+        
+        // If we got a valid emergency price, use it
+        if (emergencyPrice && emergencyPrice > 0) {
+          console.log(`Using emergency backup price: $${emergencyPrice}`);
+          closePrice = emergencyPrice;
+        } else {
+          // Otherwise, use entry price as a fallback (guaranteed to be > 0)
+          // This is better than closing at $0 which is a 100% loss
+          closePrice = parseFloat(position.entryPrice);
+          console.log(`Using entry price as fallback: $${closePrice}`);
+          
+          // Notify admin about this critical issue
+          addNotification({
+            title: 'Critical Price Error',
+            message: 'Using entry price as fallback to prevent zero-price close',
+            type: 'error',
+            playSound: true
+          });
+        }
+      }
+      
+      // Verify price is reasonable compared to entry price
+      // Prevent catastrophic price swings (e.g., BTC from $80,000 to $80)
+      const entryPrice = parseFloat(position.entryPrice);
+      const maxPriceSwing = 0.9; // 90% max drop/increase
+      
+      if (entryPrice > 0) {
+        // Check if price has dropped/increased too much from entry
+        const priceDelta = Math.abs(closePrice - entryPrice) / entryPrice;
+        
+        if (priceDelta > maxPriceSwing) {
+          console.warn(`Extreme price movement detected: Entry $${entryPrice} → Close $${closePrice} (${priceDelta * 100}% change)`);
+          
+          // Try to fetch a backup price to verify
+          const verificationPrice = await fetchBackupPrice(position.symbol);
+          
+          if (verificationPrice && verificationPrice > 0) {
+            // If verification price is closer to entry price, use it instead
+            const verificationDelta = Math.abs(verificationPrice - entryPrice) / entryPrice;
+            
+            if (verificationDelta < priceDelta) {
+              console.log(`Using verification price $${verificationPrice} instead of suspicious price $${closePrice}`);
+              closePrice = verificationPrice;
+            } else {
+              // If verification price confirms dramatic movement, log it but proceed
+              console.log(`Extreme price movement confirmed by verification: $${verificationPrice}`);
+            }
+          }
+        }
+      }
+      
+      console.log(`Closing position ${position.id} at price: $${closePrice}${isLiquidation ? ' (liquidation)' : ''}`);
+      
+      // Call the trading service to close the position
+      await tradingService.closePosition(currentUser.uid, position.id, closePrice, isLiquidation);
+      
+      // Play sound for position close
+      playTradeSound();
+      
+      // Add notification
+      addNotification({
+        title: isLiquidation ? 'Position Liquidated' : 'Position Closed',
+        message: `${position.symbol} position closed at $${closePrice.toLocaleString()}`,
+        type: isLiquidation ? 'error' : 'success',
+        playSound: !isLiquidation // Don't play sound twice for liquidations
+      });
+      
+      // Update positions
+      fetchPositions();
+      
+      // Update user balance
+      fetchUserBalances();
+    } catch (error) {
+      console.error(`Error closing position:`, error);
+      addNotification({
+        title: 'Error',
+        message: `Failed to close position: ${error.message}`,
+        type: 'error'
+      });
+    } finally {
+      setClosingPositionId(null);
+    }
+  };
+
+  // Function to fetch backup price from alternative source
+  const fetchBackupPrice = async (symbol) => {
+    try {
+      if (!symbol) return null;
+      
+      // Normalize symbol
+      const normalizedSymbol = symbol.replace(/[\/\-].*$/, '').toLowerCase();
+      
+      // Try multiple backup APIs to ensure we get a valid price
+      
+      // 1. Try CoinGecko first
+      try {
+        let coinId;
+        
+        // Map common symbols to CoinGecko IDs
+        switch (normalizedSymbol) {
+          case 'btc': coinId = 'bitcoin'; break;
+          case 'eth': coinId = 'ethereum'; break;
+          case 'sol': coinId = 'solana'; break;
+          case 'bnb': coinId = 'binancecoin'; break;
+          case 'avax': coinId = 'avalanche-2'; break;
+          default: coinId = normalizedSymbol;
+        }
+        
+        console.log(`Fetching emergency backup price for ${coinId} from CoinGecko`);
+        const response = await axios.get(
+          `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd`,
+          { timeout: 3000 }
+        );
+        
+        if (response.data[coinId]?.usd) {
+          const price = parseFloat(response.data[coinId].usd);
+          console.log(`CoinGecko returned backup price: $${price}`);
+          return price;
+        }
+      } catch (err) {
+        console.error('Failed to get backup price from CoinGecko:', err);
+      }
+      
+      // 2. Try Binance API as fallback
+      try {
+        const binanceSymbol = `${normalizedSymbol}usdt`.toUpperCase();
+        console.log(`Trying Binance API for ${binanceSymbol}`);
+        
+        const response = await axios.get(
+          `https://api.binance.com/api/v3/ticker/price?symbol=${binanceSymbol}`,
+          { timeout: 3000 }
+        );
+        
+        if (response.data?.price) {
+          const price = parseFloat(response.data.price);
+          console.log(`Binance API returned backup price: $${price}`);
+          return price;
+        }
+      } catch (err) {
+        console.error('Failed to get backup price from Binance:', err);
+      }
+      
+      // 3. Try Kraken API as final fallback
+      try {
+        const krakenSymbol = `${normalizedSymbol}usd`.toUpperCase();
+        console.log(`Trying Kraken API for ${krakenSymbol}`);
+        
+        const response = await axios.get(
+          `https://api.kraken.com/0/public/Ticker?pair=${krakenSymbol}`,
+          { timeout: 3000 }
+        );
+        
+        // Kraken response structure is complicated, navigate carefully
+        const krakenData = response.data?.result;
+        if (krakenData) {
+          const pairKey = Object.keys(krakenData)[0];
+          if (pairKey && krakenData[pairKey]?.c?.[0]) {
+            const price = parseFloat(krakenData[pairKey].c[0]);
+            console.log(`Kraken API returned backup price: $${price}`);
+            return price;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to get backup price from Kraken:', err);
+      }
+      
+      // If all APIs failed, return null
+      console.error('All backup price sources failed');
+      return null;
+    } catch (error) {
+      console.error('Error in fetchBackupPrice:', error);
+      return null;
+    }
+  };
+
+  // Update checkPositionsForLiquidation to add zero-price protection
+  const checkPositionsForLiquidation = async () => {
+    try {
+      // Skip liquidation check if no positions
+      if (!openPositions || openPositions.length === 0) {
+        return;
+      }
+      
+      // Skip if we don't have a valid market price
+      if (!marketPrice || !isPriceValidated || !isPriceConsistent) {
+        console.warn('Skipping liquidation check due to invalid price data:', marketPrice);
+        return;
+      }
+      
+      // Use the last validated price if available, otherwise use current market price
+      let priceToUse = lastValidatedPrice > 0 ? lastValidatedPrice : marketPrice;
+      
+      // CRITICAL: Zero and near-zero price protection for liquidations
+      if (priceToUse <= 0 || priceToUse < 0.000001) {
+        console.error(`PREVENTED CATASTROPHIC ZERO-PRICE LIQUIDATION: Attempted with price $${priceToUse}`);
+        return; // Skip liquidation entirely
+      }
+      
+      // Double-check that we're using a valid price - this prevents erroneous liquidations
+      const symbol = cryptoData?.token?.symbol?.toUpperCase() || 'BTC';
+      const isValidPrice = validatePrice(priceToUse, symbol);
+      
+      if (!isValidPrice) {
+        console.warn('Skipping liquidation check due to anomalous market price:', priceToUse);
+        return;
+      }
+      
+      // Check each position
+      for (const position of openPositions) {
+        // Calculate liquidation price
+        const liquidationPrice = calculateLiquidationPrice(position);
+        
+        if (!liquidationPrice) continue;
+        
+        const { type, leverage, id } = position;
+        const positionSymbol = position.symbol || symbol;
+        
+        // Add extra safety margin - only liquidate if price is at least 3% past liquidation point
+        // Increased from 1% to 3% for added safety against price volatility
+        const safetyMargin = liquidationPrice * 0.03; 
+        
+        // For longs, liquidate if price falls below liquidation price
+        // For shorts, liquidate if price rises above liquidation price
+        let shouldLiquidate = false;
+        
+        if (type === 'buy' && priceToUse < (liquidationPrice - safetyMargin)) {
+          shouldLiquidate = true;
+          console.warn(`LIQUIDATION CHECK: Long position ${id} eligible for liquidation. Current price: ${priceToUse}, Liquidation price: ${liquidationPrice}`);
+          
+          // Verify with backup price source before liquidating
+          const backupPrice = await fetchBackupPrice(positionSymbol);
+          
+          if (backupPrice && backupPrice > 0) {
+            if (backupPrice >= (liquidationPrice - safetyMargin)) {
+              console.log(`Backup price $${backupPrice} conflicts with liquidation price - aborting liquidation`);
+              shouldLiquidate = false;
+            } else {
+              // Backup price confirms liquidation should proceed
+              console.log(`Backup price $${backupPrice} confirms liquidation condition`);
+              // Use the backup price if it's valid
+              priceToUse = backupPrice;
+            }
+          }
+        } else if (type === 'sell' && priceToUse > (liquidationPrice + safetyMargin)) {
+          shouldLiquidate = true;
+          console.warn(`LIQUIDATION CHECK: Short position ${id} eligible for liquidation. Current price: ${priceToUse}, Liquidation price: ${liquidationPrice}`);
+          
+          // Verify with backup price source before liquidating
+          const backupPrice = await fetchBackupPrice(positionSymbol);
+          
+          if (backupPrice && backupPrice > 0) {
+            if (backupPrice <= (liquidationPrice + safetyMargin)) {
+              console.log(`Backup price $${backupPrice} conflicts with liquidation price - aborting liquidation`);
+              shouldLiquidate = false;
+            } else {
+              // Backup price confirms liquidation should proceed
+              console.log(`Backup price $${backupPrice} confirms liquidation condition`);
+              // Use the backup price if it's valid
+              priceToUse = backupPrice;
+            }
+          }
+        }
+        
+        if (shouldLiquidate) {
+          try {
+            // Log the liquidation event with all details for debugging
+            console.log('Liquidating position:', {
+              id,
+              type,
+              symbol: positionSymbol,
+              leverage,
+              entryPrice: position.entryPrice,
+              currentPrice: priceToUse,
+              liquidationPrice,
+              marketPriceBeforeLiquidation: marketPrice,
+              validatedPrice: lastValidatedPrice,
+              isPriceValidated,
+              isPriceConsistent
+            });
+            
+            // Close the position with the validated price
+            await handleClosePosition(position, true); // true indicates liquidation
+            
+            // Add notification for user
+            addNotification({
+              title: 'Position Liquidated',
+              message: `Your ${type === 'buy' ? 'long' : 'short'} position for ${positionSymbol} has been liquidated at $${priceToUse.toLocaleString()}`,
+              type: 'error',
+              playSound: true
+            });
+          } catch (error) {
+            console.error('Error liquidating position:', error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error checking for liquidations:", error);
+    }
+  };
+
+  return (
+    <TradingContainer>
+      {/* Trading component content */}
+    </TradingContainer>
+  );
+};
+
+export default Trading;

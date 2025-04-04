@@ -1,0 +1,31 @@
+{
+  "totalBnb": 0.01961,
+  "uniqueSenders": {},
+  "uniqueReceivers": {},
+  "highestDeposit": 0.0098,
+  "highestDepositTx": "0xa9348fb4824f27a7fa0d79784e2a16dccdb40868f01099fb2450432aa9010a08",
+  "lowestDeposit": 0.00001,
+  "lowestDepositTx": "0x9f366a1add8593306905c18eed955f832cd54854b1f349dddaf370161f7aedbd",
+  "averageDeposit": 0.006536666666666666,
+  "depositsByDate": {
+    "12/26/2024": 2,
+    "9/12/2023": 1
+  },
+  "depositsByMonth": {
+    "Dec 2024": {
+      "count": 2,
+      "amount": 0.0196
+    },
+    "Sep 2023": {
+      "count": 1,
+      "amount": 0.00001
+    }
+  },
+  "depositsByUser": {
+    "user2@example.com": {
+      "count": 3,
+      "amount": 0.01961
+    }
+  },
+  "totalTransactions": 3
+}
