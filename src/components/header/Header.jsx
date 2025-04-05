@@ -674,7 +674,8 @@ const Header = () => {
 
         try {
             // Normalize the search term to handle cases like "BTC/USDT" or "btcusdt"
-            const normalizedTerm = term.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            const normalizedTerm = term.toUpperCase();
+            const searchWords = normalizedTerm.split(/[\s\/\-]+/).filter(word => word);
             
             // Query both collections: coins and tokens
             const coinsRef = collection(db, 'coins');
@@ -696,26 +697,14 @@ const Header = () => {
                 .filter(coin => {
                     const symbol = (coin.symbol || '').toUpperCase();
                     const name = (coin.name || '').toUpperCase();
+                    const id = (coin.id || '').toUpperCase();
                     
-                    // Check for direct matches
-                    if (symbol.includes(normalizedTerm) || name.includes(normalizedTerm)) {
-                        return true;
-                    }
-                    
-                    // Check for trading pairs (e.g. BTC/USDT or BTCUSDT)
-                    if (symbol + 'USDT' === normalizedTerm) {
-                        return true;
-                    }
-                    
-                    // For pairs split by / or -
-                    if (term.includes('/') || term.includes('-')) {
-                        const parts = term.toUpperCase().replace(/-/g, '/').split('/');
-                        if (parts.length === 2 && symbol === parts[0] && parts[1] === 'USDT') {
-                            return true;
-                        }
-                    }
-                    
-                    return false;
+                    // Check if any search word matches any field
+                    return searchWords.some(word => 
+                        symbol.includes(word) || 
+                        name.includes(word) || 
+                        id.includes(word)
+                    );
                 })
                 .map(coin => ({
                     ...coin,
@@ -732,38 +721,24 @@ const Header = () => {
     };
 
     const handleResultClick = (result) => {
-        // Create trading data object from the result
-        const tradingData = {
-            token: {
-                id: result.id,
-                name: result.name,
-                symbol: result.symbol,
-                type: result.source === 'tokens' ? 'dex' : 'cex',
-                chainId: result.chainId || 'ethereum',
-                image: result.logo || result.icon || result.logoUrl || `https://coinicons-api.vercel.app/api/icon/${result.symbol?.toLowerCase()}`
-            },
-            pairInfo: {
-                symbol: `${result.symbol}/USDT`,
-                baseAsset: 'USDT',
-                quoteAsset: result.symbol,
-                address: result.address || ''
-            },
-            chartData: {
-                lastPrice: parseFloat(result.price) || 0,
-                change24h: parseFloat(result.priceChange24h) || 0,
-                volume24h: result.volume24h || 0
-            }
-        };
-        
-        console.log('Navigating to trading with data:', tradingData);
-        
-        // Navigate with state
-        navigate(`/trading/${result.id}`, { 
-            state: { cryptoData: tradingData } 
-        });
-        
-        setShowResults(false);
-        setSearchTerm('');
+        try {
+            // Instead of navigating directly, we'll redirect to the market page
+            // with search parameters to improve matching
+            console.log('Search result clicked:', result);
+            
+            // Reset search UI
+            setShowResults(false);
+            setSearchTerm('');
+            
+            // Include both name and symbol to improve matching chances
+            const searchQuery = result.symbol || result.name;
+            
+            // Navigate to market page with search filter
+            navigate(`/market?search=${encodeURIComponent(searchQuery)}`);
+        } catch (error) {
+            console.error('Error in handleResultClick:', error);
+            navigate('/market');
+        }
     };
 
     const handleProfileClick = (e) => {
