@@ -3560,7 +3560,7 @@ const Trading = () => {
       try {
         const params = getSearchParams();
         
-        // Handle custom token from URL parameters
+        // First priority: Handle custom token from URL parameters
         if (params.symbol && params.address && params.chain && params.custom === 'true') {
           const customTradingData = {
             id: `custom_${params.address}`,
@@ -3793,7 +3793,7 @@ const Trading = () => {
     
     initializeCryptoData();
     
-    // Return cleanup function to clear any custom token intervals when component unmounts
+    // Cleanup function to clear custom token intervals
     return () => {
       if (window.customTokenInterval) {
         console.log('Cleaning up custom token interval on unmount');
@@ -3833,7 +3833,23 @@ const Trading = () => {
     if (cryptoData?.token?.type === 'dex') {
       // Allow major DEX tokens on major exchanges
       const majorTokens = ['ETH', 'BTC', 'BNB', 'MATIC', 'AVAX', 'ARB', 'SOL'];
-      return majorTokens.includes(cryptoData.token.symbol.toUpperCase());
+      
+      // Extract base symbol (handle cases like "Staked SOL" where symbol might be complex)
+      const baseSymbol = cryptoData.token.symbol?.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      
+      // Special handling for SOL and token names containing "staked", "liquid", or "wrapped"
+      const tokenName = (cryptoData.token.name || '').toLowerCase();
+      const isDerivativeToken = tokenName.includes('staked') || 
+                               tokenName.includes('liquid') || 
+                               tokenName.includes('wrapped');
+      
+      // If this is a derivative of a major token (like "Jito Staked SOL"), 
+      // use DexScreener instead of TradingView
+      if (isDerivativeToken) {
+        return false;
+      }
+      
+      return majorTokens.includes(baseSymbol);
     }
     return true;
   };
@@ -3872,6 +3888,15 @@ const Trading = () => {
     // Check if this is a custom token from My List
     const urlParams = getSearchParams();
     const isCustomToken = urlParams.custom;
+    
+    // Add better debug logging
+    console.log('Chart decision info:', {
+      tokenSymbol: cryptoData?.token?.symbol,
+      tokenName: cryptoData?.token?.name,
+      tokenType: cryptoData?.token?.type,
+      isCustomToken,
+      shouldShowTradingViewChart
+    });
 
     // Generate a unique container ID for each symbol to prevent conflicts
     const chartContainerId = `tradingview_${cryptoData?.token?.symbol?.toLowerCase() || 'chart'}_${timeframe}`;
@@ -4011,39 +4036,6 @@ const Trading = () => {
                     // Also set up a regular polling interval as ultimate fallback
                     const priceInterval = setInterval(extractPriceFromIframe, 2000);
                     
-                    // Regular message listener for postMessage communication as backup
-                    const listenForDexScreenerPriceUpdates = () => {
-                      window.addEventListener('message', (event) => {
-                        try {
-                          // Check if message is from DexScreener
-                          if (event.data && typeof event.data === 'string' && event.data.includes('dexscreener')) {
-                            // Try to parse the message data
-                            const data = JSON.parse(event.data);
-                            
-                            // Look for price data in the message
-                            if (data && data.price) {
-                              const price = parseFloat(data.price);
-                              if (!isNaN(price) && price > 0) {
-                                console.log('🔄 Real-time price update from DexScreener chart message:', price);
-                                // Update all price states with the real-time price from the chart
-                                setMarketPrice(price);
-                                setCurrentPrice(price);
-                                setLastPrice(price);
-                                
-                                // Update order book with real-time price
-                                setOrderBook(generateOrderBook(price));
-                              }
-                            }
-                          }
-                        } catch (error) {
-                          console.error('Error processing DexScreener message:', error);
-                        }
-                      });
-                    };
-                    
-                    // Set up message listener
-                    listenForDexScreenerPriceUpdates();
-                    
                     // Return cleanup function
                     return () => {
                       clearInterval(priceInterval);
@@ -4051,25 +4043,15 @@ const Trading = () => {
                   }}
                 />
               )}
-              {showDebug && renderDebugInfo()}
-              
-              <DexLink 
-                href={`${getDexScreenerUrl()}?theme=dark`}
-                target="_blank" 
-                rel="noopener noreferrer"
-              >
-                View on DEXScreener <i className="bi bi-box-arrow-up-right"></i>
-              </DexLink>
             </div>
           ) : (
             // For CEX tokens, use TradingView
-            <div style={{ position: 'relative', height: '500px', width: '100%' }} id={chartContainerId}>
-              <TradingChartComponent 
+            <div id={chartContainerId} style={{ height: '500px', width: '100%' }}>
+              <TradingChartComponent
                 symbol={getChartSymbol()}
                 theme={theme}
                 timeframe={TIMEFRAMES[timeframe]?.tradingViewInterval || '60'}
                 autosize={true}
-                allow_symbol_change={true}
                 container_id={chartContainerId}
                 onPriceUpdate={(price) => {
                   if (price && !isNaN(price)) {
@@ -4084,7 +4066,7 @@ const Trading = () => {
               />
             </div>
           )}
-      </ChartContainer>
+        </ChartContainer>
       </ChartSection>
     );
   };
