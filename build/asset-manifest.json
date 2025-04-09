@@ -1,7 +1,7 @@
 {
   "files": {
     "main.css": "https://rippleexchange.org/static/css/main.b7c16611.css",
-    "main.js": "https://rippleexchange.org/static/js/main.92e79535.js",
+    "main.js": "https://rippleexchange.org/static/js/main.e9ef4244.js",
     "static/js/184.9221bd97.chunk.js": "https://rippleexchange.org/static/js/184.9221bd97.chunk.js",
     "static/media/fa-duotone-900.svg": "https://rippleexchange.org/static/media/fa-duotone-900.bac7a949fdfa983ff8a5.svg",
     "static/media/fa-light-300.svg": "https://rippleexchange.org/static/media/fa-light-300.676ceddb711397cb345f.svg",
@@ -58,6 +58,6 @@
   },
   "entrypoints": [
     "static/css/main.b7c16611.css",
-    "static/js/main.92e79535.js"
+    "static/js/main.e9ef4244.js"
   ]
 }
