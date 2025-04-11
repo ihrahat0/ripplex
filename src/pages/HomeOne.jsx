@@ -12,6 +12,7 @@ import bnbIcon from '../assets/images/coin/bnb.png';
 import tetIcon from '../assets/images/coin/tet.png';
 import solIcon from '../assets/images/coin/sol.png';
 import qrCode from '../assets/images/layout/qr-code.png';
+import adBanner from '../assets/images/ad1.gif';
 
 // Define keyframe animations
 const glow = keyframes`
@@ -139,6 +140,29 @@ const float = keyframes`
   }
   100% {
     transform: translateY(0px);
+  }
+`;
+
+// Add fade-in animation for the ad banner
+const fadeIn = keyframes`
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+`;
+
+// Add a subtle pulsing glow animation for the banner
+const subtleGlow = keyframes`
+  0% {
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
+  }
+  50% {
+    box-shadow: 0 5px 25px rgba(247, 147, 26, 0.25);
+  }
+  100% {
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
   }
 `;
 
@@ -1310,11 +1334,115 @@ const AirdropButton = styled.button`
   }
 `;
 
+// Update the AdBannerContainer with improved styling
+const AdBannerContainer = styled.div`
+  width: 80%;
+  position: relative;
+  overflow: hidden;
+  margin: 20px auto;
+  padding: 0;
+  display: block;
+  border-radius: 12px;
+  border: 1px solid rgba(247, 147, 26, 0.3);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
+  animation: ${fadeIn} 0.5s ease-in, ${subtleGlow} 3s infinite ease-in-out;
+  
+  &:hover {
+    border: 1px solid rgba(247, 147, 26, 0.5);
+  }
+  
+  @media (max-width: 768px) {
+    width: 90%;
+    height: auto;
+    margin: 15px auto;
+  }
+  
+  @media (max-width: 480px) {
+    width: 95%;
+    margin: 12px auto;
+  }
+`;
+
+// Add subtle glow to the ad image
+const AdImage = styled.img`
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+`;
+
+// Update CloseButton to be more visible on all backgrounds
+const CloseButton = styled.button`
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: 2px solid white;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: bold;
+  z-index: 10;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+  
+  &:hover {
+    background: rgba(0, 0, 0, 0.9);
+    transform: scale(1.1);
+  }
+  
+  @media (max-width: 480px) {
+    width: 36px; /* Slightly larger on mobile for easier tapping */
+    height: 36px;
+    font-size: 20px;
+    top: 8px;
+    right: 8px;
+  }
+`;
+
 function HomeOne() {
   const [email, setEmail] = useState('');
   const navigate = useNavigate();
   const [openFAQ, setOpenFAQ] = useState(0);
   const { currentUser } = useAuth();
+  const [showAd, setShowAd] = useState(false);
+  const [adLoaded, setAdLoaded] = useState(false);
+  
+  // Effect for loading ad after page content is loaded
+  useEffect(() => {
+    // Check if user has previously closed the ad
+    const adHidden = localStorage.getItem('adHidden');
+    
+    // Only show ad if user hasn't closed it before
+    if (adHidden !== 'true') {
+      // Use requestIdleCallback or setTimeout to delay loading until browser is idle
+      const loadAd = () => {
+        // Small delay to ensure it doesn't compete with initial render
+        setTimeout(() => setShowAd(true), 800);
+      };
+      
+      if ('requestIdleCallback' in window) {
+        // Use requestIdleCallback if available (modern browsers)
+        window.requestIdleCallback(loadAd, { timeout: 2000 });
+      } else {
+        // Fallback for browsers without requestIdleCallback
+        window.addEventListener('load', loadAd);
+      }
+      
+      return () => {
+        if (!('requestIdleCallback' in window)) {
+          window.removeEventListener('load', loadAd);
+        }
+      };
+    }
+  }, []);
   
   const faqItems = [
     {
@@ -1360,8 +1488,30 @@ function HomeOne() {
     }
   };
   
+  const handleCloseAd = () => {
+    setShowAd(false);
+    // Save user preference to localStorage
+    localStorage.setItem('adHidden', 'true');
+  };
+  
+  const handleAdLoad = () => {
+    setAdLoaded(true);
+  };
+  
   return (
     <div className='home-1'>
+      {showAd && (
+        <AdBannerContainer>
+          <AdImage 
+            src={adBanner} 
+            alt="Special Promotion" 
+            onLoad={handleAdLoad}
+            loading="lazy"
+          />
+          <CloseButton onClick={handleCloseAd}>×</CloseButton>
+        </AdBannerContainer>
+      )}
+      
       <HeroSection>
         <GlowingOrb />
         <GlowingOrb2 />
