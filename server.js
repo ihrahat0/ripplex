@@ -117,6 +117,7 @@ const allowedOrigins = [
   'https://www.rippleexchange.org',
   'http://rippleexchange.org',
   'https://rippleexchange.web.app',
+  'https://rippleexchange.org/send-verification-code',
   '*' // Allow all origins temporarily while testing
 ];
 
