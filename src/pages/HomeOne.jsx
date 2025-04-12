@@ -12,7 +12,21 @@ import bnbIcon from '../assets/images/coin/bnb.png';
 import tetIcon from '../assets/images/coin/tet.png';
 import solIcon from '../assets/images/coin/sol.png';
 import qrCode from '../assets/images/layout/qr-code.png';
-import adBanner from '../assets/images/ad1.gif';
+
+// Lazy import the ad banners to prevent them from blocking page load
+const importAdBanner = (id) => {
+  return import(`../assets/images/advertisements/${id}.gif`).then(module => module.default);
+};
+
+// Shuffle array utility function
+const shuffleArray = (array) => {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+};
 
 // Define keyframe animations
 const glow = keyframes`
@@ -164,6 +178,42 @@ const subtleGlow = keyframes`
   100% {
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
   }
+`;
+
+// Improve the slide transition animations to ensure no gap
+const slideIn = keyframes`
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+`;
+
+const slideOut = keyframes`
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+`;
+
+// Simple crossfade effect
+const crossfade = keyframes`
+  0%, 45% { opacity: 1; }
+  50%, 95% { opacity: 0; }
+  100% { opacity: 1; }
+`;
+
+// Add a fade effect animation for transitions
+const fadeEffect = keyframes`
+  from { opacity: 0; }
+  to { opacity: 1; }
 `;
 
 // Styled components for the new design
@@ -1334,18 +1384,19 @@ const AirdropButton = styled.button`
   }
 `;
 
-// Update the AdBannerContainer with improved styling
+// Update the AdBannerContainer to ensure full width display
 const AdBannerContainer = styled.div`
   width: 80%;
   position: relative;
-  overflow: hidden;
   margin: 20px auto;
   padding: 0;
   display: block;
+  overflow: hidden;
   border-radius: 12px;
   border: 1px solid rgba(247, 147, 26, 0.3);
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
-  animation: ${fadeIn} 0.5s ease-in, ${subtleGlow} 3s infinite ease-in-out;
+  animation: ${subtleGlow} 3s infinite ease-in-out;
+  max-height: 300px; /* Increased from 260px */
   
   &:hover {
     border: 1px solid rgba(247, 147, 26, 0.5);
@@ -1353,8 +1404,8 @@ const AdBannerContainer = styled.div`
   
   @media (max-width: 768px) {
     width: 90%;
-    height: auto;
     margin: 15px auto;
+    max-height: none;
   }
   
   @media (max-width: 480px) {
@@ -1363,48 +1414,35 @@ const AdBannerContainer = styled.div`
   }
 `;
 
-// Add subtle glow to the ad image
+// Create a properly animated AdImage with full width
 const AdImage = styled.img`
+  display: block;
   width: 100%;
   height: auto;
-  display: block;
   border-radius: 12px;
-  transition: all 0.3s ease;
+  animation: ${fadeEffect} 0.5s ease-in-out;
+  
+  @media (max-width: 768px) {
+    max-height: none;
+  }
 `;
 
-// Update CloseButton to be more visible on all backgrounds
-const CloseButton = styled.button`
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  border: 2px solid white;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
+// Update the loading placeholder to match
+const LoadingPlaceholder = styled.div`
+  width: 100%;
+  height: 100%;
+  min-height: 200px; /* Increased from 180px */
+  margin: 0;
+  padding: 0;
+  background: linear-gradient(110deg, #1e1e2d 30%, #2a2a3d 50%, #1e1e2d 70%);
+  background-size: 200% 100%;
+  animation: ${gradientFlow} 1.5s ease-in-out infinite;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  font-size: 18px;
-  font-weight: bold;
-  z-index: 10;
-  transition: all 0.3s ease;
-  box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
-  
-  &:hover {
-    background: rgba(0, 0, 0, 0.9);
-    transform: scale(1.1);
-  }
-  
-  @media (max-width: 480px) {
-    width: 36px; /* Slightly larger on mobile for easier tapping */
-    height: 36px;
-    font-size: 20px;
-    top: 8px;
-    right: 8px;
-  }
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
 `;
 
 function HomeOne() {
@@ -1412,37 +1450,72 @@ function HomeOne() {
   const navigate = useNavigate();
   const [openFAQ, setOpenFAQ] = useState(0);
   const { currentUser } = useAuth();
-  const [showAd, setShowAd] = useState(false);
-  const [adLoaded, setAdLoaded] = useState(false);
+  const [currentAdIndex, setCurrentAdIndex] = useState(0);
+  const [adBanners, setAdBanners] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   
-  // Effect for loading ad after page content is loaded
+  // Load ads after page is fully loaded
   useEffect(() => {
-    // Check if user has previously closed the ad
-    const adHidden = localStorage.getItem('adHidden');
-    
-    // Only show ad if user hasn't closed it before
-    if (adHidden !== 'true') {
-      // Use requestIdleCallback or setTimeout to delay loading until browser is idle
-      const loadAd = () => {
-        // Small delay to ensure it doesn't compete with initial render
-        setTimeout(() => setShowAd(true), 800);
-      };
-      
-      if ('requestIdleCallback' in window) {
-        // Use requestIdleCallback if available (modern browsers)
-        window.requestIdleCallback(loadAd, { timeout: 2000 });
-      } else {
-        // Fallback for browsers without requestIdleCallback
-        window.addEventListener('load', loadAd);
-      }
-      
-      return () => {
-        if (!('requestIdleCallback' in window)) {
-          window.removeEventListener('load', loadAd);
+    // Don't load ads immediately - wait until page is loaded
+    const loadAds = async () => {
+      try {
+        // Wait for the page to be fully loaded
+        if (document.readyState === 'complete') {
+          loadAdBanners();
+        } else {
+          window.addEventListener('load', loadAdBanners);
+          return () => window.removeEventListener('load', loadAdBanners);
         }
-      };
-    }
+      } catch (error) {
+        console.error("Error setting up ad loading:", error);
+        setIsLoading(false);
+      }
+    };
+    
+    loadAds();
   }, []);
+  
+  // Function to load ad banners
+  const loadAdBanners = async () => {
+    setIsLoading(true);
+    try {
+      // Slightly delay loading to ensure page is responsive first
+      setTimeout(async () => {
+        // Load all 5 advertisements
+        const ads = [];
+        for (let i = 1; i <= 5; i++) {
+          try {
+            const ad = await importAdBanner(i);
+            if (ad) {
+              ads.push(ad);
+            }
+          } catch (e) {
+            console.log(`Ad ${i} failed to load:`, e);
+          }
+        }
+        
+        // Shuffle the ads
+        if (ads.length > 0) {
+          setAdBanners(shuffleArray(ads));
+          setIsLoading(false);
+        }
+      }, 1000); // 1 second delay to ensure page is loaded first
+    } catch (error) {
+      console.error("Error loading ad banners:", error);
+      setIsLoading(false);
+    }
+  };
+  
+  // Rotate through ads in separate effect to avoid dependency issues
+  useEffect(() => {
+    if (adBanners.length === 0) return;
+    
+    const adRotationInterval = setInterval(() => {
+      setCurrentAdIndex(prevIndex => (prevIndex + 1) % adBanners.length);
+    }, 7000); // Rotate ads every 7 seconds
+    
+    return () => clearInterval(adRotationInterval);
+  }, [adBanners.length]);
   
   const faqItems = [
     {
@@ -1488,29 +1561,29 @@ function HomeOne() {
     }
   };
   
-  const handleCloseAd = () => {
-    setShowAd(false);
-    // Save user preference to localStorage
-    localStorage.setItem('adHidden', 'true');
-  };
-  
-  const handleAdLoad = () => {
-    setAdLoaded(true);
-  };
-  
   return (
     <div className='home-1'>
-      {showAd && (
-        <AdBannerContainer>
-          <AdImage 
-            src={adBanner} 
-            alt="Special Promotion" 
-            onLoad={handleAdLoad}
-            loading="lazy"
-          />
-          <CloseButton onClick={handleCloseAd}>×</CloseButton>
-        </AdBannerContainer>
-      )}
+      <AdBannerContainer>
+        {isLoading ? (
+          <LoadingPlaceholder>
+            Loading advertisements...
+          </LoadingPlaceholder>
+        ) : adBanners.length > 0 ? (
+          <div style={{ width: '100%', display: 'block' }}>
+            <AdImage 
+              src={adBanners[currentAdIndex]} 
+              alt="Special Promotion" 
+              loading="lazy"
+              key={`ad-image-${currentAdIndex}`}
+              onError={(e) => {
+                console.log("Ad image failed to load:", e);
+                e.target.onerror = null;
+                if (adBanners[0]) e.target.src = adBanners[0]; // Fallback to first ad
+              }}
+            />
+          </div>
+        ) : null}
+      </AdBannerContainer>
       
       <HeroSection>
         <GlowingOrb />
