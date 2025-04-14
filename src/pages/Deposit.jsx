@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
-import styled from 'styled-components';
+import styled, { keyframes } from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import QRCode from 'react-qr-code';
@@ -42,14 +42,61 @@ const COIN_LOGOS = {
   ATOM: atomLogo
 };
 
+// Define keyframes for the sunshine effect
+const glowEffect = keyframes`
+  0% {
+    box-shadow: 0 0 30px rgba(0, 255, 157, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 80px rgba(0, 255, 157, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 30px rgba(0, 255, 157, 0.6);
+  }
+`;
+
+const sunshineAnimation = keyframes`
+  0% {
+    background-position: 0% 50%;
+    opacity: 0.5;
+  }
+  50% {
+    background-position: 100% 50%;
+    opacity: 0.8;
+  }
+  100% {
+    background-position: 0% 50%;
+    opacity: 0.5;
+  }
+`;
+
 const Container = styled.div`
   min-height: 100vh;
   background: linear-gradient(135deg, rgba(0, 40, 20, 0.8), rgba(0, 20, 40, 0.8));
+  position: relative;
   padding: 20px;
   display: flex;
   justify-content: center;
   align-items: flex-start;
   padding-top: 60px;
+  overflow: hidden;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(
+      circle,
+      rgba(0, 255, 157, 0.15) 0%,
+      rgba(0, 0, 0, 0) 70%
+    );
+    z-index: 0;
+    animation: ${sunshineAnimation} 15s infinite ease-in-out;
+    pointer-events: none;
+  }
   
   @media (max-width: 768px) {
     padding: 15px;
@@ -70,6 +117,9 @@ const WalletCard = styled(motion.div)`
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
+  position: relative;
+  z-index: 1;
+  animation: ${glowEffect} 5s infinite alternate;
   
   @media (max-width: 768px) {
     border-radius: 12px;
@@ -462,14 +512,18 @@ const CoinLogo = styled.img`
   }
 `;
 
-const CoinName = styled.div`
-  color: #fff;
-  font-size: 14px;
+const CoinNameDisplay = styled.div`
+  display: flex;
+  flex-direction: column;
+`;
+
+const Symbol = styled.span`
   font-weight: 500;
-  
-  @media (max-width: 480px) {
-    font-size: 12px;
-  }
+`;
+
+const FullName = styled.span`
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
 `;
 
 const TokenTag = styled.span`
@@ -695,6 +749,355 @@ const NetworkOption = styled.div`
   }
 `;
 
+// New styled components for custom select
+const CustomSelectContainer = styled.div`
+  position: relative;
+  margin-bottom: 20px;
+  z-index: ${props => props.$isOpen ? 5 : 2};
+
+  label {
+    display: block;
+    color: #fff;
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+`;
+
+const SelectedOption = styled.div`
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #fff;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+  
+  ${props => props.$isOpen && `
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(0, 255, 157, 0.5);
+    box-shadow: 0 0 0 2px rgba(0, 255, 157, 0.2);
+  `}
+`;
+
+const CoinInfo = styled.div`
+  display: flex;
+  align-items: center;
+  flex-grow: 1;
+`;
+
+const DropdownIcon = styled.span`
+  margin-left: auto;
+  transition: transform 0.2s;
+  color: rgba(255, 255, 255, 0.6);
+  
+  ${props => props.$isOpen && `
+    transform: rotate(180deg);
+  `}
+`;
+
+const DropdownContainer = styled(motion.div)`
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  width: 100%;
+  background: rgba(10, 12, 14, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 10;
+  
+  /* Custom scrollbar */
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+`;
+
+const SearchInput = styled.input`
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 12px 15px;
+  color: #fff;
+  outline: none;
+  font-size: 14px;
+  
+  &:focus {
+    background: rgba(255, 255, 255, 0.08);
+  }
+  
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+  }
+`;
+
+const OptionsList = styled.div`
+  padding: 5px 0;
+`;
+
+const OptionItem = styled.div`
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: #fff;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  ${props => props.$isSelected && `
+    background: rgba(0, 255, 157, 0.1);
+    
+    &:hover {
+      background: rgba(0, 255, 157, 0.15);
+    }
+  `}
+`;
+
+const NoResults = styled.div`
+  padding: 15px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+`;
+
+const CoinIconWrapper = styled.div`
+  width: 24px;
+  height: 24px;
+  margin-right: 12px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const CoinIcon = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+`;
+
+const ChainTag = styled.span`
+  margin-left: auto;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: ${props => props.$isSPL ? 'rgba(20, 120, 255, 0.2)' : 'rgba(0, 255, 157, 0.1)'};
+  color: ${props => props.$isSPL ? '#0099ff' : '#00ff9d'};
+`;
+
+// Create custom select component
+const CustomSelect = ({ 
+  label, 
+  options, 
+  value, 
+  onChange, 
+  disabled,
+  isNetwork = false,
+  placeholder = "Select an option"
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const dropdownRef = useRef(null);
+  const searchInputRef = useRef(null);
+  
+  const selectedOption = isNetwork 
+    ? options.find(option => option.id === value)
+    : options.find(option => option.id === value);
+    
+  const getCoinLogo = (coinId) => {
+    if (isNetwork) return null;
+    
+    // First try to get from metadata (if coin option has logoUrl)
+    const option = options.find(opt => opt.id === coinId);
+    if (option?.logoUrl) {
+      return option.logoUrl;
+    }
+    
+    // Then try predefined logos
+    const symbol = option?.symbol || coinId;
+    if (COIN_LOGOS[symbol]) {
+      return COIN_LOGOS[symbol];
+    }
+    
+    // Use Coinicons API as fallback
+    return `https://coinicons-api.vercel.app/api/icon/${symbol?.toLowerCase()}`;
+  };
+  
+  const handleClickOutside = (event) => {
+    if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      setIsOpen(false);
+    }
+  };
+  
+  useEffect(() => {
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+  
+  useEffect(() => {
+    if (isOpen && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [isOpen]);
+  
+  const toggleDropdown = () => {
+    if (!disabled) {
+      setIsOpen(!isOpen);
+      setSearchTerm('');
+    }
+  };
+  
+  const handleSelect = (option) => {
+    onChange(option.id);
+    setIsOpen(false);
+  };
+  
+  const filteredOptions = options.filter(option => {
+    if (isNetwork) {
+      return option.name.toLowerCase().includes(searchTerm.toLowerCase());
+    }
+    
+    return (
+      option.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      option.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
+  
+  return (
+    <CustomSelectContainer $isOpen={isOpen} ref={dropdownRef}>
+      <label>{label}</label>
+      
+      <SelectedOption 
+        onClick={toggleDropdown} 
+        $isOpen={isOpen} 
+        disabled={disabled}
+      >
+        {value && selectedOption ? (
+          <CoinInfo>
+            {!isNetwork && (
+              <CoinIconWrapper>
+                <CoinIcon 
+                  src={getCoinLogo(selectedOption.id)}
+                  alt={selectedOption.symbol || selectedOption.name}
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "https://s2.coinmarketcap.com/static/img/coins/64x64/1.png";
+                  }}
+                />
+              </CoinIconWrapper>
+            )}
+            <CoinNameDisplay>
+              <Symbol>
+                {isNetwork 
+                  ? selectedOption.name 
+                  : selectedOption.symbol}
+              </Symbol>
+              {!isNetwork && (
+                <FullName>{selectedOption.name}</FullName>
+              )}
+            </CoinNameDisplay>
+            {isNetwork && selectedOption.id === 'solana' && (
+              <ChainTag $isSPL>SPL</ChainTag>
+            )}
+            {isNetwork && selectedOption.isEVM && (
+              <ChainTag>EVM</ChainTag>
+            )}
+          </CoinInfo>
+        ) : (
+          <span style={{ color: 'rgba(255, 255, 255, 0.5)' }}>{placeholder}</span>
+        )}
+        <DropdownIcon $isOpen={isOpen}>▼</DropdownIcon>
+      </SelectedOption>
+      
+      {isOpen && (
+        <DropdownContainer
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <SearchInput 
+            type="text"
+            placeholder={`Search ${isNetwork ? 'networks' : 'coins'}...`}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            ref={searchInputRef}
+          />
+          
+          <OptionsList>
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map(option => (
+                <OptionItem 
+                  key={option.id} 
+                  onClick={() => handleSelect(option)}
+                  $isSelected={option.id === value}
+                >
+                  {!isNetwork && (
+                    <CoinIconWrapper>
+                      <CoinIcon 
+                        src={getCoinLogo(option.id)}
+                        alt={option.symbol || option.name}
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = "https://s2.coinmarketcap.com/static/img/coins/64x64/1.png";
+                        }}
+                      />
+                    </CoinIconWrapper>
+                  )}
+                  <CoinNameDisplay>
+                    <Symbol>
+                      {isNetwork ? option.name : option.symbol}
+                    </Symbol>
+                    {!isNetwork && (
+                      <FullName>{option.name}</FullName>
+                    )}
+                  </CoinNameDisplay>
+                  {isNetwork && option.id === 'solana' && (
+                    <ChainTag $isSPL>SPL</ChainTag>
+                  )}
+                  {isNetwork && option.isEVM && (
+                    <ChainTag>EVM</ChainTag>
+                  )}
+                </OptionItem>
+              ))
+            ) : (
+              <NoResults>No {isNetwork ? 'networks' : 'coins'} found</NoResults>
+            )}
+          </OptionsList>
+        </DropdownContainer>
+      )}
+    </CustomSelectContainer>
+  );
+};
+
 const Deposit = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
@@ -711,17 +1114,67 @@ const Deposit = () => {
   const [depositAddress, setDepositAddress] = useState('');
   const [isResetting, setIsResetting] = useState(false);
   const [showResetConfirmation, setShowResetConfirmation] = useState(false);
+  const [allCoins, setAllCoins] = useState([]);
+  const [coinMetadata, setCoinMetadata] = useState({});
 
-  // Filter available chains based on selected coin
+  // Supported networks list
+  const NETWORKS = [
+    { id: 'bsc', name: 'BNB Smart Chain (BSC)', isEVM: true },
+    { id: 'ethereum', name: 'Ethereum (ETH)', isEVM: true },
+    { id: 'arbitrum', name: 'Arbitrum', isEVM: true },
+    { id: 'base', name: 'Base', isEVM: true },
+    { id: 'solana', name: 'Solana', isEVM: false }
+  ];
+
+  // Fetch all coins from Firestore
+  useEffect(() => {
+    const fetchAllCoins = async () => {
+      try {
+        const coinsCollection = collection(db, 'coins');
+        const coinsSnapshot = await getDocs(coinsCollection);
+        
+        const coinsData = coinsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          symbol: doc.data().symbol || doc.id,
+          name: doc.data().name || doc.id,
+          logoUrl: doc.data().logoUrl || doc.data().logo || null
+        }));
+        
+        setAllCoins(coinsData);
+        
+        // Create metadata map
+        const metadata = {};
+        coinsData.forEach(coin => {
+          metadata[coin.id] = coin;
+          metadata[coin.symbol] = coin;
+        });
+        
+        setCoinMetadata(metadata);
+        
+        // Set default selection if available
+        if (coinsData.length > 0) {
+          setSelectedCoin(coinsData[0].id);
+        }
+      } catch (error) {
+        console.error('Error fetching coins:', error);
+      }
+    };
+    
+    fetchAllCoins();
+  }, []);
+
+  // Set available chains based on selected coin
   useEffect(() => {
     if (selectedCoin) {
-      const chains = Object.entries(SUPPORTED_CHAINS)
-        .filter(([_, chainData]) => chainData.tokens.includes(selectedCoin))
-        .map(([chainId, chainData]) => ({
-          id: chainId,
-          name: chainData.name,
-          isSPL: chainData.isSPL || false
-        }));
+      // All coins can be deposited on BSC, ETH, Arbitrum, and Base (same EVM address)
+      // Only BSC/ETH-specific and SPL tokens on Solana
+      const chains = NETWORKS.filter(network => {
+        // Solana-specific check
+        if (network.id === 'solana') {
+          return true; // Allow all coins on Solana for simplicity
+        }
+        return network.isEVM; // All EVM chains supported
+      });
       
       setAvailableChains(chains);
       
@@ -742,15 +1195,6 @@ const Deposit = () => {
   useEffect(() => {
     if (userWallets && selectedChain) {
       setDepositAddress(userWallets[selectedChain] || '');
-      
-      // For debugging - verify Solana address format
-      if (selectedChain === 'solana') {
-        console.log('Solana deposit address:', userWallets[selectedChain]);
-        // Solana addresses are typically ~44 characters and Base58 encoded
-        if (userWallets[selectedChain]?.startsWith('0x')) {
-          console.error('Invalid Solana address format detected (starts with 0x)');
-        }
-      }
     } else {
       setDepositAddress('');
     }
@@ -766,13 +1210,6 @@ const Deposit = () => {
       try {
         const wallets = await getUserWalletAddress(currentUser.uid);
         setUserWallets(wallets);
-        
-        // Set default selections if available
-        if (Object.keys(DEFAULT_COINS).length > 0) {
-          const defaultCoin = Object.keys(DEFAULT_COINS)[0];
-          setSelectedCoin(defaultCoin);
-        }
-        
         setLoading(false);
       } catch (error) {
         console.error('Error fetching user wallet:', error);
@@ -832,31 +1269,44 @@ const Deposit = () => {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+  
+  // Get coin logo URL
+  const getCoinLogo = (coinId) => {
+    // First try to get from metadata
+    if (coinMetadata[coinId]?.logoUrl) {
+      return coinMetadata[coinId].logoUrl;
+    }
+    
+    // Then try predefined logos
+    const symbol = coinMetadata[coinId]?.symbol || coinId;
+    if (COIN_LOGOS[symbol]) {
+      return COIN_LOGOS[symbol];
+    }
+    
+    // Use Coinicons API as fallback
+    return getCoinIconUrl(symbol);
+  };
+  
+  // Get coin icon from API
+  const getCoinIconUrl = (symbol) => {
+    const symbolLower = symbol.toLowerCase();
+    return `https://coinicons-api.vercel.app/api/icon/${symbolLower}`;
+  };
 
   const getChainSpecificInfo = () => {
     if (!selectedChain) return null;
     
-    const chainInfo = SUPPORTED_CHAINS[selectedChain];
+    const chainInfo = NETWORKS.find(network => network.id === selectedChain);
     if (!chainInfo) return null;
     
-    if (chainInfo.isSPL) {
+    if (chainInfo.id === 'solana') {
       return (
         <InfoBox>
           <span>ℹ️</span>
           <InfoText>
             This is a Solana address that supports SPL tokens. Your private key is securely stored in the database and can 
-            be used to access your SPL tokens on the Solana blockchain. For USDT and other tokens, make sure you're sending 
+            be used to access your SPL tokens on the Solana blockchain. For all tokens, make sure you're sending 
             the SPL version of the token.
-          </InfoText>
-        </InfoBox>
-      );
-    } else if (selectedChain === 'bitcoin' || selectedChain === 'dogecoin') {
-      return (
-        <InfoBox>
-          <span>ℹ️</span>
-          <InfoText>
-            This is a {chainInfo.name} address. Your private key is securely stored in the database and can be used 
-            to access your funds on the {chainInfo.name} blockchain.
           </InfoText>
         </InfoBox>
       );
@@ -866,7 +1316,8 @@ const Deposit = () => {
           <span>ℹ️</span>
           <InfoText>
             This is an EVM-compatible wallet address for the {chainInfo.name} network. Your private key is securely stored in the 
-            database and can be used across all EVM networks (Ethereum, BSC, Polygon, etc.).
+            database and can be used across all EVM networks. The same address works for all EVM networks (BSC, Ethereum, Arbitrum, Base), 
+            but make sure you're sending tokens on the correct network.
           </InfoText>
         </InfoBox>
       );
@@ -879,7 +1330,7 @@ const Deposit = () => {
       <InfoBox>
         <span className="bi bi-info-circle"></span>
         <InfoText>
-          <strong>Important:</strong> For security and reliability, we only support deposits on BSC (BNB Smart Chain), ETH (Ethereum), Base, Arbitrum, Polygon, and Solana networks. Please ensure you're sending from these chains only.
+          <strong>Important:</strong> For security and reliability, we only support deposits on BSC (BNB Smart Chain), ETH (Ethereum), Base, Arbitrum, and Solana networks. Please ensure you're sending from these chains only. For all EVM chains (BSC, ETH, Arbitrum, Base), you'll use the same address.
         </InfoText>
       </InfoBox>
     );
@@ -1016,42 +1467,41 @@ const Deposit = () => {
             <>
               {renderChainWarning()}
               <Description>
-                Select the coin you want to deposit and the blockchain network. Only send{' '}
-                {selectedCoin && <><CoinLogo src={COIN_LOGOS[selectedCoin]} alt={selectedCoin} />{selectedCoin}</>}{' '}
-                on the {typeof SUPPORTED_CHAINS[selectedChain] === 'object' ? SUPPORTED_CHAINS[selectedChain]?.name : selectedChain || ''} network to this address.
-                {SUPPORTED_CHAINS[selectedChain]?.isSPL && selectedCoin && <TokenTag isSPL>SPL Token</TokenTag>}
+                Select the coin you want to deposit and the blockchain network. You can deposit any coin in your balance through our supported networks.
+                {selectedCoin && selectedChain && (
+                  <>
+                    {' '}Only send{' '}
+                    <CoinLogo 
+                      src={getCoinLogo(selectedCoin)} 
+                      alt={coinMetadata[selectedCoin]?.symbol || selectedCoin} 
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = "https://s2.coinmarketcap.com/static/img/coins/64x64/1.png";
+                      }}
+                    />
+                    {coinMetadata[selectedCoin]?.name || selectedCoin}{' '}
+                    on the {NETWORKS.find(n => n.id === selectedChain)?.name || selectedChain} network to this address.
+                  </>
+                )}
               </Description>
               
-              <SelectContainer>
-                <label>Select Coin</label>
-                <Select 
-                  value={selectedCoin} 
-                  onChange={(e) => setSelectedCoin(e.target.value)}
-                >
-                  <option value="">Select a coin</option>
-                  {Object.keys(DEFAULT_COINS).map(coin => (
-                    <option key={coin} value={coin}>
-                      {coin} - {DEFAULT_COINS[coin].name}
-                    </option>
-                  ))}
-                </Select>
-              </SelectContainer>
+              <CustomSelect
+                label="Select Coin"
+                options={allCoins}
+                value={selectedCoin}
+                onChange={setSelectedCoin}
+                placeholder="Select a coin"
+              />
               
-              <SelectContainer>
-                <label>Select Network</label>
-                <Select 
-                  value={selectedChain} 
-                  onChange={(e) => setSelectedChain(e.target.value)}
-                  disabled={availableChains.length === 0}
-                >
-                  <option value="">Select a network</option>
-                  {availableChains.map(chain => (
-                    <option key={chain.id} value={chain.id}>
-                      {chain.name} {chain.isSPL ? '(SOL)' : ''}
-                    </option>
-                  ))}
-                </Select>
-              </SelectContainer>
+              <CustomSelect
+                label="Select Network"
+                options={availableChains}
+                value={selectedChain}
+                onChange={setSelectedChain}
+                disabled={availableChains.length === 0}
+                isNetwork={true}
+                placeholder="Select a network"
+              />
               
               {selectedCoin && selectedChain && depositAddress && (
                 <>
@@ -1060,8 +1510,8 @@ const Deposit = () => {
                   <WalletAddress>
                     <AddressHeader>
                       <AddressLabel>
-                        Deposit Address ({typeof SUPPORTED_CHAINS[selectedChain] === 'object' ? SUPPORTED_CHAINS[selectedChain]?.name : selectedChain})
-                        {SUPPORTED_CHAINS[selectedChain]?.isSPL && <TokenTag isSPL>SPL</TokenTag>}
+                        Deposit Address ({NETWORKS.find(n => n.id === selectedChain)?.name || selectedChain})
+                        {selectedChain === 'solana' && <TokenTag isSPL>SPL</TokenTag>}
                       </AddressLabel>
                       <AddressValue>
                         <CopyButton onClick={() => copyToClipboard(depositAddress)}>
@@ -1083,9 +1533,9 @@ const Deposit = () => {
                   </QRCodeContainer>
                   
                   <Warning>
-                    {SUPPORTED_CHAINS[selectedChain]?.isSPL ? 
-                      `This is a Solana SPL token address. Only send ${selectedCoin} using the Solana network.` : 
-                      `Only send ${selectedCoin} on the ${typeof SUPPORTED_CHAINS[selectedChain] === 'object' ? SUPPORTED_CHAINS[selectedChain]?.name : selectedChain} network to this address.`} 
+                    {selectedChain === 'solana' ? 
+                      `This is a Solana SPL token address. Only send ${coinMetadata[selectedCoin]?.symbol || selectedCoin} using the Solana network.` : 
+                      `Only send ${coinMetadata[selectedCoin]?.symbol || selectedCoin} on the ${NETWORKS.find(n => n.id === selectedChain)?.name || selectedChain} network to this address.`} 
                     Sending any other asset may result in permanent loss.
                   </Warning>
                 </>

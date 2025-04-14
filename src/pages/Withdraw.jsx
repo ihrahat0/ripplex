@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { doc, getDoc, collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, limit } from 'firebase/firestore';
 import { db } from '../firebase';
-import styled from 'styled-components';
+import styled, { keyframes } from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { getUserWalletAddress, SUPPORTED_CHAINS } from '../services/walletService';
@@ -60,14 +60,61 @@ const COIN_NAMES = {
   ATOM: 'Cosmos'
 };
 
+// Define keyframes for the sunshine effect
+const glowEffect = keyframes`
+  0% {
+    box-shadow: 0 0 30px rgba(0, 255, 157, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 80px rgba(0, 255, 157, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 30px rgba(0, 255, 157, 0.6);
+  }
+`;
+
+const sunshineAnimation = keyframes`
+  0% {
+    background-position: 0% 50%;
+    opacity: 0.5;
+  }
+  50% {
+    background-position: 100% 50%;
+    opacity: 0.8;
+  }
+  100% {
+    background-position: 0% 50%;
+    opacity: 0.5;
+  }
+`;
+
 const Container = styled.div`
   min-height: 100vh;
   background: linear-gradient(135deg, rgba(0, 40, 20, 0.8), rgba(0, 20, 40, 0.8));
+  position: relative;
   padding: 20px;
   display: flex;
   justify-content: center;
   align-items: flex-start;
   padding-top: 60px;
+  overflow: hidden;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(
+      circle,
+      rgba(0, 255, 157, 0.15) 0%,
+      rgba(0, 0, 0, 0) 70%
+    );
+    z-index: 0;
+    animation: ${sunshineAnimation} 15s infinite ease-in-out;
+    pointer-events: none;
+  }
   
   @media (max-width: 768px) {
     padding: 15px;
@@ -88,6 +135,9 @@ const WithdrawCard = styled(motion.div)`
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
+  position: relative;
+  z-index: 1;
+  animation: ${glowEffect} 5s infinite alternate;
   margin-bottom: 20px;
   
   @media (max-width: 768px) {
@@ -394,6 +444,366 @@ const StatusCard = styled.div`
   }
 `;
 
+// New styled components for custom select
+const CustomSelectContainer = styled.div`
+  position: relative;
+  margin-bottom: 20px;
+  z-index: ${props => props.$isOpen ? 5 : 2};
+
+  label {
+    display: block;
+    color: #fff;
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+`;
+
+const SelectedOption = styled.div`
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #fff;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+  
+  ${props => props.$isOpen && `
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(0, 255, 157, 0.5);
+    box-shadow: 0 0 0 2px rgba(0, 255, 157, 0.2);
+  `}
+`;
+
+const CoinInfo = styled.div`
+  display: flex;
+  align-items: center;
+  flex-grow: 1;
+`;
+
+const DropdownIcon = styled.span`
+  margin-left: auto;
+  transition: transform 0.2s;
+  color: rgba(255, 255, 255, 0.6);
+  
+  ${props => props.$isOpen && `
+    transform: rotate(180deg);
+  `}
+`;
+
+const DropdownContainer = styled(motion.div)`
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  width: 100%;
+  background: rgba(10, 12, 14, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 10;
+  
+  /* Custom scrollbar */
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+`;
+
+const SearchInput = styled.input`
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 12px 15px;
+  color: #fff;
+  outline: none;
+  font-size: 14px;
+  
+  &:focus {
+    background: rgba(255, 255, 255, 0.08);
+  }
+  
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+  }
+`;
+
+const OptionsList = styled.div`
+  padding: 5px 0;
+`;
+
+const OptionItem = styled.div`
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: #fff;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  ${props => props.$isSelected && `
+    background: rgba(0, 255, 157, 0.1);
+    
+    &:hover {
+      background: rgba(0, 255, 157, 0.15);
+    }
+  `}
+`;
+
+const NoResults = styled.div`
+  padding: 15px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+`;
+
+const CoinIconWrapper = styled.div`
+  width: 24px;
+  height: 24px;
+  margin-right: 12px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const CoinIcon = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+`;
+
+const CoinNameDisplay = styled.div`
+  display: flex;
+  flex-direction: column;
+`;
+
+const Symbol = styled.span`
+  font-weight: 500;
+`;
+
+const FullName = styled.span`
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+`;
+
+const ChainTag = styled.span`
+  margin-left: auto;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: ${props => props.$isSPL ? 'rgba(20, 120, 255, 0.2)' : 'rgba(0, 255, 157, 0.1)'};
+  color: ${props => props.$isSPL ? '#0099ff' : '#00ff9d'};
+`;
+
+// Create custom select component
+const CustomSelect = ({ 
+  label, 
+  options, 
+  value, 
+  onChange, 
+  disabled,
+  isNetwork = false,
+  placeholder = "Select an option"
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const dropdownRef = useRef(null);
+  const searchInputRef = useRef(null);
+  
+  const selectedOption = isNetwork 
+    ? options.find(option => option.id === value)
+    : options.find(option => option.id === value || option.symbol === value);
+    
+  const getCoinLogo = (coinId) => {
+    if (isNetwork) return null;
+    
+    // For coins with symbol as the ID
+    const option = options.find(opt => opt.id === coinId || opt.symbol === coinId);
+    const symbol = option?.symbol || coinId;
+    
+    // Try predefined logos first
+    if (COIN_LOGOS[symbol]) {
+      return COIN_LOGOS[symbol];
+    }
+    
+    // Use API as fallback
+    const symbolLower = symbol?.toLowerCase();
+    return `https://coinicons-api.vercel.app/api/icon/${symbolLower}`;
+  };
+  
+  const handleClickOutside = (event) => {
+    if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      setIsOpen(false);
+    }
+  };
+  
+  useEffect(() => {
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+  
+  useEffect(() => {
+    if (isOpen && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [isOpen]);
+  
+  const toggleDropdown = () => {
+    if (!disabled) {
+      setIsOpen(!isOpen);
+      setSearchTerm('');
+    }
+  };
+  
+  const handleSelect = (option) => {
+    onChange(option.id || option.symbol);
+    setIsOpen(false);
+  };
+  
+  const filteredOptions = options.filter(option => {
+    if (isNetwork) {
+      return option.name.toLowerCase().includes(searchTerm.toLowerCase());
+    }
+    
+    const symbolMatch = option.symbol?.toLowerCase().includes(searchTerm.toLowerCase());
+    const nameMatch = option.name?.toLowerCase().includes(searchTerm.toLowerCase());
+    return symbolMatch || nameMatch;
+  });
+  
+  return (
+    <CustomSelectContainer $isOpen={isOpen} ref={dropdownRef}>
+      <label>{label}</label>
+      
+      <SelectedOption 
+        onClick={toggleDropdown} 
+        $isOpen={isOpen} 
+        disabled={disabled}
+      >
+        {value && selectedOption ? (
+          <CoinInfo>
+            {!isNetwork && (
+              <CoinIconWrapper>
+                <CoinIcon 
+                  src={getCoinLogo(selectedOption.id || selectedOption.symbol)}
+                  alt={selectedOption.symbol || selectedOption.name}
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "https://s2.coinmarketcap.com/static/img/coins/64x64/1.png";
+                  }}
+                />
+              </CoinIconWrapper>
+            )}
+            <CoinNameDisplay>
+              <Symbol>
+                {isNetwork 
+                  ? selectedOption.name 
+                  : selectedOption.symbol}
+              </Symbol>
+              {!isNetwork && (
+                <FullName>{selectedOption.name || COIN_NAMES[selectedOption.symbol]}</FullName>
+              )}
+            </CoinNameDisplay>
+            {isNetwork && selectedOption.id === 'solana' && (
+              <ChainTag $isSPL>SPL</ChainTag>
+            )}
+            {isNetwork && selectedOption.isEVM && (
+              <ChainTag>EVM</ChainTag>
+            )}
+          </CoinInfo>
+        ) : (
+          <span style={{ color: 'rgba(255, 255, 255, 0.5)' }}>{placeholder}</span>
+        )}
+        <DropdownIcon $isOpen={isOpen}>▼</DropdownIcon>
+      </SelectedOption>
+      
+      {isOpen && (
+        <DropdownContainer
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <SearchInput 
+            type="text"
+            placeholder={`Search ${isNetwork ? 'networks' : 'coins'}...`}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            ref={searchInputRef}
+          />
+          
+          <OptionsList>
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map(option => (
+                <OptionItem 
+                  key={option.id || option.symbol} 
+                  onClick={() => handleSelect(option)}
+                  $isSelected={value === (option.id || option.symbol)}
+                >
+                  {!isNetwork && (
+                    <CoinIconWrapper>
+                      <CoinIcon 
+                        src={getCoinLogo(option.id || option.symbol)}
+                        alt={option.symbol || option.name}
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = "https://s2.coinmarketcap.com/static/img/coins/64x64/1.png";
+                        }}
+                      />
+                    </CoinIconWrapper>
+                  )}
+                  <CoinNameDisplay>
+                    <Symbol>
+                      {isNetwork ? option.name : option.symbol}
+                    </Symbol>
+                    {!isNetwork && (
+                      <FullName>{option.name || COIN_NAMES[option.symbol]}</FullName>
+                    )}
+                  </CoinNameDisplay>
+                  {isNetwork && option.id === 'solana' && (
+                    <ChainTag $isSPL>SPL</ChainTag>
+                  )}
+                  {isNetwork && option.isEVM && (
+                    <ChainTag>EVM</ChainTag>
+                  )}
+                </OptionItem>
+              ))
+            ) : (
+              <NoResults>No {isNetwork ? 'networks' : 'coins'} found</NoResults>
+            )}
+          </OptionsList>
+        </DropdownContainer>
+      )}
+    </CustomSelectContainer>
+  );
+};
+
 function Withdraw() {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
@@ -415,6 +825,18 @@ function Withdraw() {
     rejected: 0,
     completed: 0
   });
+  const [coins, setCoins] = useState([]);
+  const [networks, setNetworks] = useState([]);
+
+  // Supported networks list
+  const NETWORKS = [
+    { id: 'ethereum', name: 'Ethereum (ETH)', isEVM: true },
+    { id: 'bsc', name: 'BNB Smart Chain (BSC)', isEVM: true },
+    { id: 'arbitrum', name: 'Arbitrum', isEVM: true },
+    { id: 'base', name: 'Base', isEVM: true },
+    { id: 'solana', name: 'Solana', isEVM: false },
+    { id: 'bitcoin', name: 'Bitcoin', isEVM: false }
+  ];
 
   // Get coin chains based on selected coin
   const getChainForCoin = (coin) => {
@@ -423,6 +845,30 @@ function Withdraw() {
     if (coin === 'BNB') return 'bsc';
     return 'ethereum'; // Default to Ethereum for most ERC-20 tokens
   };
+
+  // Format coins for dropdown
+  useEffect(() => {
+    if (Object.keys(userBalances).length > 0) {
+      const formattedCoins = Object.entries(userBalances)
+        .filter(([_, balance]) => balance > 0)
+        .map(([symbol, balance]) => ({
+          symbol,
+          balance,
+          name: COIN_NAMES[symbol] || symbol
+        }));
+      
+      setCoins(formattedCoins);
+      
+      // Set networks based on selected coin
+      const networks = NETWORKS.filter(network => {
+        if (selectedCoin === 'SOL') return network.id === 'solana';
+        if (selectedCoin === 'BTC') return network.id === 'bitcoin';
+        return network.isEVM; // Only show EVM networks for other coins
+      });
+      
+      setNetworks(networks);
+    }
+  }, [userBalances, selectedCoin]);
 
   // Initialize component
   useEffect(() => {
@@ -441,7 +887,16 @@ function Withdraw() {
       const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
       
       if (userDoc.exists()) {
-        setUserBalances(userDoc.data().balances || {});
+        const balances = userDoc.data().balances || {};
+        setUserBalances(balances);
+        
+        // Set default selected coin if user has balances
+        const availableCoins = Object.entries(balances).filter(([_, balance]) => balance > 0);
+        if (availableCoins.length > 0) {
+          const [firstCoin] = availableCoins[0];
+          setSelectedCoin(firstCoin);
+          setSelectedChain(getChainForCoin(firstCoin));
+        }
       } else {
         // Initialize with empty balances
         setUserBalances({});
@@ -455,11 +910,16 @@ function Withdraw() {
   };
 
   // Handle coin selection
-  const handleCoinChange = (e) => {
-    const coin = e.target.value;
+  const handleCoinChange = (coin) => {
     setSelectedCoin(coin);
     setSelectedChain(getChainForCoin(coin));
     setAmount('');
+    setError('');
+  };
+
+  // Handle network selection
+  const handleNetworkChange = (networkId) => {
+    setSelectedChain(networkId);
     setError('');
   };
 
@@ -735,21 +1195,28 @@ function Withdraw() {
                 )}
                 
                 <FormGroup>
-                  <Label>Select Coin</Label>
-                  <Select value={selectedCoin} onChange={handleCoinChange}>
-                    {Object.entries(userBalances)
-                      .filter(([_, balance]) => balance > 0)
-                      .map(([coin]) => (
-                        <option key={coin} value={coin}>
-                          {coin} - {COIN_NAMES[coin] || coin}
-                        </option>
-                      ))
-                    }
-                  </Select>
+                  <CustomSelect
+                    label="Select Coin"
+                    options={coins}
+                    value={selectedCoin}
+                    onChange={handleCoinChange}
+                    placeholder="Select a coin"
+                  />
                   
                   <AvailableBalance>
                     <span>Available: {(userBalances[selectedCoin] || 0).toFixed(8)} {selectedCoin}</span>
                   </AvailableBalance>
+                </FormGroup>
+                
+                <FormGroup>
+                  <CustomSelect
+                    label="Select Network"
+                    options={networks}
+                    value={selectedChain}
+                    onChange={handleNetworkChange}
+                    isNetwork={true}
+                    placeholder="Select a network"
+                  />
                 </FormGroup>
                 
                 <FormGroup>

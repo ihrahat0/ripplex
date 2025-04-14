@@ -1190,19 +1190,21 @@ const Modal = ({ isOpen, onClose, children }) => {
 
 function UserProfile(props) {
     const navigate = useNavigate();
-    const [userData, setUserData] = useState({});
+    const [userData, setUserData] = useState({
+        displayName: '',
+        email: '',
+        phoneNumber: '',
+        avatar: '',
+        verified: false
+    });
     const [balances, setBalances] = useState({});
-    const [loading, setLoading] = useState(true);
+    const [tokenPrices, setTokenPrices] = useState({});
+    const [coinNames, setCoinNames] = useState({});
+    const [success, setSuccess] = useState('');
     const [error, setError] = useState('');
-    const [success, setSuccess] = useState(''); // Added missing success state variable
-    const [displayName, setDisplayName] = useState('');
-    const [isPremium, setIsPremium] = useState(false);
-    const [userId, setUserId] = useState('');
-    const [avatar, setAvatar] = useState(img);
-    const [isAdmin, setIsAdmin] = useState(false);
-    
-    // Admin state variables
+    const [loading, setLoading] = useState(true);
     const [users, setUsers] = useState([]);
+    const [isAdmin, setIsAdmin] = useState(false);
     const [selectedUser, setSelectedUser] = useState('');
     const [selectedToken, setSelectedToken] = useState('');
     const [amount, setAmount] = useState('');
@@ -1210,20 +1212,42 @@ function UserProfile(props) {
     const [selectedCategory, setSelectedCategory] = useState('');
     const [categoryTokens, setCategoryTokens] = useState({});
     const [loadingCategories, setLoadingCategories] = useState(false);
+    const [positions, setPositions] = useState([]);
+    const [totalPnL, setTotalPnL] = useState(0);
+    const [editBalance, setEditBalance] = useState({ token: '', amount: '' });
+    const [showConvertModal, setShowConvertModal] = useState(false);
+    const [isGoogleUser, setIsGoogleUser] = useState(false);
+    const [verificationCode, setVerificationCode] = useState('');
+    const [sentVerificationCode, setSentVerificationCode] = useState('');
+    const [is2FAEnabled, setIs2FAEnabled] = useState(false);
+    const [oldPassword, setOldPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [bonusAccount, setBonusAccount] = useState(null);
+    const [loadingBonus, setLoadingBonus] = useState(true);
+    const [referralData, setReferralData] = useState(null);
+    const [loadingReferrals, setLoadingReferrals] = useState(true);
+    const [copySuccess, setCopySuccess] = useState('');
+    const [showDepositModal, setShowDepositModal] = useState(false);
+    const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+    const [showSendModal, setShowSendModal] = useState(false);
+    const [sendData, setSendData] = useState({
+        recipientEmail: '',
+        token: '',
+        amount: '',
+    });
+    const [recipientValidation, setRecipientValidation] = useState({
+        loading: false,
+        exists: false,
+        message: '',
+    });
+    const [showTransferSuccess, setShowTransferSuccess] = useState(false);
+    const [transferSuccessDetails, setTransferSuccessDetails] = useState({ amount: '', token: '', recipient: '' });
+    const [sendModalLoading, setSendModalLoading] = useState(false);
+    // Add state to store coin metadata from Firestore
+    const [coinMetadata, setCoinMetadata] = useState({});
     
-    // Define checkAdminStatusOnMount function
-    const checkAdminStatusOnMount = async () => {
-        if (auth.currentUser) {
-            try {
-                const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
-                setIsAdmin(userDoc.exists() && (userDoc.data()?.role === 'admin' || userDoc.data()?.isAdmin === true));
-            } catch (error) {
-                console.error('Error checking admin status:', error);
-                setIsAdmin(false);
-            }
-        }
-    };
-    
+    // Add back the dataCoinTab for the tabs
     const [dataCoinTab] = useState([
         {
             id: 1,
@@ -1256,69 +1280,20 @@ function UserProfile(props) {
             icon: 'fa-lock'
         },
     ]);
-
-    const [positions, setPositions] = useState([]);
-    const [totalPnL, setTotalPnL] = useState(0);
-    const [tokenPrices, setTokenPrices] = useState(() => {
-        // Try to load previous prices from localStorage
-        const savedPrices = localStorage.getItem('tokenPrices');
-        const defaultPrices = {
-            RIPPLEX: 1, // Fixed price for RIPPLEX
-            BTC: 60000, // Default fallback prices
-            ETH: 3000,
-            XRP: 0.5,
-            ADA: 0.4,
-            DOGE: 0.1,
-            SOL: 100,
-            BNB: 300,
-            MATIC: 1,
-            DOT: 5,
-            AVAX: 30,
-            LINK: 15,
-            UNI: 7,
-            ATOM: 10,
-            USDT: 1
-        };
-        
-        return savedPrices ? { ...defaultPrices, ...JSON.parse(savedPrices) } : defaultPrices;
-    });
-    const [editBalance, setEditBalance] = useState({ token: '', amount: '' });
-    const [showConvertModal, setShowConvertModal] = useState(false);
-    const [isGoogleUser, setIsGoogleUser] = useState(false);
-    const [verificationCode, setVerificationCode] = useState('');
-    const [sentVerificationCode, setSentVerificationCode] = useState('');
-    const [is2FAEnabled, setIs2FAEnabled] = useState(false);
-    const [oldPassword, setOldPassword] = useState('');
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [bonusAccount, setBonusAccount] = useState(null);
-    const [loadingBonus, setLoadingBonus] = useState(true);
-    const [referralData, setReferralData] = useState(null);
-    const [loadingReferrals, setLoadingReferrals] = useState(true);
-    const [copySuccess, setCopySuccess] = useState('');
-
-    // Add these state hooks at the top level of your component (with other useState declarations)
-    const [showDepositModal, setShowDepositModal] = useState(false);
-    const [showWithdrawModal, setShowWithdrawModal] = useState(false);
-    const [showSendModal, setShowSendModal] = useState(false);
-    const [sendData, setSendData] = useState({
-        recipientEmail: '',
-        token: '',
-        amount: '',
-    });
-    const [recipientValidation, setRecipientValidation] = useState({
-        loading: false,
-        exists: false,
-        message: '',
-    });
-
-    // Add a new state variable for the success animation
-    const [showTransferSuccess, setShowTransferSuccess] = useState(false);
-    const [transferSuccessDetails, setTransferSuccessDetails] = useState({ amount: '', token: '', recipient: '' });
-
-    // Add a new state variable for the send modal loading state
-    const [sendModalLoading, setSendModalLoading] = useState(false);
-
+    
+    // Define checkAdminStatusOnMount function at the top of the component
+    const checkAdminStatusOnMount = async () => {
+        if (auth.currentUser) {
+            try {
+                const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+                setIsAdmin(userDoc.exists() && (userDoc.data()?.role === 'admin' || userDoc.data()?.isAdmin === true));
+            } catch (error) {
+                console.error('Error checking admin status:', error);
+                setIsAdmin(false);
+            }
+        }
+    };
+    
     const calculateTotalBalance = useMemo(() => {
         return Object.entries(balances).reduce((total, [asset, balance]) => {
             // Use a fixed price of $1 for RIPPLEX token
@@ -1333,7 +1308,13 @@ function UserProfile(props) {
         let safetyTimeout; // Declare variable at the top level of useEffect
         
         if (auth.currentUser) {
-            setUserId(auth.currentUser.uid);
+            setUserData({
+                displayName: auth.currentUser.displayName || '',
+                email: auth.currentUser.email || '',
+                phoneNumber: auth.currentUser.phoneNumber || '',
+                avatar: auth.currentUser.photoURL || '',
+                verified: auth.currentUser.emailVerified
+            });
             
             // Define variables to track loading process
             let userDataLoaded = false;
@@ -1355,36 +1336,47 @@ function UserProfile(props) {
             // Fetch authenticated user's data
             const fetchUserData = async () => {
                 try {
-                    const userRef = doc(db, 'users', auth.currentUser.uid);
-                    const userSnapshot = await getDoc(userRef);
+                    console.log("Fetching user data from Firestore");
+                    const userSnapshot = await getDoc(doc(db, 'users', auth.currentUser.uid));
                     
                     if (userSnapshot.exists()) {
-                        const userData = userSnapshot.data();
-                        setUserData(userData);
-                        setDisplayName(userData.displayName || '');
-                        setIsPremium(userData.isPremium || false);
+                        const userDataFromFirestore = userSnapshot.data();
                         
-                        const storedAvatar = userData.avatar || auth.currentUser.photoURL;
-                        if (storedAvatar) {
-                            setAvatar(storedAvatar);
-                        }
+                        // Merge with the existing userData state
+                        setUserData(prev => ({
+                            ...prev,
+                            ...userDataFromFirestore,
+                            email: auth.currentUser.email || userDataFromFirestore.email || '',
+                            displayName: userDataFromFirestore.displayName || auth.currentUser.displayName || '',
+                            avatar: userDataFromFirestore.avatar || auth.currentUser.photoURL || img,
+                            isPremium: userDataFromFirestore.isPremium || false
+                        }));
                         
                         // If user has balances in their user document, use them as initial values
-                        if (userData.balances) {
-                            setBalances(userData.balances);
+                        if (userDataFromFirestore.balances) {
+                            setBalances(userDataFromFirestore.balances);
                         }
                         
                         // For any information tied to 2FA
                         await checkTwoFactorStatus(auth.currentUser.uid);
+                    } else {
+                        console.log("User document doesn't exist in Firestore yet");
+                        // Set basic user data from auth
+                        setUserData(prev => ({
+                            ...prev,
+                            email: auth.currentUser.email || '',
+                            displayName: auth.currentUser.displayName || '',
+                            avatar: auth.currentUser.photoURL || img
+                        }));
                     }
                     userDataLoaded = true;
                     // If balances are already loaded, we can set loading to false
                     if (balancesLoaded) {
-                      setLoading(false);
+                        setLoading(false);
                     } else {
-                      // Set loading to false after getting user data anyway
-                      // This will allow the UI to render with partial data
-                      setTimeout(() => setLoading(false), 500);
+                        // Set loading to false after getting user data anyway
+                        // This will allow the UI to render with partial data
+                        setTimeout(() => setLoading(false), 500);
                     }
                 } catch (error) {
                     console.error('Error fetching user data:', error);
@@ -1506,21 +1498,54 @@ function UserProfile(props) {
             const userRef = doc(db, 'users', userId);
             const userDoc = await getDoc(userRef);
             
+            // Fetch all available coins from both 'tokens' and 'coins' collections
+            let allCoins = {};
+            
+            // Start with DEFAULT_COINS
+            Object.keys(DEFAULT_COINS).forEach(coin => {
+                allCoins[coin] = true;
+            });
+            
+            // Add coins from 'tokens' collection
+            try {
+                const tokensSnapshot = await getDocs(collection(db, 'tokens'));
+                tokensSnapshot.docs.forEach(doc => {
+                    const symbol = doc.data().symbol;
+                    if (symbol) {
+                        allCoins[symbol] = true;
+                    }
+                });
+            } catch (error) {
+                console.error("Error fetching tokens:", error);
+            }
+            
+            // Add coins from 'coins' collection
+            try {
+                const coinsSnapshot = await getDocs(collection(db, 'coins'));
+                coinsSnapshot.docs.forEach(doc => {
+                    const symbol = doc.data().symbol;
+                    if (symbol) {
+                        allCoins[symbol] = true;
+                    }
+                });
+            } catch (error) {
+                console.error("Error fetching coins:", error);
+            }
+            
+            // Make sure RIPPLEX is included
+            allCoins['RIPPLEX'] = true;
+            
+            console.log("All available coins:", Object.keys(allCoins));
+            
             if (userDoc.exists()) {
                 console.log("User document exists, updating balances");
                 const currentBalances = userDoc.data().balances || {};
                 const updatedBalances = {};
                 
                 // Initialize all coins with 0 if they don't exist
-                Object.keys(DEFAULT_COINS).forEach(coin => {
+                Object.keys(allCoins).forEach(coin => {
                     updatedBalances[coin] = currentBalances[coin] || 0;
                 });
-                
-                // Make sure RIPPLEX is initialized even if it wasn't in DEFAULT_COINS before
-                if (!('RIPPLEX' in updatedBalances)) {
-                    console.log("Adding RIPPLEX token to user's balances");
-                    updatedBalances['RIPPLEX'] = 0;
-                }
                 
                 // Check if we need to update the database (if any coins were added)
                 const needsUpdate = Object.keys(updatedBalances).some(coin => !(coin in currentBalances));
@@ -1532,7 +1557,7 @@ function UserProfile(props) {
                             balances: updatedBalances,
                             updatedAt: serverTimestamp()
                         });
-                        console.log("Updated user balances in Firestore with missing coins");
+                        console.log("Updated user balances in Firestore with all available coins");
                     } catch (updateError) {
                         console.error("Error updating balances in Firestore:", updateError);
                         // Return the balances anyway even if we couldn't update Firestore
@@ -1543,15 +1568,12 @@ function UserProfile(props) {
                 
                 return updatedBalances;
             } else {
-                console.log("User document doesn't exist, creating default balances");
-                // If user doc doesn't exist, create default balances
+                console.log("User document doesn't exist, creating default balances with all available coins");
+                // If user doc doesn't exist, create balances for all available coins
                 const defaultBalances = {};
-                Object.keys(DEFAULT_COINS).forEach(coin => {
+                Object.keys(allCoins).forEach(coin => {
                     defaultBalances[coin] = 0;
                 });
-                
-                // Explicitly ensure RIPPLEX is included
-                defaultBalances['RIPPLEX'] = 0;
                 
                 // Try to create a user document with default balances
                 try {
@@ -1562,7 +1584,7 @@ function UserProfile(props) {
                         createdAt: serverTimestamp(),
                         emailVerified: true
                     });
-                    console.log("Created new user document with default balances including RIPPLEX");
+                    console.log("Created new user document with balances for all available coins");
                 } catch (setError) {
                     console.error("Error creating user document with balances:", setError);
                 }
@@ -1635,27 +1657,152 @@ function UserProfile(props) {
     // Function to fetch cryptocurrency prices
     const fetchPrices = async () => {
         try {
-            const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,ripple,cardano,dogecoin,solana,binancecoin,matic-network,polkadot,avalanche-2,chainlink,uniswap,cosmos&vs_currencies=usd');
+            // Try to fetch prices for a wide range of cryptocurrencies
+            const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,ripple,cardano,dogecoin,solana,binancecoin,matic-network,polkadot,avalanche-2,chainlink,uniswap,cosmos,tron,litecoin,bitcoin-cash,stellar,monero,tezos,aave,maker,compound,synthetix,yearn-finance,sushi,pancakeswap-token,curve-dao-token,1inch,the-graph,decentraland,axie-infinity,chiliz,enjincoin,basic-attention-token,loopring,harmony,theta-token,fantom,near,algorand,flow,hedera-hashgraph,elrond-erd-2,eos,kusama,vechain,iota,filecoin,theta-fuel,zilliqa,qtum,icon,waves,ontology,ravencoin,nano,digibyte,decred,dash,doge-killer,safemoon,baby-doge-coin,shiba-inu&vs_currencies=usd');
             const data = await response.json();
             
-            // Create a mapping from our token symbols to prices
-            const prices = {
+            // Create an empty price map
+            let prices = {
                 ...tokenPrices, // Preserve existing prices, especially RIPPLEX
-                BTC: data.bitcoin?.usd || tokenPrices.BTC,
-                ETH: data.ethereum?.usd || tokenPrices.ETH,
-                XRP: data.ripple?.usd || tokenPrices.XRP,
-                ADA: data.cardano?.usd || tokenPrices.ADA,
-                DOGE: data.dogecoin?.usd || tokenPrices.DOGE,
-                SOL: data.solana?.usd || tokenPrices.SOL,
-                BNB: data.binancecoin?.usd || tokenPrices.BNB,
-                MATIC: data['matic-network']?.usd || tokenPrices.MATIC,
-                DOT: data.polkadot?.usd || tokenPrices.DOT,
-                AVAX: data['avalanche-2']?.usd || tokenPrices.AVAX,
-                LINK: data.chainlink?.usd || tokenPrices.LINK,
-                UNI: data.uniswap?.usd || tokenPrices.UNI,
-                ATOM: data.cosmos?.usd || tokenPrices.ATOM,
-                USDT: 1
+                USDT: 1, // USDT is pegged to USD
             };
+            
+            // Map from CoinGecko IDs to our token symbols
+            const idToSymbol = {
+                'bitcoin': 'BTC',
+                'ethereum': 'ETH',
+                'ripple': 'XRP',
+                'cardano': 'ADA',
+                'dogecoin': 'DOGE',
+                'solana': 'SOL',
+                'binancecoin': 'BNB',
+                'matic-network': 'MATIC',
+                'polkadot': 'DOT',
+                'avalanche-2': 'AVAX',
+                'chainlink': 'LINK',
+                'uniswap': 'UNI',
+                'cosmos': 'ATOM',
+                'tron': 'TRX',
+                'litecoin': 'LTC',
+                'bitcoin-cash': 'BCH',
+                'stellar': 'XLM',
+                'monero': 'XMR',
+                'tezos': 'XTZ',
+                'aave': 'AAVE',
+                'maker': 'MKR',
+                'compound': 'COMP',
+                'synthetix': 'SNX',
+                'yearn-finance': 'YFI',
+                'sushi': 'SUSHI',
+                'pancakeswap-token': 'CAKE',
+                'curve-dao-token': 'CRV',
+                '1inch': '1INCH',
+                'the-graph': 'GRT',
+                'decentraland': 'MANA',
+                'axie-infinity': 'AXS',
+                'chiliz': 'CHZ',
+                'enjincoin': 'ENJ',
+                'basic-attention-token': 'BAT',
+                'loopring': 'LRC',
+                'harmony': 'ONE',
+                'theta-token': 'THETA',
+                'fantom': 'FTM',
+                'near': 'NEAR',
+                'algorand': 'ALGO',
+                'flow': 'FLOW',
+                'hedera-hashgraph': 'HBAR',
+                'elrond-erd-2': 'EGLD',
+                'eos': 'EOS',
+                'kusama': 'KSM',
+                'vechain': 'VET',
+                'iota': 'MIOTA',
+                'filecoin': 'FIL',
+                'theta-fuel': 'TFUEL',
+                'zilliqa': 'ZIL',
+                'qtum': 'QTUM',
+                'icon': 'ICX',
+                'waves': 'WAVES',
+                'ontology': 'ONT',
+                'ravencoin': 'RVN',
+                'nano': 'NANO',
+                'digibyte': 'DGB',
+                'decred': 'DCR',
+                'dash': 'DASH',
+                'doge-killer': 'LEASH',
+                'safemoon': 'SAFEMOON',
+                'baby-doge-coin': 'BABYDOGE',
+                'shiba-inu': 'SHIB'
+            };
+            
+            // Populate prices from the API response
+            for (const [id, priceData] of Object.entries(data)) {
+                const symbol = idToSymbol[id];
+                if (symbol && priceData.usd) {
+                    prices[symbol] = priceData.usd;
+                }
+            }
+            
+            // Fetch all coins and tokens from Firebase to get additional price data and names
+            try {
+                // First, fetch tokens collection
+                const tokensSnapshot = await getDocs(collection(db, 'tokens'));
+                const tokensData = tokensSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                
+                // Then fetch coins collection
+                const coinsSnapshot = await getDocs(collection(db, 'coins'));
+                const coinsData = coinsSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                
+                // Combine the data
+                const allCoinsData = [...tokensData, ...coinsData];
+                
+                // Extract price data and map to our format
+                const coinNameMap = {};
+                
+                allCoinsData.forEach(coin => {
+                    const symbol = coin.symbol;
+                    if (!symbol) return;
+                    
+                    // Save coin names for display
+                    coinNameMap[symbol] = coin.name || symbol;
+                    
+                    // Try to extract price from the data
+                    if (coin.price) {
+                        let priceValue = 0;
+                        
+                        // Handle string price format (e.g. "$1.23")
+                        if (typeof coin.price === 'string') {
+                            // Remove currency symbol and commas
+                            const priceStr = coin.price.replace(/[$,]/g, '');
+                            priceValue = parseFloat(priceStr);
+                        } 
+                        // Handle number price format
+                        else if (typeof coin.price === 'number') {
+                            priceValue = coin.price;
+                        }
+                        
+                        // Add to prices object if we don't already have a price
+                        if (!isNaN(priceValue) && priceValue > 0 && !prices[symbol]) {
+                            prices[symbol] = priceValue;
+                        }
+                    }
+                });
+                
+                // Set coin names in state for use in the UI
+                setCoinNames(coinNameMap);
+            } catch (error) {
+                console.error('Error fetching coin data from Firebase:', error);
+            }
+            
+            // Set RIPPLEX price to 1 USD if not already set
+            if (!prices.RIPPLEX) {
+                prices.RIPPLEX = 1;
+            }
             
             // Save to localStorage for future use
             localStorage.setItem('tokenPrices', JSON.stringify(prices));
@@ -1663,6 +1810,16 @@ function UserProfile(props) {
             setTokenPrices(prices);
         } catch (error) {
             console.error('Error fetching token prices:', error);
+            
+            // Use cached prices if available
+            const cachedPrices = localStorage.getItem('tokenPrices');
+            if (cachedPrices) {
+                try {
+                    setTokenPrices(JSON.parse(cachedPrices));
+                } catch (e) {
+                    console.error('Error parsing cached token prices:', e);
+                }
+            }
         }
     };
 
@@ -2537,6 +2694,34 @@ function UserProfile(props) {
         }
     };
 
+    // Add an effect to fetch coin metadata from Firestore
+    useEffect(() => {
+      const fetchCoinMetadata = async () => {
+        try {
+          // Fetch all coins from Firestore
+          const coinsSnapshot = await getDocs(collection(db, 'coins'));
+          const coinsData = {};
+          
+          coinsSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.symbol) {
+              coinsData[data.symbol] = {
+                logoUrl: data.logoUrl || data.icon || data.logo,
+                name: data.name,
+                // Add any other fields you need
+              };
+            }
+          });
+          
+          setCoinMetadata(coinsData);
+        } catch (error) {
+          console.error('Error fetching coin metadata:', error);
+        }
+      };
+      
+      fetchCoinMetadata();
+    }, []);
+
     if (loading) {
         return (
             <div style={{
@@ -2762,7 +2947,14 @@ function UserProfile(props) {
                                                     gap: '5px'
                                                 }}>
                                                     <img 
-                                                        src={COIN_LOGOS[token] || `https://cryptologos.cc/logos/${token.toLowerCase()}-${token.toLowerCase()}-logo.png`} 
+                                                        src={
+                                                          // First priority: Check if we have metadata from Firestore
+                                                          (coinMetadata[token] && coinMetadata[token].logoUrl) 
+                                                          // Second priority: Use predefined logos
+                                                          || COIN_LOGOS[token] 
+                                                          // Last fallback: Try cryptologos
+                                                          || `https://s2.coinmarketcap.com/static/img/coins/64x64/1.png`
+                                                        } 
                                                         alt={token}
                                                         style={{
                                                             width: '16px',
@@ -2771,7 +2963,9 @@ function UserProfile(props) {
                                                         }}
                                                         onError={(e) => {
                                                             e.target.onerror = null;
-                                                            e.target.src = 'https://cryptologos.cc/logos/question-mark.png';
+                                                            
+                                                            // Don't use question mark icon, just use a general coin image
+                                                            e.target.src = 'https://s2.coinmarketcap.com/static/img/coins/64x64/1.png';
                                                         }}
                                                     />
                                                     {token}
@@ -3129,7 +3323,14 @@ function UserProfile(props) {
                                                                                 gap: '12px'
                                                                             }}>
                                                                                 <img 
-                                                                                    src={COIN_LOGOS[asset] || `https://cryptologos.cc/logos/${asset.toLowerCase()}-${asset.toLowerCase()}-logo.png`} 
+                                                                                    src={
+                                                                                      // First priority: Check if we have metadata from Firestore
+                                                                                      (coinMetadata[asset] && coinMetadata[asset].logoUrl) 
+                                                                                      // Second priority: Use predefined logos
+                                                                                      || COIN_LOGOS[asset] 
+                                                                                      // Last fallback: Try cryptologos
+                                                                                      || `https://s2.coinmarketcap.com/static/img/coins/64x64/1.png`
+                                                                                    } 
                                                                                     alt={asset}
                                                                                     style={{
                                                                                         width: '32px',
@@ -3140,7 +3341,9 @@ function UserProfile(props) {
                                                                                     }}
                                                                                     onError={(e) => {
                                                                                         e.target.onerror = null;
-                                                                                        e.target.src = 'https://cryptologos.cc/logos/question-mark.png';
+                                                                                        
+                                                                                        // Don't use question mark icon, just use a general coin image
+                                                                                        e.target.src = 'https://s2.coinmarketcap.com/static/img/coins/64x64/1.png';
                                                                                     }}
                                                                                 />
                                                                                 <div>
@@ -3166,9 +3369,10 @@ function UserProfile(props) {
                                                                                         color: '#7A7A7A',
                                                                                         marginTop: '2px'
                                                                                     }}>
-                                                                                        {asset === 'USDT' ? 'Tether USD' : 
-                                                                                         asset === 'RIPPLEX' ? 'Ripple Exchange Token' : 
-                                                                                         asset}
+                                                                                        {coinNames[asset] || // Try to use the name from our map
+                                                                                         (asset === 'USDT' ? 'Tether USD' : 
+                                                                                          asset === 'RIPPLEX' ? 'Ripple Exchange Token' : 
+                                                                                          asset)} {/* Fallback to predefined names or the symbol itself */}
                                                                                     </div>
                                                                                 </div>
                                                                             </div>
