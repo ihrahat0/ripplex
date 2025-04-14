@@ -1692,6 +1692,10 @@ function CryptoPrices({ searchFilter = '', onClearSearch }) {
 
     console.log('Trading data:', tradingData); // For debugging
 
+    // Clear any existing tradingMode to ensure the modal shows up
+    localStorage.removeItem('ripple_trading_mode');
+    
+    // Navigate to trading page with the crypto data
     navigate(`/trading/${crypto.id}`, { 
       state: { cryptoData: tradingData } 
     });

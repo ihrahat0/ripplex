@@ -1715,7 +1715,11 @@ function HomeOne() {
                 <StepDescription>
                   Buy, sell, and trade cryptocurrency with ease on our secure and intuitive platform.
                 </StepDescription>
-                <Button onClick={() => navigate('/trading')}>Start Now</Button>
+                <Button onClick={() => {
+                  // Clear trading mode to trigger mode selection modal
+                  localStorage.removeItem('ripple_trading_mode');
+                  navigate('/trading');
+                }}>Start Now</Button>
               </StepCard>
             </StepsContainer>
           </Container>
