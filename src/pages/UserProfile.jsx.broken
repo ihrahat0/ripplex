@@ -3571,7 +3571,7 @@ function UserProfile(props) {
                         </button>
                     </div>
                 </form>
-            </Modal>
+            </CustomModal>
 
             <TransactionHistoryModal
                 isOpen={showTransferSuccess}

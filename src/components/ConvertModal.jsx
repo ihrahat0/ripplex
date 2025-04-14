@@ -12,7 +12,7 @@ import bnbLogo from '../assets/images/coin/bnb.png';
 import solLogo from '../assets/images/coin/sol.png';
 import solanLogo from '../assets/images/coin/solana.png';
 import adaLogo from '../assets/images/coin/ada.png';
-import dogeeLogo from '../assets/images/coin/doge.png';
+import dogeLogo from '../assets/images/coin/doge.png';
 import dotLogo from '../assets/images/coin/dot.png';
 import maticLogo from '../assets/images/coin/matic.png';
 import avaxLogo from '../assets/images/coin/avax.png';
@@ -510,7 +510,7 @@ function ConvertModal({ isOpen, onClose, balances, tokenPrices, onConvert }) {
     BNB: bnbLogo,
     SOL: solLogo || solanLogo, // Try both versions
     ADA: adaLogo,
-    DOGE: dogeeLogo,
+    DOGE: dogeLogo,
     DOT: dotLogo,
     MATIC: maticLogo,
     AVAX: avaxLogo,
@@ -728,8 +728,48 @@ function ConvertModal({ isOpen, onClose, balances, tokenPrices, onConvert }) {
       return COIN_LOGOS[symbol];
     }
     
-    // Fallback to online crypto logos
-    return `https://cryptologos.cc/logos/${symbol.toLowerCase()}-${symbol.toLowerCase()}-logo.png?v=024`;
+    // Check for SHITCOIN, NPCS, LEO, FILECOIN, AIC, TITCOIN, TAO, KAS, IPLR and other admin-added coins
+    // Use direct links to admin-provided images instead of relying on cryptologos.cc
+    const adminCoins = {
+      'TAO': 'https://cryptologos.cc/logos/1inch-1inch-logo.png', // Bittensor (TAO) shown as "T" in screenshot
+      'QNT': 'https://cryptologos.cc/logos/quant-qnt-logo.png', // Quant
+      'SHITCOIN': 'https://cryptologos.cc/logos/shiba-inu-shib-logo.png',
+      'NPCS': 'https://cryptologos.cc/logos/polkadot-new-dot-logo.png',
+      'LEO': 'https://cryptologos.cc/logos/leo-token-leo-logo.png',
+      'FILECOIN': 'https://cryptologos.cc/logos/filecoin-fil-logo.png',
+      'AIC': 'https://cryptologos.cc/logos/algorand-algo-logo.png',
+      'TITCOIN': 'https://cryptologos.cc/logos/theta-token-theta-logo.png',
+      'KAS': 'https://cryptologos.cc/logos/kaspa-kas-logo.png',
+      'IPLR': 'https://cryptologos.cc/logos/internet-computer-icp-logo.png',
+      'VINE': 'https://cryptologos.cc/logos/vechain-vet-logo.png'
+    };
+    
+    if (adminCoins[symbol]) {
+      return adminCoins[symbol];
+    }
+    
+    // First fallback to cryptologos.cc with proper format
+    const symbolLower = symbol.toLowerCase();
+    if (symbolLower === 'btc') {
+      return 'https://cryptologos.cc/logos/bitcoin-btc-logo.png';
+    } else if (symbolLower === 'eth') {
+      return 'https://cryptologos.cc/logos/ethereum-eth-logo.png';
+    } else if (symbolLower === 'bnb') {
+      return 'https://cryptologos.cc/logos/bnb-bnb-logo.png';
+    } else if (symbolLower === 'sol') {
+      return 'https://cryptologos.cc/logos/solana-sol-logo.png';
+    } else if (symbolLower === 'xrp') {
+      return 'https://cryptologos.cc/logos/xrp-xrp-logo.png';
+    } else if (symbolLower === 'ada') {
+      return 'https://cryptologos.cc/logos/cardano-ada-logo.png';
+    } else if (symbolLower === 'doge') {
+      return 'https://cryptologos.cc/logos/dogecoin-doge-logo.png';
+    } else if (symbolLower === 'trx') {
+      return 'https://cryptologos.cc/logos/tron-trx-logo.png';
+    }
+    
+    // Try coinicons-api as second fallback
+    return `https://coinicons-api.vercel.app/api/icon/${symbolLower}`;
   };
 
   const renderCurrencyDropdown = () => {
@@ -763,7 +803,48 @@ function ConvertModal({ isOpen, onClose, balances, tokenPrices, onConvert }) {
                 alt={coin.symbol}
                 onError={(e) => {
                   e.target.onerror = null;
-                  e.target.src = "https://cryptologos.cc/logos/question-mark.png";
+                  const symbol = coin.symbol?.toLowerCase() || 'btc';
+                  
+                  // Check first for admin-added coins
+                  const adminCoins = {
+                    'TAO': 'https://cryptologos.cc/logos/1inch-1inch-logo.png', // Bittensor (TAO) shown as "T" in screenshot
+                    'QNT': 'https://cryptologos.cc/logos/quant-qnt-logo.png', // Quant
+                    'SHITCOIN': 'https://cryptologos.cc/logos/shiba-inu-shib-logo.png',
+                    'NPCS': 'https://cryptologos.cc/logos/polkadot-new-dot-logo.png',
+                    'LEO': 'https://cryptologos.cc/logos/leo-token-leo-logo.png',
+                    'FILECOIN': 'https://cryptologos.cc/logos/filecoin-fil-logo.png',
+                    'AIC': 'https://cryptologos.cc/logos/algorand-algo-logo.png',
+                    'TITCOIN': 'https://cryptologos.cc/logos/theta-token-theta-logo.png',
+                    'KAS': 'https://cryptologos.cc/logos/kaspa-kas-logo.png',
+                    'IPLR': 'https://cryptologos.cc/logos/internet-computer-icp-logo.png',
+                    'VINE': 'https://cryptologos.cc/logos/vechain-vet-logo.png'
+                  };
+                  
+                  if (adminCoins[coin.symbol]) {
+                    e.target.src = adminCoins[coin.symbol];
+                    return;
+                  }
+                  
+                  // First fallback to direct cryptologos format
+                  if (e.target.src.includes('cryptologos.cc')) {
+                    if (symbol === 'btc') e.target.src = 'https://cryptologos.cc/logos/bitcoin-btc-logo.png';
+                    else if (symbol === 'eth') e.target.src = 'https://cryptologos.cc/logos/ethereum-eth-logo.png';
+                    else if (symbol === 'bnb') e.target.src = 'https://cryptologos.cc/logos/bnb-bnb-logo.png';
+                    else if (symbol === 'sol') e.target.src = 'https://cryptologos.cc/logos/solana-sol-logo.png';
+                    else if (symbol === 'xrp') e.target.src = 'https://cryptologos.cc/logos/xrp-xrp-logo.png';
+                    else if (symbol === 'ada') e.target.src = 'https://cryptologos.cc/logos/cardano-ada-logo.png';
+                    else if (symbol === 'doge') e.target.src = 'https://cryptologos.cc/logos/dogecoin-doge-logo.png';
+                    else if (symbol === 'trx') e.target.src = 'https://cryptologos.cc/logos/tron-trx-logo.png';
+                    else e.target.src = `https://coinicons-api.vercel.app/api/icon/${symbol}`;
+                  }
+                  // Second fallback to CoinIcons API
+                  else if (e.target.src.includes('coinicons-api')) {
+                    e.target.src = `https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${symbol}.png`;
+                  }
+                  // Final fallback to question mark
+                  else {
+                    e.target.src = "https://cryptologos.cc/logos/question-mark.png";
+                  }
                 }}
               />
               <div className="name">
@@ -802,7 +883,48 @@ function ConvertModal({ isOpen, onClose, balances, tokenPrices, onConvert }) {
               alt={fromCoin || "From"}
               onError={(e) => {
                 e.target.onerror = null;
-                e.target.src = "https://cryptologos.cc/logos/question-mark.png";
+                const symbol = fromCoin?.toLowerCase() || 'btc';
+                
+                // Check first for admin-added coins
+                const adminCoins = {
+                  'TAO': 'https://cryptologos.cc/logos/1inch-1inch-logo.png', // Bittensor (TAO) shown as "T" in screenshot
+                  'QNT': 'https://cryptologos.cc/logos/quant-qnt-logo.png', // Quant
+                  'SHITCOIN': 'https://cryptologos.cc/logos/shiba-inu-shib-logo.png',
+                  'NPCS': 'https://cryptologos.cc/logos/polkadot-new-dot-logo.png',
+                  'LEO': 'https://cryptologos.cc/logos/leo-token-leo-logo.png',
+                  'FILECOIN': 'https://cryptologos.cc/logos/filecoin-fil-logo.png',
+                  'AIC': 'https://cryptologos.cc/logos/algorand-algo-logo.png',
+                  'TITCOIN': 'https://cryptologos.cc/logos/theta-token-theta-logo.png',
+                  'KAS': 'https://cryptologos.cc/logos/kaspa-kas-logo.png',
+                  'IPLR': 'https://cryptologos.cc/logos/internet-computer-icp-logo.png',
+                  'VINE': 'https://cryptologos.cc/logos/vechain-vet-logo.png'
+                };
+                
+                if (adminCoins[fromCoin]) {
+                  e.target.src = adminCoins[fromCoin];
+                  return;
+                }
+                
+                // First fallback to direct cryptologos format
+                if (e.target.src.includes('cryptologos.cc')) {
+                  if (symbol === 'btc') e.target.src = 'https://cryptologos.cc/logos/bitcoin-btc-logo.png';
+                  else if (symbol === 'eth') e.target.src = 'https://cryptologos.cc/logos/ethereum-eth-logo.png';
+                  else if (symbol === 'bnb') e.target.src = 'https://cryptologos.cc/logos/bnb-bnb-logo.png';
+                  else if (symbol === 'sol') e.target.src = 'https://cryptologos.cc/logos/solana-sol-logo.png';
+                  else if (symbol === 'xrp') e.target.src = 'https://cryptologos.cc/logos/xrp-xrp-logo.png';
+                  else if (symbol === 'ada') e.target.src = 'https://cryptologos.cc/logos/cardano-ada-logo.png';
+                  else if (symbol === 'doge') e.target.src = 'https://cryptologos.cc/logos/dogecoin-doge-logo.png';
+                  else if (symbol === 'trx') e.target.src = 'https://cryptologos.cc/logos/tron-trx-logo.png';
+                  else e.target.src = `https://coinicons-api.vercel.app/api/icon/${symbol}`;
+                }
+                // Second fallback to CoinIcons API
+                else if (e.target.src.includes('coinicons-api')) {
+                  e.target.src = `https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${symbol}.png`;
+                }
+                // Final fallback to question mark
+                else {
+                  e.target.src = "https://cryptologos.cc/logos/question-mark.png";
+                }
               }}
             />
           </CoinIcon>
@@ -817,7 +939,48 @@ function ConvertModal({ isOpen, onClose, balances, tokenPrices, onConvert }) {
               alt={toCoin || "To"}
               onError={(e) => {
                 e.target.onerror = null;
-                e.target.src = "https://cryptologos.cc/logos/question-mark.png";
+                const symbol = toCoin?.toLowerCase() || 'btc';
+                
+                // Check first for admin-added coins
+                const adminCoins = {
+                  'TAO': 'https://cryptologos.cc/logos/1inch-1inch-logo.png', // Bittensor (TAO) shown as "T" in screenshot
+                  'QNT': 'https://cryptologos.cc/logos/quant-qnt-logo.png', // Quant
+                  'SHITCOIN': 'https://cryptologos.cc/logos/shiba-inu-shib-logo.png',
+                  'NPCS': 'https://cryptologos.cc/logos/polkadot-new-dot-logo.png',
+                  'LEO': 'https://cryptologos.cc/logos/leo-token-leo-logo.png',
+                  'FILECOIN': 'https://cryptologos.cc/logos/filecoin-fil-logo.png',
+                  'AIC': 'https://cryptologos.cc/logos/algorand-algo-logo.png',
+                  'TITCOIN': 'https://cryptologos.cc/logos/theta-token-theta-logo.png',
+                  'KAS': 'https://cryptologos.cc/logos/kaspa-kas-logo.png',
+                  'IPLR': 'https://cryptologos.cc/logos/internet-computer-icp-logo.png',
+                  'VINE': 'https://cryptologos.cc/logos/vechain-vet-logo.png'
+                };
+                
+                if (adminCoins[toCoin]) {
+                  e.target.src = adminCoins[toCoin];
+                  return;
+                }
+                
+                // First fallback to direct cryptologos format
+                if (e.target.src.includes('cryptologos.cc')) {
+                  if (symbol === 'btc') e.target.src = 'https://cryptologos.cc/logos/bitcoin-btc-logo.png';
+                  else if (symbol === 'eth') e.target.src = 'https://cryptologos.cc/logos/ethereum-eth-logo.png';
+                  else if (symbol === 'bnb') e.target.src = 'https://cryptologos.cc/logos/bnb-bnb-logo.png';
+                  else if (symbol === 'sol') e.target.src = 'https://cryptologos.cc/logos/solana-sol-logo.png';
+                  else if (symbol === 'xrp') e.target.src = 'https://cryptologos.cc/logos/xrp-xrp-logo.png';
+                  else if (symbol === 'ada') e.target.src = 'https://cryptologos.cc/logos/cardano-ada-logo.png';
+                  else if (symbol === 'doge') e.target.src = 'https://cryptologos.cc/logos/dogecoin-doge-logo.png';
+                  else if (symbol === 'trx') e.target.src = 'https://cryptologos.cc/logos/tron-trx-logo.png';
+                  else e.target.src = `https://coinicons-api.vercel.app/api/icon/${symbol}`;
+                }
+                // Second fallback to CoinIcons API
+                else if (e.target.src.includes('coinicons-api')) {
+                  e.target.src = `https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${symbol}.png`;
+                }
+                // Final fallback to question mark
+                else {
+                  e.target.src = "https://cryptologos.cc/logos/question-mark.png";
+                }
               }}
             />
           </CoinIcon>
@@ -847,7 +1010,48 @@ function ConvertModal({ isOpen, onClose, balances, tokenPrices, onConvert }) {
                       alt={fromCoin}
                       onError={(e) => {
                         e.target.onerror = null;
-                        e.target.src = "https://cryptologos.cc/logos/question-mark.png";
+                        const symbol = fromCoin?.toLowerCase() || 'btc';
+                        
+                        // Check first for admin-added coins
+                        const adminCoins = {
+                          'TAO': 'https://cryptologos.cc/logos/1inch-1inch-logo.png', // Bittensor (TAO) shown as "T" in screenshot
+                          'QNT': 'https://cryptologos.cc/logos/quant-qnt-logo.png', // Quant
+                          'SHITCOIN': 'https://cryptologos.cc/logos/shiba-inu-shib-logo.png',
+                          'NPCS': 'https://cryptologos.cc/logos/polkadot-new-dot-logo.png',
+                          'LEO': 'https://cryptologos.cc/logos/leo-token-leo-logo.png',
+                          'FILECOIN': 'https://cryptologos.cc/logos/filecoin-fil-logo.png',
+                          'AIC': 'https://cryptologos.cc/logos/algorand-algo-logo.png',
+                          'TITCOIN': 'https://cryptologos.cc/logos/theta-token-theta-logo.png',
+                          'KAS': 'https://cryptologos.cc/logos/kaspa-kas-logo.png',
+                          'IPLR': 'https://cryptologos.cc/logos/internet-computer-icp-logo.png',
+                          'VINE': 'https://cryptologos.cc/logos/vechain-vet-logo.png'
+                        };
+                        
+                        if (adminCoins[fromCoin]) {
+                          e.target.src = adminCoins[fromCoin];
+                          return;
+                        }
+                        
+                        // First fallback to direct cryptologos format
+                        if (e.target.src.includes('cryptologos.cc')) {
+                          if (symbol === 'btc') e.target.src = 'https://cryptologos.cc/logos/bitcoin-btc-logo.png';
+                          else if (symbol === 'eth') e.target.src = 'https://cryptologos.cc/logos/ethereum-eth-logo.png';
+                          else if (symbol === 'bnb') e.target.src = 'https://cryptologos.cc/logos/bnb-bnb-logo.png';
+                          else if (symbol === 'sol') e.target.src = 'https://cryptologos.cc/logos/solana-sol-logo.png';
+                          else if (symbol === 'xrp') e.target.src = 'https://cryptologos.cc/logos/xrp-xrp-logo.png';
+                          else if (symbol === 'ada') e.target.src = 'https://cryptologos.cc/logos/cardano-ada-logo.png';
+                          else if (symbol === 'doge') e.target.src = 'https://cryptologos.cc/logos/dogecoin-doge-logo.png';
+                          else if (symbol === 'trx') e.target.src = 'https://cryptologos.cc/logos/tron-trx-logo.png';
+                          else e.target.src = `https://coinicons-api.vercel.app/api/icon/${symbol}`;
+                        }
+                        // Second fallback to CoinIcons API
+                        else if (e.target.src.includes('coinicons-api')) {
+                          e.target.src = `https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${symbol}.png`;
+                        }
+                        // Final fallback to question mark
+                        else {
+                          e.target.src = "https://cryptologos.cc/logos/question-mark.png";
+                        }
                       }}
                     />
                   )}
@@ -890,7 +1094,48 @@ function ConvertModal({ isOpen, onClose, balances, tokenPrices, onConvert }) {
                       alt={toCoin}
                       onError={(e) => {
                         e.target.onerror = null;
-                        e.target.src = "https://cryptologos.cc/logos/question-mark.png";
+                        const symbol = toCoin?.toLowerCase() || 'btc';
+                        
+                        // Check first for admin-added coins
+                        const adminCoins = {
+                          'TAO': 'https://cryptologos.cc/logos/1inch-1inch-logo.png', // Bittensor (TAO) shown as "T" in screenshot
+                          'QNT': 'https://cryptologos.cc/logos/quant-qnt-logo.png', // Quant
+                          'SHITCOIN': 'https://cryptologos.cc/logos/shiba-inu-shib-logo.png',
+                          'NPCS': 'https://cryptologos.cc/logos/polkadot-new-dot-logo.png',
+                          'LEO': 'https://cryptologos.cc/logos/leo-token-leo-logo.png',
+                          'FILECOIN': 'https://cryptologos.cc/logos/filecoin-fil-logo.png',
+                          'AIC': 'https://cryptologos.cc/logos/algorand-algo-logo.png',
+                          'TITCOIN': 'https://cryptologos.cc/logos/theta-token-theta-logo.png',
+                          'KAS': 'https://cryptologos.cc/logos/kaspa-kas-logo.png',
+                          'IPLR': 'https://cryptologos.cc/logos/internet-computer-icp-logo.png',
+                          'VINE': 'https://cryptologos.cc/logos/vechain-vet-logo.png'
+                        };
+                        
+                        if (adminCoins[toCoin]) {
+                          e.target.src = adminCoins[toCoin];
+                          return;
+                        }
+                        
+                        // First fallback to direct cryptologos format
+                        if (e.target.src.includes('cryptologos.cc')) {
+                          if (symbol === 'btc') e.target.src = 'https://cryptologos.cc/logos/bitcoin-btc-logo.png';
+                          else if (symbol === 'eth') e.target.src = 'https://cryptologos.cc/logos/ethereum-eth-logo.png';
+                          else if (symbol === 'bnb') e.target.src = 'https://cryptologos.cc/logos/bnb-bnb-logo.png';
+                          else if (symbol === 'sol') e.target.src = 'https://cryptologos.cc/logos/solana-sol-logo.png';
+                          else if (symbol === 'xrp') e.target.src = 'https://cryptologos.cc/logos/xrp-xrp-logo.png';
+                          else if (symbol === 'ada') e.target.src = 'https://cryptologos.cc/logos/cardano-ada-logo.png';
+                          else if (symbol === 'doge') e.target.src = 'https://cryptologos.cc/logos/dogecoin-doge-logo.png';
+                          else if (symbol === 'trx') e.target.src = 'https://cryptologos.cc/logos/tron-trx-logo.png';
+                          else e.target.src = `https://coinicons-api.vercel.app/api/icon/${symbol}`;
+                        }
+                        // Second fallback to CoinIcons API
+                        else if (e.target.src.includes('coinicons-api')) {
+                          e.target.src = `https://raw.githubusercontent.com/spothq/cryptocurrency-icons/master/128/color/${symbol}.png`;
+                        }
+                        // Final fallback to question mark
+                        else {
+                          e.target.src = "https://cryptologos.cc/logos/question-mark.png";
+                        }
                       }}
                     />
                   )}
