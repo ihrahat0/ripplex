@@ -17,6 +17,12 @@ import {
 } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 
+// Define trading modes
+const TRADING_MODES = {
+    SPOT: 'spot',
+    FUTURES: 'futures'
+};
+
 export const tradingService = {
     async openPosition(userId, tradeData) {
         try {
@@ -71,6 +77,7 @@ export const tradingService = {
                     entryPrice: tradeData.entryPrice,
                     margin: tradeData.margin,
                     orderMode: tradeData.orderMode,
+                    tradingMode: tradeData.tradingMode || TRADING_MODES.FUTURES, // Use provided trading mode or default to futures
                     status: 'OPEN',
                     openTime: serverTimestamp(),
                     currentPnL: 0,
@@ -211,7 +218,8 @@ export const tradingService = {
                 finalPnL: pnl,
                 returnAmount,
                 bonusUsed,
-                liquidationProtected
+                liquidationProtected,
+                tradingMode: TRADING_MODES.SPOT
             });
 
             // Check if user has balances field
@@ -314,24 +322,25 @@ export const tradingService = {
                 throw new Error('Insufficient balance for limit order');
             }
             
-            // Create a consistent limit order object with all necessary fields
-            const limitOrder = {
+            // Create limit order object
+            const order = {
                 userId,
                 symbol: tradeData.symbol,
                 type: tradeData.type,
-                side: tradeData.side || tradeData.type, // Ensure side is consistent with type if not provided
+                side: tradeData.side || tradeData.type, // Ensure side is always set
                 amount: tradeData.amount,
                 leverage: tradeData.leverage,
-                targetPrice: tradeData.entryPrice, // The price at which the order should execute
-                price: tradeData.entryPrice, // Add price field for compatibility
+                targetPrice: tradeData.targetPrice,
+                price: tradeData.targetPrice,
                 margin: tradeData.margin,
+                tradingMode: tradeData.tradingMode || TRADING_MODES.FUTURES, // Use provided trading mode or default to futures
                 status: 'PENDING',
                 createdAt: serverTimestamp(),
                 lastUpdated: serverTimestamp()
             };
 
-            console.log('Creating limit order in Firestore:', limitOrder);
-            batch.set(orderRef, limitOrder);
+            console.log('Creating limit order in Firestore:', order);
+            batch.set(orderRef, order);
             
             // Update user balance based on document structure
             if (userData.balances) {
@@ -364,7 +373,7 @@ export const tradingService = {
             return {
                 success: true,
                 orderId: orderRef.id,
-                order: { ...limitOrder, id: orderRef.id }
+                order: { ...order, id: orderRef.id }
             };
         } catch (error) {
             console.error('Error creating limit order:', error);
@@ -515,7 +524,7 @@ export const tradingService = {
      * Execute a pending limit order by creating a market position
      * Simplified and robust implementation
      */
-    async executeLimitOrder(order) {
+    async executeLimitOrder(order, currentMarketPrice) {
         try {
             console.log('⚙️ EXECUTE LIMIT ORDER SERVICE:', order);
             let orderId, orderData;
@@ -591,45 +600,46 @@ export const tradingService = {
             
             console.log('⚙️ Creating position from order:', orderData);
             
+            // Create position from limit order
+            const position = {
+                userId: order.userId,
+                symbol: order.symbol,
+                type: order.type,
+                side: order.side || order.type,
+                amount: order.amount,
+                leverage: order.leverage,
+                entryPrice: currentMarketPrice, // Use current market price for execution
+                margin: order.margin,
+                orderMode: 'limit',
+                tradingMode: order.tradingMode || TRADING_MODES.FUTURES, // Use order's trading mode or default to futures
+                status: 'OPEN',
+                openTime: serverTimestamp(),
+                currentPnL: 0,
+                lastUpdated: serverTimestamp(),
+                closePrice: null,
+                closeTime: null,
+                finalPnL: null
+            };
+            
             // Try to use a transaction for atomic operations
             try {
                 // Start transaction
                 const result = await runTransaction(db, async (transaction) => {
                     // 1. Create position document
                     const positionRef = doc(collection(db, 'positions'));
-                    const position = {
-                        userId: orderData.userId,
-                        symbol: orderData.symbol,
-                        type: (orderData.side || orderData.type || 'buy').toLowerCase(),
-                        side: (orderData.side || orderData.type || 'buy').toLowerCase(),
-                        amount: parseFloat(orderData.amount),
-                        leverage: parseInt(orderData.leverage || 1),
-                        entryPrice: parseFloat(orderData.price || orderData.targetPrice),
-                        margin: parseFloat(orderData.margin),
-                        status: 'OPEN',
-                        openTime: serverTimestamp(),
-                        lastUpdated: serverTimestamp(),
-                        orderMode: 'market',
-                        limitOrderId: orderId,
-                        pnl: 0,
-                        closePrice: null,
-                        closeTime: null,
-                        finalPnL: null
-                    };
-                    
                     transaction.set(positionRef, position);
                     
                     // 2. Delete the limit order
                     transaction.delete(orderRef);
                     
                     // 3. Update user's reserved balance if needed
-                    if (orderData.userId) {
-                        const userRef = doc(db, 'users', orderData.userId);
+                    if (order.userId) {
+                        const userRef = doc(db, 'users', order.userId);
                         const userDoc = await transaction.get(userRef);
                         
                         if (userDoc.exists() && userDoc.data().reservedBalance?.USDT) {
                             transaction.update(userRef, {
-                                'reservedBalance.USDT': increment(-orderData.margin),
+                                'reservedBalance.USDT': increment(-order.margin),
                                 lastUpdated: serverTimestamp()
                             });
                         }
@@ -685,20 +695,20 @@ export const tradingService = {
                 
                 // Create position document
                 const position = {
-                    userId: orderData.userId,
-                    symbol: orderData.symbol,
-                    type: (orderData.side || orderData.type || 'buy').toLowerCase(),
-                    side: (orderData.side || orderData.type || 'buy').toLowerCase(),
-                    amount: parseFloat(orderData.amount),
-                    leverage: parseInt(orderData.leverage || 1),
-                    entryPrice: parseFloat(orderData.price || orderData.targetPrice),
-                    margin: parseFloat(orderData.margin),
+                    userId: order.userId,
+                    symbol: order.symbol,
+                    type: order.type,
+                    side: order.side || order.type,
+                    amount: order.amount,
+                    leverage: order.leverage,
+                    entryPrice: currentMarketPrice, // Use current market price for execution
+                    margin: order.margin,
+                    orderMode: 'limit',
+                    tradingMode: order.tradingMode || TRADING_MODES.FUTURES, // Use order's trading mode or default to futures
                     status: 'OPEN',
                     openTime: serverTimestamp(),
+                    currentPnL: 0,
                     lastUpdated: serverTimestamp(),
-                    orderMode: 'market',
-                    limitOrderId: orderId,
-                    pnl: 0,
                     closePrice: null,
                     closeTime: null,
                     finalPnL: null
@@ -711,11 +721,11 @@ export const tradingService = {
                 await deleteDoc(orderRef);
                 
                 // Update user's reserved balance if needed
-                if (orderData.userId) {
+                if (order.userId) {
                     try {
-                        const userRef = doc(db, 'users', orderData.userId);
+                        const userRef = doc(db, 'users', order.userId);
                         await updateDoc(userRef, {
-                            'reservedBalance.USDT': increment(-orderData.margin),
+                            'reservedBalance.USDT': increment(-order.margin),
                             lastUpdated: serverTimestamp()
                         });
                     } catch (userError) {
@@ -855,61 +865,63 @@ export const tradingService = {
 };
 
 function calculatePnL(position, closePrice) {
-    const { type, entryPrice, leverage, margin } = position;
+    if (!position || !closePrice) return 0;
     
-    // Ensure all values are proper numbers
-    const entryPriceNum = parseFloat(entryPrice);
-    const closePriceNum = parseFloat(closePrice);
-    const leverageNum = parseFloat(leverage);
-    const marginNum = parseFloat(margin);
+    const entryPrice = parseFloat(position.entryPrice);
+    const amount = parseFloat(position.amount);
+    const leverage = parseFloat(position.leverage || 1);
     
-    // Validation
-    if (isNaN(entryPriceNum) || isNaN(closePriceNum) || isNaN(leverageNum) || isNaN(marginNum)) {
-        console.error('Invalid values for PnL calculation:', { entryPrice, closePrice, leverage, margin });
+    if (isNaN(entryPrice) || isNaN(amount) || isNaN(leverage) || isNaN(closePrice)) {
+        console.error('Invalid values for PNL calculation:', { entryPrice, amount, leverage, closePrice });
         return 0;
     }
     
-    if (type === 'buy') {
-        const priceDiff = closePriceNum - entryPriceNum;
-        const percentageChange = (priceDiff / entryPriceNum) * 100;
-        return +(marginNum * (percentageChange / 100) * leverageNum).toFixed(2);
+    // Use position side (or type if side not available)
+    const side = position.side || position.type;
+    
+    // Check if this is a spot position (leverage is always 1 for spot)
+    if (position.tradingMode === TRADING_MODES.SPOT) {
+        // For spot positions, PnL is simply the difference in value
+        if (side === 'buy') {
+            // For buy (long), profit when price goes up
+            return parseFloat(((closePrice - entryPrice) * amount).toFixed(2));
+        } else {
+            // For sell (short), profit when price goes down
+            return parseFloat(((entryPrice - closePrice) * amount).toFixed(2));
+        }
     } else {
-        const priceDiff = entryPriceNum - closePriceNum;
-        const percentageChange = (priceDiff / entryPriceNum) * 100;
-        return +(marginNum * (percentageChange / 100) * leverageNum).toFixed(2);
+        // For futures positions, apply leverage
+        if (side === 'buy') {
+            return parseFloat(((closePrice - entryPrice) / entryPrice * amount * entryPrice * leverage).toFixed(2));
+        } else {
+            return parseFloat(((entryPrice - closePrice) / entryPrice * amount * entryPrice * leverage).toFixed(2));
+        }
     }
 }
 
 function calculateLiquidationPrice(order) {
     if (!order) return 0;
     
-    try {
-        // Extract values and ensure they're proper numbers
-        const entryPriceNum = parseFloat(order.entryPrice);
-        const leverageNum = parseFloat(order.leverage);
-        const marginNum = parseFloat(order.margin || 0);
-        
-        if (isNaN(entryPriceNum) || isNaN(leverageNum) || leverageNum === 0 || marginNum === 0) {
-            console.warn("Invalid entry price, leverage, or margin for liquidation calculation", order);
-            return 0;
-        }
-        
-        // Calculate the liquidation threshold (percentage of margin that triggers liquidation)
-        const liquidationThreshold = 0.8;
-        
-        // Calculate liquidation price based on position type (buy/long or sell/short)
-        if (order.type === 'buy') {
-            // For long positions, liquidation happens when price falls
-            // Formula: entry_price - (entry_price / leverage) * liquidationThreshold
-            return entryPriceNum * (1 - (liquidationThreshold / leverageNum));
-        } else {
-            // For short positions, liquidation happens when price rises
-            // Formula: entry_price + (entry_price / leverage) * liquidationThreshold
-            return entryPriceNum * (1 + (liquidationThreshold / leverageNum));
-        }
-    } catch (error) {
-        console.error("Error calculating liquidation price:", error);
+    // No liquidation price for spot trading
+    if (order.tradingMode === TRADING_MODES.SPOT) {
         return 0;
+    }
+    
+    const entryPrice = parseFloat(order.entryPrice);
+    const leverage = parseFloat(order.leverage || 1);
+    const side = order.side || order.type;
+    
+    if (isNaN(entryPrice) || isNaN(leverage)) {
+        return 0;
+    }
+    
+    // Using a simplified formula with 95% margin requirement for liquidation
+    const liquidationThreshold = 0.95 / leverage;
+    
+    if (side === 'buy') {
+        return parseFloat((entryPrice * (1 - liquidationThreshold)).toFixed(2));
+    } else {
+        return parseFloat((entryPrice * (1 + liquidationThreshold)).toFixed(2));
     }
 }
 

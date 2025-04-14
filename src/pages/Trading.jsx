@@ -29,6 +29,13 @@ import { tradingService } from '../services/tradingService';
 import btcIcon from '../assets/images/coin/btc.png';
 import LightweightChartComponent from '../components/LightweightChartComponent';
 import soundEffect from '../assets/sound/sound-effect.wav';
+import TradingModeModal from '../components/TradingModeModal';
+
+// Define trading modes
+const TRADING_MODES = {
+  SPOT: 'spot',
+  FUTURES: 'futures'
+};
 
 // Add immediately after imports
 // Global state to track trading operations and prevent cross-contamination between coins
@@ -1490,7 +1497,11 @@ const Trading = () => {
   // Price validation states
   const [isPriceConsistent, setIsPriceConsistent] = useState(true);
   const [lastVerifiedPrices, setLastVerifiedPrices] = useState({});
-
+  
+  // Add new state variables for trading mode
+  const [showTradingModeModal, setShowTradingModeModal] = useState(false);
+  const [tradingMode, setTradingMode] = useState(TRADING_MODES.FUTURES); // Default to futures
+  
   // Refs for cleanup
   const ws = useRef(null);
   const priceUpdateInterval = useRef(null);
@@ -2563,9 +2574,18 @@ const Trading = () => {
 
     const tradeAmount = parseFloat(amount);
     const currentMarketPrice = orderMode === 'market' ? marketPrice : parseFloat(limitPrice);
-    const requiredMargin = calculateRequiredMargin(tradeAmount, currentMarketPrice, leverage);
+    
+    // Handle margin calculation differently based on trading mode
+    let requiredMargin;
+    if (tradingMode === TRADING_MODES.FUTURES) {
+      // For futures, use the existing calculation with leverage
+      requiredMargin = calculateRequiredMargin(tradeAmount, currentMarketPrice, leverage);
+    } else {
+      // For spot trading, the required margin is the full amount (no leverage)
+      requiredMargin = tradeAmount * currentMarketPrice;
+    }
 
-    if (!tradeAmount || !currentMarketPrice || !leverage) {
+    if (!tradeAmount || !currentMarketPrice) {
       setError('Please fill in all fields');
       clearTradingState();
       return;
@@ -2579,13 +2599,14 @@ const Trading = () => {
 
     const tradeData = {
       symbol: cryptoData.token.symbol,
-      type: currentOrderType,      // Use the current order type
-      side: currentOrderType,      // Use the current order type for side 
+      type: currentOrderType,
+      side: currentOrderType,
       amount: tradeAmount,
-      leverage: parseInt(leverage),
+      leverage: tradingMode === TRADING_MODES.FUTURES ? parseInt(leverage) : 1, // Always use 1x for spot
       entryPrice: currentMarketPrice,
       margin: requiredMargin,
       orderMode: orderMode,
+      tradingMode: tradingMode, // Add the trading mode to the trade data
       // Add isolation data to ensure we only affect this symbol
       isolationData: {
         symbol: normalizedCurrentSymbol,
@@ -2602,6 +2623,9 @@ const Trading = () => {
       setError('');
       setIsPending(true);
       
+      // The tradingService needs to be updated to handle spot trading
+      // For now, we'll use the existing functionality with adapted parameters
+      
       if (orderMode === 'market') {
         // For market orders, use the existing optimistic update approach
         // ---------------------------
@@ -2614,12 +2638,13 @@ const Trading = () => {
           userId: currentUser.uid,
           symbol: tradeData.symbol,
           type: tradeData.type,
-          side: tradeData.side,   // Add side field to the position
+          side: tradeData.side,
           amount: tradeData.amount,
           leverage: tradeData.leverage,
           entryPrice: tradeData.entryPrice,
           margin: tradeData.margin,
           orderMode: tradeData.orderMode,
+          tradingMode: tradeData.tradingMode, // Add trading mode to provisional position
           status: 'OPEN',
           openTime: now,
           currentPnL: 0,
@@ -2656,12 +2681,13 @@ const Trading = () => {
           symbol: tradeData.symbol,
           // Explicitly set both type and side for consistency
           type: tradeData.type,
-          side: tradeData.side, // Add side field with same value as type
+          side: tradeData.side,
           amount: tradeData.amount,
           leverage: tradeData.leverage,
           targetPrice: tradeData.entryPrice,
-          price: tradeData.entryPrice, // Add price field with same value as targetPrice
+          price: tradeData.entryPrice,
           margin: tradeData.margin,
+          tradingMode: tradeData.tradingMode, // Add trading mode to provisional order
           status: 'PENDING',
           createdAt: now,
           lastUpdated: now,
@@ -2697,7 +2723,9 @@ const Trading = () => {
       setIsPending(false);
       // Clear input fields whether success or error
       setAmount('');
-      setLeverage(1);
+      if (tradingMode === TRADING_MODES.FUTURES) {
+        setLeverage(1);
+      }
       setLimitPrice('');
       
       // Clear the trading state
@@ -3339,37 +3367,30 @@ const Trading = () => {
 
   // Replace the renderLeverageInput function with this:
   const renderLeverageControls = () => (
-    <div style={{ marginBottom: '6px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
-        <span style={{ fontSize: '11px', color: 'var(--text)' }}>Leverage</span>
-        <span style={{ fontSize: '11px', color: 'var(--text)' }}>{leverage}x</span>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+    tradingMode === TRADING_MODES.FUTURES ? (
+      <LeverageContainer>
+        <LeverageLabel>Leverage: {leverage}x</LeverageLabel>
         <LeverageSlider
           type="range"
           min="1"
           max="40"
+          step="1"
           value={leverage}
           onChange={(e) => setLeverage(parseInt(e.target.value))}
-          style={{ flex: 1 }}
         />
-        <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text)' }}>{leverage}x</span>
-      </div>
-      <QuickLeverageButtons>
-        {[10, 20, 30, 40].map(value => (
-          <QuickLeverageButton
-            key={value}
-            $active={leverage === value}
-            onClick={(e) => {
-              e.preventDefault();
-              setLeverage(value);
-            }}
-          >
-            {value}x
-          </QuickLeverageButton>
-        ))}
-      </QuickLeverageButtons>
-    </div>
+        <LeverageBubbles>
+          {[1, 5, 10, 20, 30, 40].map(value => (
+            <LeverageBubble
+              key={value}
+              active={leverage >= value}
+              onClick={() => setLeverage(value)}
+            >
+              {value}x
+            </LeverageBubble>
+          ))}
+        </LeverageBubbles>
+      </LeverageContainer>
+    ) : null // Don't show leverage controls for spot trading
   );
 
   // Update the getTradingViewSymbol function
@@ -5339,10 +5360,263 @@ const Trading = () => {
     };
   }, [isOnline, cryptoData?.token?.symbol, cryptoData?.isCustomToken]);
 
+  // Initialize component
+  useEffect(() => {
+    // Determine if we need to show the modal
+    const storedTradingMode = localStorage.getItem('ripple_trading_mode');
+    
+    if (!storedTradingMode) {
+      // If no trading mode is stored, show the modal
+      setShowTradingModeModal(true);
+    } else {
+      // Use the stored trading mode
+      setTradingMode(storedTradingMode);
+    }
+    
+    // ... rest of your existing initialization code ...
+  }, []);
+  
+  // Handle trading mode selection
+  const handleTradingModeSelect = (mode) => {
+    if (!mode) return;
+    
+    setTradingMode(mode);
+    setShowTradingModeModal(false);
+    
+    // Store the selected mode in localStorage
+    localStorage.setItem('ripple_trading_mode', mode);
+    
+    // Reset leverage to 1x if spot trading is selected
+    if (mode === TRADING_MODES.SPOT) {
+      setLeverage(1);
+    }
+  };
+
+  // Add a function to render the trading mode indicator
+  const renderTradingModeIndicator = () => (
+    <TradingModeIndicator onClick={() => setShowTradingModeModal(true)}>
+      <TradingModeIcon $mode={tradingMode}>
+        {tradingMode === 'futures' ? (
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+          </svg>
+        ) : (
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        )}
+      </TradingModeIcon>
+      <TradingModeLabel>
+        {tradingMode === 'futures' ? 'Futures' : 'Spot'} 
+        <TradingModeChange>Change</TradingModeChange>
+      </TradingModeLabel>
+    </TradingModeIndicator>
+  );
+
+  // Add styled components for the leverage controls
+  const LeverageContainer = styled.div`
+    margin-bottom: 12px;
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 8px;
+    padding: 10px;
+  `;
+
+  const LeverageLabel = styled.div`
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
+    font-size: 14px;
+    color: var(--text);
+  `;
+
+  const LeverageSlider = styled.input`
+    width: 100%;
+    margin: 10px 0;
+    -webkit-appearance: none;
+    height: 6px;
+    border-radius: 5px;
+    background: linear-gradient(90deg, #F7931A 0%, #F7931A ${props => props.value / 40 * 100}%, rgba(255, 255, 255, 0.2) ${props => props.value / 40 * 100}%);
+    outline: none;
+    
+    &::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #F7931A;
+      cursor: pointer;
+      box-shadow: 0 0 5px rgba(247, 147, 26, 0.5);
+    }
+    
+    &::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #F7931A;
+      cursor: pointer;
+      box-shadow: 0 0 5px rgba(247, 147, 26, 0.5);
+      border: none;
+    }
+  `;
+
+  const LeverageBubbles = styled.div`
+    display: flex;
+    justify-content: space-between;
+    margin-top: 5px;
+  `;
+
+  const LeverageBubble = styled.div`
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 12px;
+    background: ${props => props.active ? '#F7931A' : 'rgba(255, 255, 255, 0.1)'};
+    color: ${props => props.active ? '#fff' : 'rgba(255, 255, 255, 0.7)'};
+    cursor: pointer;
+    transition: all 0.2s ease;
+    
+    &:hover {
+      background: ${props => props.active ? '#F7931A' : 'rgba(255, 255, 255, 0.2)'};
+      transform: scale(1.1);
+    }
+  `;
+
+  // Add new styled components
+  const LoginPrompt = styled.div`
+    text-align: center;
+    padding: 40px;
+    background: var(--bg2);
+    border-radius: 8px;
+    margin: 20px 0;
+
+    h3 {
+      color: var(--text);
+      margin-bottom: 16px;
+    }
+
+    p {
+      color: var(--onsurface);
+      margin-bottom: 24px;
+    }
+  `;
+
+  const ButtonGroup = styled.div`
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+  `;
+
+  const StyledButton = styled.button`
+    padding: 12px 24px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+
+    &:first-child {
+      background: var(--primary);
+      color: white;
+
+      &:hover {
+        background: var(--primary-dark);
+      }
+    }
+
+    &:last-child {
+      background: transparent;
+      border: 1px solid var(--primary);
+      color: var(--primary);
+
+      &:hover {
+        background: var(--primary);
+        color: white;
+      }
+    }
+  `;
+
+  const StatusMessage = styled.div`
+    color: ${props => props.error ? '#F6465D' : '#0ECB81'};
+    padding: 8px;
+    text-align: center;
+    background: ${props => props.error ? 'rgba(246, 70, 93, 0.1)' : 'rgba(14, 203, 129, 0.1)'};
+    border-radius: 4px;
+    margin-bottom: 16px;
+  `;
+
+  // Add these new styled components for the professional order book
+  const OrderBookArrow = styled.span`
+    color: ${props => props.$direction === 'up' ? '#0ECB81' : '#F6465D'};
+    margin-right: 4px;
+    font-size: 14px;
+  `;
+
+  const OrderBookFlag = styled.span`
+    color: #F0B90B;
+    margin-left: 4px;
+    font-size: 12px;
+  `;
+
+  const OrderBookRatio = styled.div`
+    display: flex;
+    align-items: center;
+    height: 28px;
+    background: linear-gradient(
+      to right,
+      rgba(14, 203, 129, 0.2) ${props => props.$buyPercent}%,
+      rgba(246, 70, 93, 0.2) ${props => props.$buyPercent}%
+    );
+    margin-top: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+  `;
+
+  const RatioIndicator = styled.div`
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+    padding: 0 8px;
+    align-items: center;
+    
+    span {
+      font-size: 12px;
+      font-weight: 500;
+      padding: 3px 6px;
+      border-radius: 4px;
+      
+      &:first-child {
+        background: rgba(14, 203, 129, 0.3);
+        color: #0ECB81;
+      }
+      
+      &:last-child {
+        background: rgba(246, 70, 93, 0.3);
+        color: #F6465D;
+      }
+    }
+  `;
+
+  // Modified return statement
   return (
     <TradingContainer>
+      {/* Add the trading mode modal */}
+      <TradingModeModal 
+        isOpen={showTradingModeModal}
+        onClose={() => setShowTradingModeModal(false)}
+        onSelectMode={handleTradingModeSelect}
+        cryptoData={cryptoData}
+      />
+
       {cryptoData?.token && (
         <CoinInfo>
+          {/* Add the trading mode indicator at the top right corner */}
+          {renderTradingModeIndicator()}
+          
           <CoinIcon 
             src={cryptoData.token?.image || `https://coinicons-api.vercel.app/api/icon/${cryptoData.token?.symbol?.toLowerCase()}`}
             onError={(e) => {
@@ -5370,63 +5644,77 @@ const Trading = () => {
           </PriceInfo>
         </CoinInfo>
       )}
+      
+      {/* The rest of your existing JSX */}
+      
+      {/* Add the trading mode modal */}
+      <TradingModeModal 
+        isOpen={showTradingModeModal}
+        onClose={() => setShowTradingModeModal(false)}
+        onSelectMode={handleTradingModeSelect}
+        cryptoData={cryptoData}
+      />
 
+      {/* Add the trading mode indicator near the top of the page */}
+      {renderTradingModeIndicator()}
+      
+      {/* Your existing TradeGrid and other components */}
       <TradeGrid>
         {renderChartSection()}
 
         <RightSection>
           {currentUser ? (
             <>
-          <TradingInterface>
-            <OrderBookSection>
-              <OrderBook>
-                <OrderBookHeader>
-                  <span>Price(USDT)</span>
-                  <span>Qty({cryptoData?.token?.symbol || 'BTC'})</span>
-                  <span>Total</span>
-                </OrderBookHeader>
-                
+              <TradingInterface>
+                <OrderBookSection>
+                  <OrderBook>
+                    <OrderBookHeader>
+                      <span>Price(USDT)</span>
+                      <span>Qty({cryptoData?.token?.symbol || 'BTC'})</span>
+                      <span>Total</span>
+                    </OrderBookHeader>
+                    
                     <OrderBookContent>
                       <AsksContainer>
                         {orderBook?.asks?.length > 0 ? (
                           orderBook.asks.slice().reverse().map((ask, i) => (
-                    <OrderBookRow 
+                            <OrderBookRow 
                               key={`ask-${i}`}
-                      $side="sell"
-                      $depth={orderBook.asks.length ? 
+                              $side="sell"
+                              $depth={orderBook.asks.length ? 
                                       (parseFloat(ask.amount) / Math.max(...orderBook.asks.map(a => parseFloat(a.amount)))) * 100 : 0}
-                        onClick={() => {
-                        setOrderMode('limit');
+                              onClick={() => {
+                                setOrderMode('limit');
                                 setLimitPrice(String(ask.price));
                                 setAmount(String(ask.amount));
-                      }}
-                      className={orderBookFlash[`ask-${i}`] ? 'flash' : ''}
-                    >
-                      <span style={{ color: '#F6465D' }}>
+                              }}
+                              className={orderBookFlash[`ask-${i}`] ? 'flash' : ''}
+                            >
+                              <span style={{ color: '#F6465D' }}>
                                 {formatOrderPrice(ask.price)}
-                      </span>
-                        <span>
-                          {isNaN(parseFloat(ask.amount)) ? 
-                            (ask.price > 500 ? (Math.random() * 1.95 + 0.05).toFixed(4) : 
-                             ask.price > 100 ? (Math.random() * 4.9 + 0.1).toFixed(4) : 
-                             (Math.random() * 20 + 1).toFixed(4)) : 
-                            (typeof ask.amount === 'number' ? 
-                              ask.amount.toFixed(4) : 
-                              parseFloat(ask.amount).toFixed(4))}
-                        </span>
-                        <span>
-                          {isNaN(parseFloat(ask.total)) ? 
-                            (parseFloat(formatOrderPrice(ask.price)) * 
-                              (isNaN(parseFloat(ask.amount)) ? 
-                                parseFloat((ask.price > 500 ? (Math.random() * 1.95 + 0.05).toFixed(4) : 
-                                 ask.price > 100 ? (Math.random() * 4.9 + 0.1).toFixed(4) : 
-                                 (Math.random() * 20 + 1).toFixed(4))) : parseFloat(ask.amount)
-                              )).toFixed(4) : 
-                            (typeof ask.total === 'number' ? 
-                              ask.total.toFixed(4) : 
-                              parseFloat(ask.total).toFixed(4))}
-                        </span>
-                    </OrderBookRow>
+                              </span>
+                              <span>
+                                {isNaN(parseFloat(ask.amount)) ? 
+                                  (ask.price > 500 ? (Math.random() * 1.95 + 0.05).toFixed(4) : 
+                                   ask.price > 100 ? (Math.random() * 4.9 + 0.1).toFixed(4) : 
+                                   (Math.random() * 20 + 1).toFixed(4)) : 
+                                  (typeof ask.amount === 'number' ? 
+                                    ask.amount.toFixed(4) : 
+                                    parseFloat(ask.amount).toFixed(4))}
+                              </span>
+                              <span>
+                                {isNaN(parseFloat(ask.total)) ? 
+                                  (parseFloat(formatOrderPrice(ask.price)) * 
+                                    (isNaN(parseFloat(ask.amount)) ? 
+                                      parseFloat((ask.price > 500 ? (Math.random() * 1.95 + 0.05).toFixed(4) : 
+                                       ask.price > 100 ? (Math.random() * 4.9 + 0.1).toFixed(4) : 
+                                       (Math.random() * 20 + 1).toFixed(4))) : parseFloat(ask.amount)
+                                    )).toFixed(4) : 
+                                  (typeof ask.total === 'number' ? 
+                                    ask.total.toFixed(4) : 
+                                    parseFloat(ask.total).toFixed(4))}
+                              </span>
+                            </OrderBookRow>
                           ))
                         ) : (
                           // Display placeholder rows when no asks are available
@@ -5440,53 +5728,53 @@ const Trading = () => {
                         )}
                       </AsksContainer>
 
-                  <CurrentPrice $isUp={marketPrice > lastPrice}>
+                      <CurrentPrice $isUp={marketPrice > lastPrice}>
                         <OrderBookArrow $direction={marketPrice > lastPrice ? 'up' : 'down'}>
                           {marketPrice > lastPrice ? '↑' : '↓'}
                         </OrderBookArrow>
                         {formatOrderPrice(marketPrice)}
-                  </CurrentPrice>
+                      </CurrentPrice>
 
                       <BidsContainer>
                         {orderBook?.bids?.length > 0 ? (
                           orderBook.bids.map((bid, i) => (
-                    <OrderBookRow 
+                            <OrderBookRow 
                               key={`bid-${i}`}
-                      $side="buy"
-                      $depth={orderBook.bids.length ? 
+                              $side="buy"
+                              $depth={orderBook.bids.length ? 
                                       (parseFloat(bid.amount) / Math.max(...orderBook.bids.map(b => parseFloat(b.amount)))) * 100 : 0}
-                        onClick={() => {
-                        setOrderMode('limit');
+                              onClick={() => {
+                                setOrderMode('limit');
                                 setLimitPrice(String(bid.price));
                                 setAmount(String(bid.amount));
-                      }}
-                      className={orderBookFlash[`bid-${i}`] ? 'flash' : ''}
-                    >
-                      <span style={{ color: '#0ECB81' }}>
+                              }}
+                              className={orderBookFlash[`bid-${i}`] ? 'flash' : ''}
+                            >
+                              <span style={{ color: '#0ECB81' }}>
                                 {formatOrderPrice(bid.price)}
-                      </span>
-                        <span>
-                          {isNaN(parseFloat(bid.amount)) ? 
-                            (bid.price > 500 ? (Math.random() * 1.95 + 0.05).toFixed(4) : 
-                             bid.price > 100 ? (Math.random() * 4.9 + 0.1).toFixed(4) : 
-                             (Math.random() * 20 + 1).toFixed(4)) : 
-                            (typeof bid.amount === 'number' ? 
-                              bid.amount.toFixed(4) : 
-                              parseFloat(bid.amount).toFixed(4))}
-                        </span>
-                        <span>
-                          {isNaN(parseFloat(bid.total)) ? 
-                            (parseFloat(formatOrderPrice(bid.price)) * 
-                              (isNaN(parseFloat(bid.amount)) ? 
-                                parseFloat((bid.price > 500 ? (Math.random() * 1.95 + 0.05).toFixed(4) : 
-                                 bid.price > 100 ? (Math.random() * 4.9 + 0.1).toFixed(4) : 
-                                 (Math.random() * 20 + 1).toFixed(4))) : parseFloat(bid.amount)
-                              )).toFixed(4) : 
-                            (typeof bid.total === 'number' ? 
-                              bid.total.toFixed(4) : 
-                              parseFloat(bid.total).toFixed(4))}
-                        </span>
-                    </OrderBookRow>
+                              </span>
+                              <span>
+                                {isNaN(parseFloat(bid.amount)) ? 
+                                  (bid.price > 500 ? (Math.random() * 1.95 + 0.05).toFixed(4) : 
+                                   bid.price > 100 ? (Math.random() * 4.9 + 0.1).toFixed(4) : 
+                                   (Math.random() * 20 + 1).toFixed(4)) : 
+                                  (typeof bid.amount === 'number' ? 
+                                    bid.amount.toFixed(4) : 
+                                    parseFloat(bid.amount).toFixed(4))}
+                              </span>
+                              <span>
+                                {isNaN(parseFloat(bid.total)) ? 
+                                  (parseFloat(formatOrderPrice(bid.price)) * 
+                                    (isNaN(parseFloat(bid.amount)) ? 
+                                      parseFloat((bid.price > 500 ? (Math.random() * 1.95 + 0.05).toFixed(4) : 
+                                       bid.price > 100 ? (Math.random() * 4.9 + 0.1).toFixed(4) : 
+                                       (Math.random() * 20 + 1).toFixed(4))) : parseFloat(bid.amount)
+                                    )).toFixed(4) : 
+                                  (typeof bid.total === 'number' ? 
+                                    bid.total.toFixed(4) : 
+                                    parseFloat(bid.total).toFixed(4))}
+                              </span>
+                            </OrderBookRow>
                           ))
                         ) : (
                           // Display placeholder rows when no bids are available
@@ -5508,55 +5796,55 @@ const Trading = () => {
                         </RatioIndicator>
                       </OrderBookRatio>
                     </OrderBookContent>
-              </OrderBook>
-            </OrderBookSection>
+                  </OrderBook>
+                </OrderBookSection>
 
-            <OrderFormSection>
-              <OrderTypeSelector>
-                <OrderTab 
-                  active={orderMode === 'market'} 
-                  onClick={() => setOrderMode('market')}
-                >
-                  Market
-                </OrderTab>
-                <OrderTab 
-                  active={orderMode === 'limit'} 
-                  onClick={() => setOrderMode('limit')}
-                >
-                  Limit
-                </OrderTab>
-              </OrderTypeSelector>
+                <OrderFormSection>
+                  <OrderTypeSelector>
+                    <OrderTab 
+                      active={orderMode === 'market'} 
+                      onClick={() => setOrderMode('market')}
+                    >
+                      Market
+                    </OrderTab>
+                    <OrderTab 
+                      active={orderMode === 'limit'} 
+                      onClick={() => setOrderMode('limit')}
+                    >
+                      Limit
+                    </OrderTab>
+                  </OrderTypeSelector>
 
-              <OrderForm onSubmit={handleSubmit}>
-                <div style={{ display: 'grid', gridTemplateColumns: orderMode === 'limit' ? '1fr 1fr' : '1fr', gap: '6px', marginBottom: '6px' }}>
-                  <AmountInput
-                    key={`amount-${inputKey}`}
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder={`Amount in ${cryptoData.token.symbol}`}
-                    min="0"
-                    step="0.000001"
-                    required
-                  />
+                  <OrderForm onSubmit={handleSubmit}>
+                    <div style={{ display: 'grid', gridTemplateColumns: orderMode === 'limit' ? '1fr 1fr' : '1fr', gap: '6px', marginBottom: '6px' }}>
+                      <AmountInput
+                        key={`amount-${inputKey}`}
+                        type="number"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder={`Amount in ${cryptoData.token.symbol}`}
+                        min="0"
+                        step="0.000001"
+                        required
+                      />
 
-                  {orderMode === 'limit' && (
-                    <AmountInput
-                      key={`limit-${inputKey}`}
-                      type="number"
-                      value={limitPrice}
-                      onChange={(e) => setLimitPrice(e.target.value)}
-                      placeholder="Limit Price (USDT)"
-                      required
-                    />
-                  )}
-                </div>
+                      {orderMode === 'limit' && (
+                        <AmountInput
+                          key={`limit-${inputKey}`}
+                          type="number"
+                          value={limitPrice}
+                          onChange={(e) => setLimitPrice(e.target.value)}
+                          placeholder="Limit Price (USDT)"
+                          required
+                        />
+                      )}
+                    </div>
 
-                {renderLeverageControls()}
+                    {renderLeverageControls()}
 
-                <OrderDetails>
-                  <DetailRow>
-                    <span>Entry Price</span>
+                    <OrderDetails>
+                      <DetailRow>
+                        <span>Entry Price</span>
                         <span>${orderMode === 'market' ? 
                           (marketPrice ? 
                             marketPrice.toLocaleString(
@@ -5567,57 +5855,57 @@ const Trading = () => {
                               marketPrice < 100 ? 3 : 2
                             ) : '0.00') : 
                           (limitPrice || '0.00')}</span>
-                  </DetailRow>
-                  <DetailRow>
-                    <span>Size</span>
+                      </DetailRow>
+                      <DetailRow>
+                        <span>Size</span>
                         <span>{amount || '0.00'} {cryptoData?.token?.symbol || ''}</span>
-                  </DetailRow>
-                  <DetailRow>
-                    <span>Leverage</span>
-                    <span>{leverage}x</span>
-                  </DetailRow>
-                </OrderDetails>
+                      </DetailRow>
+                      <DetailRow>
+                        <span>Leverage</span>
+                        <span>{leverage}x</span>
+                      </DetailRow>
+                    </OrderDetails>
 
                     <div style={{ marginTop: 'auto' }}>
-                <TradeInfo>
-                  <InfoItem>
-                    <span>Required Margin:</span>
-                    <span>${calculateRequiredMargin(amount, marketPrice, leverage).toLocaleString()} USDT</span>
-                  </InfoItem>
-                  <InfoItem $highlight>
-                    <span>Available Balance:</span>
-                    <span>${typeof userBalance?.USDT === 'number' && !isNaN(userBalance.USDT) ? userBalance.USDT.toLocaleString() : '0.00'} USDT</span>
-                  </InfoItem>
-                </TradeInfo>
+                      <TradeInfo>
+                        <InfoItem>
+                          <span>Required {tradingMode === TRADING_MODES.FUTURES ? 'Margin' : 'Balance'}:</span>
+                          <span>${calculateRequiredMargin(amount, marketPrice, leverage).toLocaleString()} USDT</span>
+                        </InfoItem>
+                        <InfoItem $highlight>
+                          <span>Available Balance:</span>
+                          <span>${typeof userBalance?.USDT === 'number' && !isNaN(userBalance.USDT) ? userBalance.USDT.toLocaleString() : '0.00'} USDT</span>
+                        </InfoItem>
+                      </TradeInfo>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '30px' }}>
-                  <OrderButton 
-                    $orderType="buy"
-                    onClick={() => {
-                      setOrderType('buy');
-                      // Pass 'buy' directly to handleSubmit to avoid state timing issues
-                      handleSubmit(new Event('click'), 'buy');
-                    }}
-                    disabled={isPending}
-                  >
-                    {isPending && orderType === 'buy' ? 'Processing...' : `Buy ${cryptoData.token.symbol}`}
-                  </OrderButton>
-                  <OrderButton 
-                    $orderType="sell"
-                    onClick={() => {
-                      setOrderType('sell');
-                      // Pass 'sell' directly to handleSubmit to avoid state timing issues
-                      handleSubmit(new Event('click'), 'sell');
-                    }}
-                    disabled={isPending}
-                  >
-                    {isPending && orderType === 'sell' ? 'Processing...' : `Sell ${cryptoData.token.symbol}`}
-                  </OrderButton>
+                        <OrderButton 
+                          $orderType="buy"
+                          onClick={() => {
+                            setOrderType('buy');
+                            // Pass 'buy' directly to handleSubmit to avoid state timing issues
+                            handleSubmit(new Event('click'), 'buy');
+                          }}
+                          disabled={isPending}
+                        >
+                          {isPending && orderType === 'buy' ? 'Processing...' : `Buy ${cryptoData.token.symbol}`}
+                        </OrderButton>
+                        <OrderButton 
+                          $orderType="sell"
+                          onClick={() => {
+                            setOrderType('sell');
+                            // Pass 'sell' directly to handleSubmit to avoid state timing issues
+                            handleSubmit(new Event('click'), 'sell');
+                          }}
+                          disabled={isPending}
+                        >
+                          {isPending && orderType === 'sell' ? 'Processing...' : `Sell ${cryptoData.token.symbol}`}
+                        </OrderButton>
                       </div>
-                </div>
-              </OrderForm>
-            </OrderFormSection>
-          </TradingInterface>
+                    </div>
+                  </OrderForm>
+                </OrderFormSection>
+              </TradingInterface>
             </>
           ) : (
             <LoginPrompt>
@@ -5631,7 +5919,7 @@ const Trading = () => {
           )}
         </RightSection>
       </TradeGrid>
-
+      
       {renderPendingLimitOrders()}
 
       <div style={{ 
@@ -5655,88 +5943,88 @@ const Trading = () => {
             {isLoadingPositions ? (
               <div style={{ textAlign: 'center', padding: '20px' }}>Loading positions...</div>
             ) : openPositions.filter(p => p.symbol === cryptoData?.token?.symbol).length > 0 ? (
-          <PositionsTable>
-            <thead>
-              <tr>
-                <TableHeader>Type</TableHeader>
-                <TableHeader>Amount</TableHeader>
-                <TableHeader>Entry Price</TableHeader>
-                <TableHeader>Mark Price</TableHeader>
-                <TableHeader>Liquidation</TableHeader>
-                <TableHeader>Leverage</TableHeader>
-                <TableHeader>PnL (ROE %)</TableHeader>
-                <TableHeader>Actions</TableHeader>
-              </tr>
-            </thead>
-            <tbody>
-                    {openPositions
-                      .filter(position => position.symbol === cryptoData?.token?.symbol)
-                      .map(position => {
+              <PositionsTable>
+                <thead>
+                  <tr>
+                    <TableHeader>Type</TableHeader>
+                    <TableHeader>Amount</TableHeader>
+                    <TableHeader>Entry Price</TableHeader>
+                    <TableHeader>Mark Price</TableHeader>
+                    <TableHeader>Liquidation</TableHeader>
+                    <TableHeader>Leverage</TableHeader>
+                    <TableHeader>PnL (ROE %)</TableHeader>
+                    <TableHeader>Actions</TableHeader>
+                  </tr>
+                </thead>
+                <tbody>
+                  {openPositions
+                    .filter(position => position.symbol === cryptoData?.token?.symbol)
+                    .map(position => {
                       const pnl = calculatePnL(position, marketPrice) || 0;
                       const roe = position.margin ? ((pnl / position.margin) * 100).toLocaleString() : '0.00';
                       const liquidationPrice = calculateLiquidationPrice(position);
-                
-                return (
-                  <tr key={position.id}>
-                    <TableCell style={{ 
-                      color: position.side === 'sell' ? '#F6465D' : '#0ECB81' 
-                    }}>
-                      {position.side?.toUpperCase() || position.type?.toUpperCase() || 'N/A'} <span className="mobile-only-symbol">[{position.symbol}]</span>
-                    </TableCell>
+                      
+                      return (
+                        <tr key={position.id}>
+                          <TableCell style={{ 
+                            color: position.side === 'sell' ? '#F6465D' : '#0ECB81' 
+                          }}>
+                            {position.side?.toUpperCase() || position.type?.toUpperCase() || 'N/A'} <span className="mobile-only-symbol">[{position.symbol}]</span>
+                          </TableCell>
                           <TableCell>{position.amount || 0} {position.symbol || ''}</TableCell>
-                    <TableCell>${position.entryPrice?.toLocaleString() || '0.00'}</TableCell>
-                    <TableCell>${
-                      typeof marketPrice === 'number' 
-                        ? marketPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) 
-                        : '0.00'
-                    }</TableCell>
-                    <TableCell style={{ color: '#F44336' }}>
-                      ${typeof liquidationPrice === 'number' ? liquidationPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00'}
-                    </TableCell>
+                          <TableCell>${position.entryPrice?.toLocaleString() || '0.00'}</TableCell>
+                          <TableCell>${
+                            typeof marketPrice === 'number' 
+                              ? marketPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) 
+                              : '0.00'
+                          }</TableCell>
+                          <TableCell style={{ color: '#F44336' }}>
+                            ${typeof liquidationPrice === 'number' ? liquidationPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00'}
+                          </TableCell>
                           <TableCell>{position.leverage || 1}x</TableCell>
-                    <TableCell>
-                      <PnLValue value={pnl}>
-                        ${pnl.toLocaleString()} ({roe}%)
-                      </PnLValue>
-                    </TableCell>
-                    <TableCell>
-                      <Button
+                          <TableCell>
+                            <PnLValue value={pnl}>
+                              ${pnl.toLocaleString()} ({roe}%)
+                            </PnLValue>
+                          </TableCell>
+                          <TableCell>
+                            <Button
                               onClick={() => handleClosePosition(position)}
                               disabled={isPending && closingPositionId === position.id}
                             >
                               {isPending && closingPositionId === position.id ? 'Processing...' : 'Close'}
-                      </Button>
-                    </TableCell>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </PositionsTable>
-              ) : (
-                <div style={{ textAlign: 'center', padding: '20px' }}>No open positions for {cryptoData?.token?.symbol || 'this pair'}</div>
-              )}
-            </TabPanel>
+                            </Button>
+                          </TableCell>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </PositionsTable>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '20px' }}>No open positions for {cryptoData?.token?.symbol || 'this pair'}</div>
+            )}
+          </TabPanel>
 
-            <TabPanel>
-              {isLoadingPositions ? (
-                <div style={{ textAlign: 'center', padding: '20px' }}>Loading positions...</div>
-              ) : closedPositions.filter(p => p.symbol === cryptoData?.token?.symbol).length > 0 ? (
-                <PositionsTable>
-                  <thead>
-                    <tr>
-                      <TableHeader>Type</TableHeader>
-                      <TableHeader>Amount</TableHeader>
-                      <TableHeader>Entry Price</TableHeader>
-                      <TableHeader>Close Price</TableHeader>
-                      <TableHeader>Leverage</TableHeader>
-                      <TableHeader>Final PnL</TableHeader>
-                      <TableHeader>Close Time</TableHeader>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {closedPositions
-                      .filter(position => position.symbol === cryptoData?.token?.symbol)
-                      .map(position => (
+          <TabPanel>
+            {isLoadingPositions ? (
+              <div style={{ textAlign: 'center', padding: '20px' }}>Loading positions...</div>
+            ) : closedPositions.filter(p => p.symbol === cryptoData?.token?.symbol).length > 0 ? (
+              <PositionsTable>
+                <thead>
+                  <tr>
+                    <TableHeader>Type</TableHeader>
+                    <TableHeader>Amount</TableHeader>
+                    <TableHeader>Entry Price</TableHeader>
+                    <TableHeader>Close Price</TableHeader>
+                    <TableHeader>Leverage</TableHeader>
+                    <TableHeader>Final PnL</TableHeader>
+                    <TableHeader>Close Time</TableHeader>
+                  </tr>
+                </thead>
+                <tbody>
+                  {closedPositions
+                    .filter(position => position.symbol === cryptoData?.token?.symbol)
+                    .map(position => (
                       <tr key={position.id}>
                         <TableCell style={{ 
                           color: position.side === 'sell' ? '#F6465D' : '#0ECB81' 
@@ -5764,14 +6052,14 @@ const Trading = () => {
                         </TableCell>
                       </tr>
                     ))}
-                  </tbody>
-                </PositionsTable>
-              ) : (
-                <div style={{ textAlign: 'center', padding: '20px' }}>No closed positions for {cryptoData?.token?.symbol || 'this pair'}</div>
-              )}
-            </TabPanel>
-          </Tabs>
-        </div>
+                </tbody>
+              </PositionsTable>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '20px' }}>No closed positions for {cryptoData?.token?.symbol || 'this pair'}</div>
+            )}
+          </TabPanel>
+        </Tabs>
+      </div>
 
       {!isOnline && (
         <StatusMessage error>
@@ -5784,123 +6072,66 @@ const Trading = () => {
           {error}
         </StatusMessage>
       )}
+      
+      {/* ... rest of your existing JSX ... */}
     </TradingContainer>
   );
 }
 
-// Add new styled components
-const LoginPrompt = styled.div`
-  text-align: center;
-  padding: 40px;
-  background: var(--bg2);
-  border-radius: 8px;
-  margin: 20px 0;
-
-  h3 {
-    color: var(--text);
-    margin-bottom: 16px;
-  }
-
-  p {
-    color: var(--onsurface);
-    margin-bottom: 24px;
-  }
-`;
-
-const ButtonGroup = styled.div`
+// Add new styled components for the trading mode indicator
+const TradingModeIndicator = styled.div`
   display: flex;
-  gap: 16px;
-  justify-content: center;
-`;
-
-const StyledButton = styled.button`
-  padding: 12px 24px;
-  border-radius: 4px;
-  border: none;
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.3s ease;
-
-  &:first-child {
-    background: var(--primary);
-    color: white;
-
-    &:hover {
-      background: var(--primary-dark);
-    }
-  }
-
-  &:last-child {
-    background: transparent;
-    border: 1px solid var(--primary);
-    color: var(--primary);
-
-    &:hover {
-      background: var(--primary);
-      color: white;
-    }
-  }
-`;
-
-const StatusMessage = styled.div`
-  color: ${props => props.error ? '#F6465D' : '#0ECB81'};
-  padding: 8px;
-  text-align: center;
-  background: ${props => props.error ? 'rgba(246, 70, 93, 0.1)' : 'rgba(14, 203, 129, 0.1)'};
-  border-radius: 4px;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  padding: 8px 16px;
   margin-bottom: 16px;
-`;
-
-// Add these new styled components for the professional order book
-const OrderBookArrow = styled.span`
-  color: ${props => props.$direction === 'up' ? '#0ECB81' : '#F6465D'};
-  margin-right: 4px;
-  font-size: 14px;
-`;
-
-const OrderBookFlag = styled.span`
-  color: #F0B90B;
-  margin-left: 4px;
-  font-size: 12px;
-`;
-
-const OrderBookRatio = styled.div`
-  display: flex;
-  align-items: center;
-  height: 28px;
-  background: linear-gradient(
-    to right,
-    rgba(14, 203, 129, 0.2) ${props => props.$buyPercent}%,
-    rgba(246, 70, 93, 0.2) ${props => props.$buyPercent}%
-  );
-  margin-top: 8px;
-  border-radius: 4px;
-  overflow: hidden;
-`;
-
-const RatioIndicator = styled.div`
-  display: flex;
-  width: 100%;
-  justify-content: space-between;
-  padding: 0 8px;
-  align-items: center;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
   
-  span {
-    font-size: 12px;
-    font-weight: 500;
-    padding: 3px 6px;
-    border-radius: 4px;
-    
-    &:first-child {
-      background: rgba(14, 203, 129, 0.3);
-      color: #0ECB81;
-    }
-    
-    &:last-child {
-      background: rgba(246, 70, 93, 0.3);
-      color: #F6465D;
-    }
+  &:hover {
+    background: rgba(0, 0, 0, 0.4);
+    border-color: rgba(255, 255, 255, 0.2);
   }
 `;
+
+const TradingModeIcon = styled.div`
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+  background: ${props => props.$mode === TRADING_MODES.FUTURES
+    ? 'linear-gradient(135deg, #3E7BFA, #6149F9)'
+    : 'linear-gradient(135deg, #F7931A, #D4AF37)'};
+  
+  svg {
+    width: 20px;
+    height: 20px;
+    color: #fff;
+  }
+`;
+
+const TradingModeLabel = styled.div`
+  color: #fff;
+  font-weight: 500;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+`;
+
+const TradingModeChange = styled.span`
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-left: 8px;
+  padding: 3px 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+`;
+
+// ... existing styled components ...
 
 export default Trading; 
