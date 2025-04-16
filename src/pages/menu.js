@@ -95,9 +95,13 @@ const menus = [
         name: 'BITUSDT',
         links: '/wallet'
     },
-
     {
         id: 7,
+        name: 'Competition',
+        links: '/competition'
+    },
+    {
+        id: 8,
         name: 'Pages',
         links: '#',
         namesub: [
