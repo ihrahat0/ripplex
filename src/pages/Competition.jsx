@@ -30,6 +30,17 @@ const float = keyframes`
   100% { transform: translateY(0px); }
 `;
 
+const glow = keyframes`
+  0% { box-shadow: 0 0 5px rgba(255, 143, 36, 0.6); }
+  50% { box-shadow: 0 0 20px rgba(255, 143, 36, 0.8), 0 0 30px rgba(255, 143, 36, 0.4); }
+  100% { box-shadow: 0 0 5px rgba(255, 143, 36, 0.6); }
+`;
+
+const shimmer = keyframes`
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+`;
+
 // Main container
 const CompetitionContainer = styled.div`
   max-width: 1200px;
@@ -41,6 +52,59 @@ const CompetitionContainer = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
+`;
+
+// OSCAR Logo Box
+const OscarLogoContainer = styled.div`
+  display: flex;
+  align-items: center;
+  background: linear-gradient(135deg, #1a1e2e, #2a304a);
+  border-radius: 15px;
+  padding: 10px 25px;
+  margin-bottom: 30px;
+  border: 1px solid rgba(255, 143, 36, 0.3);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  position: relative;
+  overflow: hidden;
+  animation: ${glow} 3s infinite ease-in-out;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+      90deg, 
+      rgba(255, 255, 255, 0) 0%, 
+      rgba(255, 255, 255, 0.1) 50%, 
+      rgba(255, 255, 255, 0) 100%
+    );
+    background-size: 200% 100%;
+    animation: ${shimmer} 3s infinite linear;
+    z-index: 1;
+  }
+`;
+
+const OscarLogo = styled.img`
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  margin-right: 15px;
+  animation: ${pulse} 3s infinite ease-in-out;
+  z-index: 2;
+`;
+
+const OscarTitle = styled.h2`
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+  background: linear-gradient(90deg, #FF8F24, #FFD700);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: 1px;
+  z-index: 2;
 `;
 
 // Toggle section
@@ -470,17 +534,13 @@ const Competition = () => {
 
   return (
     <CompetitionContainer>
+      {/* OSCAR Logo and Title */}
+      <OscarLogoContainer>
+        <OscarLogo src={oscarLogo} alt="OSCAR" />
+        <OscarTitle>OSCAR</OscarTitle>
+      </OscarLogoContainer>
+      
       {/* Toggle Section */}
-      <ToggleContainer>
-        <ToggleButton className={activeTab === 'daily' ? 'active' : ''} 
-                     onClick={() => setActiveTab('daily')}>
-          Daily
-        </ToggleButton>
-        <ToggleButton className={activeTab === 'monthly' ? 'active' : ''}
-                     onClick={() => setActiveTab('monthly')}>
-          Monthly
-        </ToggleButton>
-      </ToggleContainer>
       
       {/* Competition Info Box */}
       <InfoBox>
