@@ -19,7 +19,7 @@ import { isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth';
 import AOS from 'aos';
 import AdminPanel from './pages/admin/AdminPanel';
 import PrivateRoute from './components/PrivateRoute';
-import depositChecker from './services/depositChecker';
+import { startDepositChecker, stopDepositChecker } from './services/depositChecker';
 
 // Create a separate component for email link handling
 function EmailLinkHandler() {
@@ -61,11 +61,11 @@ function App() {
         localStorage.setItem("theme", "is_dark");
         
         // Start the blockchain deposit checker service
-        depositChecker.startDepositChecker();
+        startDepositChecker();
         
         // Clean up when app unmounts (though this may never happen in a SPA)
         return () => {
-            depositChecker.stopDepositChecker();
+            stopDepositChecker();
         };
     }, []);
 

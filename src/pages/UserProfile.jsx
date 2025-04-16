@@ -1657,89 +1657,93 @@ function UserProfile(props) {
     // Function to fetch cryptocurrency prices
     const fetchPrices = async () => {
         try {
-            // Try to fetch prices for a wide range of cryptocurrencies
-            const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,ripple,cardano,dogecoin,solana,binancecoin,matic-network,polkadot,avalanche-2,chainlink,uniswap,cosmos,tron,litecoin,bitcoin-cash,stellar,monero,tezos,aave,maker,compound,synthetix,yearn-finance,sushi,pancakeswap-token,curve-dao-token,1inch,the-graph,decentraland,axie-infinity,chiliz,enjincoin,basic-attention-token,loopring,harmony,theta-token,fantom,near,algorand,flow,hedera-hashgraph,elrond-erd-2,eos,kusama,vechain,iota,filecoin,theta-fuel,zilliqa,qtum,icon,waves,ontology,ravencoin,nano,digibyte,decred,dash,doge-killer,safemoon,baby-doge-coin,shiba-inu&vs_currencies=usd');
-            const data = await response.json();
-            
             // Create an empty price map
             let prices = {
                 ...tokenPrices, // Preserve existing prices, especially RIPPLEX
                 USDT: 1, // USDT is pegged to USD
             };
             
-            // Map from CoinGecko IDs to our token symbols
-            const idToSymbol = {
-                'bitcoin': 'BTC',
-                'ethereum': 'ETH',
-                'ripple': 'XRP',
-                'cardano': 'ADA',
-                'dogecoin': 'DOGE',
-                'solana': 'SOL',
-                'binancecoin': 'BNB',
-                'matic-network': 'MATIC',
-                'polkadot': 'DOT',
-                'avalanche-2': 'AVAX',
-                'chainlink': 'LINK',
-                'uniswap': 'UNI',
-                'cosmos': 'ATOM',
-                'tron': 'TRX',
-                'litecoin': 'LTC',
-                'bitcoin-cash': 'BCH',
-                'stellar': 'XLM',
-                'monero': 'XMR',
-                'tezos': 'XTZ',
-                'aave': 'AAVE',
-                'maker': 'MKR',
-                'compound': 'COMP',
-                'synthetix': 'SNX',
-                'yearn-finance': 'YFI',
-                'sushi': 'SUSHI',
-                'pancakeswap-token': 'CAKE',
-                'curve-dao-token': 'CRV',
-                '1inch': '1INCH',
-                'the-graph': 'GRT',
-                'decentraland': 'MANA',
-                'axie-infinity': 'AXS',
-                'chiliz': 'CHZ',
-                'enjincoin': 'ENJ',
-                'basic-attention-token': 'BAT',
-                'loopring': 'LRC',
-                'harmony': 'ONE',
-                'theta-token': 'THETA',
-                'fantom': 'FTM',
-                'near': 'NEAR',
-                'algorand': 'ALGO',
-                'flow': 'FLOW',
-                'hedera-hashgraph': 'HBAR',
-                'elrond-erd-2': 'EGLD',
-                'eos': 'EOS',
-                'kusama': 'KSM',
-                'vechain': 'VET',
-                'iota': 'MIOTA',
-                'filecoin': 'FIL',
-                'theta-fuel': 'TFUEL',
-                'zilliqa': 'ZIL',
-                'qtum': 'QTUM',
-                'icon': 'ICX',
-                'waves': 'WAVES',
-                'ontology': 'ONT',
-                'ravencoin': 'RVN',
-                'nano': 'NANO',
-                'digibyte': 'DGB',
-                'decred': 'DCR',
-                'dash': 'DASH',
-                'doge-killer': 'LEASH',
-                'safemoon': 'SAFEMOON',
-                'baby-doge-coin': 'BABYDOGE',
-                'shiba-inu': 'SHIB'
-            };
-            
-            // Populate prices from the API response
-            for (const [id, priceData] of Object.entries(data)) {
-                const symbol = idToSymbol[id];
-                if (symbol && priceData.usd) {
-                    prices[symbol] = priceData.usd;
+            // Try to fetch prices from CoinGecko
+            try {
+                const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,ripple,cardano,dogecoin,solana,binancecoin,matic-network,polkadot,avalanche-2,chainlink,uniswap,cosmos,tron,litecoin,bitcoin-cash,stellar,monero,tezos,aave,maker,compound,synthetix,yearn-finance,sushi,pancakeswap-token,curve-dao-token,1inch,the-graph,decentraland,axie-infinity,chiliz,enjincoin,basic-attention-token,loopring,harmony,theta-token,fantom,near,algorand,flow,hedera-hashgraph,elrond-erd-2,eos,kusama,vechain,iota,filecoin,theta-fuel,zilliqa,qtum,icon,waves,ontology,ravencoin,nano,digibyte,decred,dash,doge-killer,safemoon,baby-doge-coin,shiba-inu&vs_currencies=usd');
+                const data = await response.json();
+                
+                // Map from CoinGecko IDs to our token symbols
+                const idToSymbol = {
+                    'bitcoin': 'BTC',
+                    'ethereum': 'ETH',
+                    'ripple': 'XRP',
+                    'cardano': 'ADA',
+                    'dogecoin': 'DOGE',
+                    'solana': 'SOL',
+                    'binancecoin': 'BNB',
+                    'matic-network': 'MATIC',
+                    'polkadot': 'DOT',
+                    'avalanche-2': 'AVAX',
+                    'chainlink': 'LINK',
+                    'uniswap': 'UNI',
+                    'cosmos': 'ATOM',
+                    'tron': 'TRX',
+                    'litecoin': 'LTC',
+                    'bitcoin-cash': 'BCH',
+                    'stellar': 'XLM',
+                    'monero': 'XMR',
+                    'tezos': 'XTZ',
+                    'aave': 'AAVE',
+                    'maker': 'MKR',
+                    'compound': 'COMP',
+                    'synthetix': 'SNX',
+                    'yearn-finance': 'YFI',
+                    'sushi': 'SUSHI',
+                    'pancakeswap-token': 'CAKE',
+                    'curve-dao-token': 'CRV',
+                    '1inch': '1INCH',
+                    'the-graph': 'GRT',
+                    'decentraland': 'MANA',
+                    'axie-infinity': 'AXS',
+                    'chiliz': 'CHZ',
+                    'enjincoin': 'ENJ',
+                    'basic-attention-token': 'BAT',
+                    'loopring': 'LRC',
+                    'harmony': 'ONE',
+                    'theta-token': 'THETA',
+                    'fantom': 'FTM',
+                    'near': 'NEAR',
+                    'algorand': 'ALGO',
+                    'flow': 'FLOW',
+                    'hedera-hashgraph': 'HBAR',
+                    'elrond-erd-2': 'EGLD',
+                    'eos': 'EOS',
+                    'kusama': 'KSM',
+                    'vechain': 'VET',
+                    'iota': 'MIOTA',
+                    'filecoin': 'FIL',
+                    'theta-fuel': 'TFUEL',
+                    'zilliqa': 'ZIL',
+                    'qtum': 'QTUM',
+                    'icon': 'ICX',
+                    'waves': 'WAVES',
+                    'ontology': 'ONT',
+                    'ravencoin': 'RVN',
+                    'nano': 'NANO',
+                    'digibyte': 'DGB',
+                    'decred': 'DCR',
+                    'dash': 'DASH',
+                    'doge-killer': 'LEASH',
+                    'safemoon': 'SAFEMOON',
+                    'baby-doge-coin': 'BABYDOGE',
+                    'shiba-inu': 'SHIB'
+                };
+                
+                // Populate prices from the API response
+                for (const [id, priceData] of Object.entries(data)) {
+                    const symbol = idToSymbol[id];
+                    if (symbol && priceData.usd) {
+                        prices[symbol] = priceData.usd;
+                    }
                 }
+            } catch (error) {
+                console.error('Error fetching prices from CoinGecko:', error);
             }
             
             // Fetch all coins and tokens from Firebase to get additional price data and names
@@ -1799,27 +1803,66 @@ function UserProfile(props) {
                 console.error('Error fetching coin data from Firebase:', error);
             }
             
-            // Set RIPPLEX price to 1 USD if not already set
-            if (!prices.RIPPLEX) {
-                prices.RIPPLEX = 1;
-            }
+            // For tokens that still don't have prices, try DexScreener API
+            const tokensWithoutPrices = Object.keys(balances || {}).filter(token => 
+                balances[token] > 0 && !prices[token]
+            );
             
-            // Save to localStorage for future use
-            localStorage.setItem('tokenPrices', JSON.stringify(prices));
-            
-            setTokenPrices(prices);
-        } catch (error) {
-            console.error('Error fetching token prices:', error);
-            
-            // Use cached prices if available
-            const cachedPrices = localStorage.getItem('tokenPrices');
-            if (cachedPrices) {
+            if (tokensWithoutPrices.length > 0) {
                 try {
-                    setTokenPrices(JSON.parse(cachedPrices));
-                } catch (e) {
-                    console.error('Error parsing cached token prices:', e);
+                    // Try to fetch prices from DexScreener for tokens with balances that don't have prices yet
+                    for (const token of tokensWithoutPrices) {
+                        try {
+                            // Check both Ethereum and BSC networks
+                            const networks = ['ethereum', 'bsc'];
+                            
+                            for (const network of networks) {
+                                try {
+                                    const response = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${token}`);
+                                    const data = await response.json();
+                                    
+                                    if (data && data.pairs && data.pairs.length > 0) {
+                                        // Find the pair for the right token on either network
+                                        const pair = data.pairs.find(p => 
+                                            (p.baseToken.symbol === token || p.quoteToken.symbol === token) &&
+                                            (p.chainId === network)
+                                        );
+                                        
+                                        if (pair) {
+                                            // Get the price in USD
+                                            let priceUsd = 0;
+                                            
+                                            if (pair.baseToken.symbol === token) {
+                                                priceUsd = parseFloat(pair.priceUsd);
+                                            } else {
+                                                // If the token is the quote currency, we need to calculate differently
+                                                priceUsd = parseFloat(pair.priceUsd) / parseFloat(pair.priceNative);
+                                            }
+                                            
+                                            if (priceUsd > 0) {
+                                                console.log(`Found price for ${token} on ${network}: $${priceUsd}`);
+                                                prices[token] = priceUsd;
+                                                break; // Stop checking networks once we find a price
+                                            }
+                                        }
+                                    }
+                                } catch (networkError) {
+                                    console.error(`Error fetching price for ${token} on ${network} from DexScreener:`, networkError);
+                                }
+                            }
+                        } catch (tokenError) {
+                            console.error(`Error processing price for ${token}:`, tokenError);
+                        }
+                    }
+                } catch (dexError) {
+                    console.error('Error fetching prices from DexScreener:', dexError);
                 }
             }
+            
+            // Update token prices in state
+            setTokenPrices(prices);
+        } catch (error) {
+            console.error('Error in fetchPrices:', error);
         }
     };
 
@@ -3299,7 +3342,17 @@ function UserProfile(props) {
                                                                 const usdValue = balance * price;
                                                                 return { asset, balance, usdValue };
                                                             })
-                                                            .sort((a, b) => b.usdValue - a.usdValue) // Sort by USD value, descending
+                                                            .sort((a, b) => {
+                                                                // First: Always put tokens with non-zero balances at the top
+                                                                if (a.balance > 0 && b.balance === 0) return -1;
+                                                                if (a.balance === 0 && b.balance > 0) return 1;
+                                                                
+                                                                // Second: Sort by USD value (for tokens with balances)
+                                                                if (a.balance > 0 && b.balance > 0) return b.usdValue - a.usdValue;
+                                                                
+                                                                // Third: For zero-balance tokens, still sort by USD value
+                                                                return b.usdValue - a.usdValue;
+                                                            })
                                                             .map(({ asset, balance, usdValue }, index) => {
                                                                 const isRipplex = asset === 'RIPPLEX';
                                                                 return (

@@ -8,8 +8,7 @@ import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { SUPPORTED_CHAINS } from '../../services/walletService';
-import { monitorAllDeposits, monitorWalletAddresses } from '../../services/depositService';
-import { scanAllUsersHistoricalDeposits } from '../../services/blockchainService';
+import { monitorAllDeposits } from '../../services/depositService';
 
 const Container = styled.div`
   color: var(--text);
@@ -1060,50 +1059,27 @@ const AllDeposits = () => {
     setScanSummary(null);
     
     try {
-      // First run a dry-run scan
-      const dryRunResult = await scanAllUsersHistoricalDeposits(true);
+      // Using the new deposit listening system instead of the old scanning method
+      const { runDepositCheck } = await import('../../services/depositChecker');
       
-      if (dryRunResult.success) {
+      // Run an immediate check with the deposit service
+      const checkResult = await runDepositCheck();
+      
+      if (checkResult.success) {
         setScanSummary({
-          ...dryRunResult.results,
+          usersScanned: checkResult.usersScanned || 0,
+          usersWithDeposits: checkResult.usersWithDeposits || 0,
+          totalDepositsFound: checkResult.totalDepositsFound || 0,
           scanTime: new Date(),
-          message: dryRunResult.message
+          message: checkResult.message || 'Deposit check completed successfully'
         });
         
-        // Ask for confirmation before processing
-        if (dryRunResult.results.totalDepositsFound > 0) {
-          const confirmProcess = window.confirm(
-            `Found ${dryRunResult.results.totalDepositsFound} unprocessed deposits across ${dryRunResult.results.usersWithDeposits} users. Process them now?`
-          );
-          
-          if (confirmProcess) {
-            toast.success('Processing deposits... This may take a while');
-            
-            // Process for real
-            const processResult = await scanAllUsersHistoricalDeposits(false);
-            
-            if (processResult.success) {
-              toast.success(`Successfully processed ${processResult.results.totalDepositsFound} deposits for ${processResult.results.usersWithDeposits} users`);
-              
-              // Update scan summary with final result
-              setScanSummary({
-                ...processResult.results,
-                scanTime: new Date(),
-                message: processResult.message,
-                processed: true
-              });
-              
-              // Refresh deposits list
-              fetchDeposits();
-            } else {
-              toast.error(`Error processing deposits: ${processResult.message}`);
-            }
-          }
-        } else {
-          toast.success('No new deposits found');
-        }
+        toast.success(checkResult.message || 'Deposit check completed successfully');
+        
+        // Refresh deposits list
+        fetchDeposits();
       } else {
-        toast.error(`Error scanning blockchain: ${dryRunResult.message}`);
+        toast.error(`Error checking deposits: ${checkResult.message || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error scanning blockchain deposits:', error);
