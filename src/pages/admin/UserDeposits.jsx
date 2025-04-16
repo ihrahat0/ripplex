@@ -18,7 +18,6 @@ import {
 } from 'firebase/firestore';
 import { SUPPORTED_CHAINS } from '../../services/walletService';
 import { toast } from 'react-toastify'; // Assuming you use react-toastify
-import { processHistoricalDeposits } from '../../services/blockchainService';
 
 const Container = styled.div`
   padding: 20px;
@@ -587,40 +586,30 @@ const UserDeposits = () => {
     setFoundDeposits([]);
     
     try {
-      // First, perform a dry-run scan to see what deposits we can find
-      const results = await processHistoricalDeposits(userId, true);
+      // Using the new deposit system instead of the old scanning method
+      const { checkUserDeposits } = await import('../../services/depositChecker');
+      
+      // Run an immediate check for this specific user
+      const results = await checkUserDeposits(userId);
       
       if (results.success) {
         setScanResults({
           scannedAt: new Date(),
-          depositsFound: results.foundDeposits.length,
-          message: results.message
+          depositsFound: results.depositsFound || 0,
+          message: results.message || 'Scan completed successfully'
         });
         
-        if (results.foundDeposits.length > 0) {
-          setFoundDeposits(results.foundDeposits);
+        if (results.deposits && results.deposits.length > 0) {
+          setFoundDeposits(results.deposits);
+          toast.success(`Found and processed ${results.depositsFound} deposits`);
           
-          // Ask for confirmation before processing
-          const confirmProcess = window.confirm(
-            `Found ${results.foundDeposits.length} unprocessed deposits. Process them now?`
-          );
-          
-          if (confirmProcess) {
-            // Process the deposits for real
-            const processResults = await processHistoricalDeposits(userId, false);
-            
-            if (processResults.success) {
-              toast.success(`Successfully processed ${processResults.foundDeposits.length} historical deposits`);
-              
-              // Refresh the data to show new deposits
-              refreshData();
-            } else {
-              toast.error(`Error processing deposits: ${processResults.message}`);
-            }
-          }
+          // Refresh the data to show new deposits
+          refreshData();
+        } else {
+          toast.info('No new deposits found');
         }
       } else {
-        toast.error(`Error scanning blockchain: ${results.message}`);
+        toast.error(`Error scanning user deposits: ${results.message || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error scanning blockchain:', error);

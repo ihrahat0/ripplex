@@ -1,0 +1,39 @@
+{
+  "scanTime": "2025-04-15T11:35:30.552Z",
+  "chainsScanned": [
+    "bsc"
+  ],
+  "ethereumBalances": {
+    "0x9264e84dcc5dfdf009f4cd14cda70c59d7cb98fd": {
+      "userId": "FudOGIx112Zb6QOLD1nhcUowqeD3",
+      "userEmail": "official@rippleexchange.org",
+      "nativeBalance": 0,
+      "tokens": {},
+      "totalValueUSD": 0
+    }
+  },
+  "bscBalances": {
+    "0x9264e84dcc5dfdf009f4cd14cda70c59d7cb98fd": {
+      "userId": "FudOGIx112Zb6QOLD1nhcUowqeD3",
+      "userEmail": "official@rippleexchange.org",
+      "nativeBalance": 0,
+      "tokens": {
+        "SHONG": {
+          "balance": 6037,
+          "tokenAddress": "0xd55578730450e9cc9554c47cc055d557e2af4444",
+          "decimals": 18
+        }
+      },
+      "totalValueUSD": 0
+    }
+  },
+  "solanaBalances": {},
+  "summary": {
+    "ethereumAddressCount": 1,
+    "bscAddressCount": 1,
+    "solanaAddressCount": 0,
+    "nonZeroEthereumCount": 0,
+    "nonZeroBscCount": 0,
+    "nonZeroSolanaCount": 0
+  }
+}

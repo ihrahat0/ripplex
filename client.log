@@ -1,0 +1,34 @@
+
+> cyboxreact@0.1.0 client
+> craco start
+
+(node:5856) [DEP_WEBPACK_DEV_SERVER_ON_AFTER_SETUP_MIDDLEWARE] DeprecationWarning: 'onAfterSetupMiddleware' option is deprecated. Please use the 'setupMiddlewares' option.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:5856) [DEP_WEBPACK_DEV_SERVER_ON_BEFORE_SETUP_MIDDLEWARE] DeprecationWarning: 'onBeforeSetupMiddleware' option is deprecated. Please use the 'setupMiddlewares' option.
+Starting the development server...
+
+Failed to compile.
+
+Attempted import error: './services/depositChecker' does not contain a default export (imported as 'depositChecker').
+ERROR in ./src/App.js 71:4-38
+export 'default' (imported as 'depositChecker') was not found in './services/depositChecker' (possible exports: checkUserDeposits, getCheckerStatus, runDepositCheck, startDepositChecker, stopDepositChecker)
+
+ERROR in ./src/App.js 75:6-39
+export 'default' (imported as 'depositChecker') was not found in './services/depositChecker' (possible exports: checkUserDeposits, getCheckerStatus, runDepositCheck, startDepositChecker, stopDepositChecker)
+
+ERROR in ./src/pages/admin/AllDeposits.jsx 1072:31-53
+export 'monitorWalletAddresses' (imported as 'monitorWalletAddresses') was not found in '../../services/depositService' (possible exports: createPendingDeposit, getDepositAddress, monitorAllDeposits, monitorDeposits, processDeposit, validateDeposit)
+
+ERROR in ./src/pages/admin/AllDeposits.jsx 1178:33-63
+export 'scanAllUsersHistoricalDeposits' (imported as 'scanAllUsersHistoricalDeposits') was not found in '../../services/blockchainService' (possible exports: CHAINS, calculateTokenAmount, getTokenInfoForAddress, getTransactionHistory, isTransactionProcessed, markTransactionProcessed)
+
+ERROR in ./src/pages/admin/AllDeposits.jsx 1193:40-70
+export 'scanAllUsersHistoricalDeposits' (imported as 'scanAllUsersHistoricalDeposits') was not found in '../../services/blockchainService' (possible exports: CHAINS, calculateTokenAmount, getTokenInfoForAddress, getTransactionHistory, isTransactionProcessed, markTransactionProcessed)
+
+ERROR in ./src/pages/admin/UserDeposits.jsx 532:28-53
+export 'processHistoricalDeposits' (imported as 'processHistoricalDeposits') was not found in '../../services/blockchainService' (possible exports: CHAINS, calculateTokenAmount, getTokenInfoForAddress, getTransactionHistory, isTransactionProcessed, markTransactionProcessed)
+
+ERROR in ./src/pages/admin/UserDeposits.jsx 546:41-66
+export 'processHistoricalDeposits' (imported as 'processHistoricalDeposits') was not found in '../../services/blockchainService' (possible exports: CHAINS, calculateTokenAmount, getTokenInfoForAddress, getTransactionHistory, isTransactionProcessed, markTransactionProcessed)
+
+webpack compiled with 7 errors
