@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { SUPPORTED_CHAINS } from '../../services/walletService';
-import { monitorAllDeposits } from '../../services/depositService';
+import { monitorAllDeposits, monitorWalletAddresses } from '../../services/depositService';
 
 const Container = styled.div`
   color: var(--text);
@@ -575,6 +575,18 @@ const DummyIndicator = styled.span`
   font-weight: bold;
 `;
 
+// Add a new styled component for the real blockchain indicator
+const RealBlockchainIndicator = styled.span`
+  background-color: rgba(20, 203, 129, 0.15);
+  color: #14cb81;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 8px;
+  vertical-align: middle;
+  font-weight: bold;
+`;
+
 // Add a new styled component for the pending indicator
 const PendingIndicator = styled.span`
   background-color: rgba(243, 186, 47, 0.15);
@@ -591,6 +603,9 @@ const PendingIndicator = styled.span`
 const StableDepositsTable = React.memo(({ deposits, onViewDetails, showAllDeposits }) => {
   // Apply filtering unless we're in show all mode
   const filteredDeposits = showAllDeposits ? deposits : deposits.filter(deposit => {
+    // Always show real blockchain deposits
+    if (deposit.isRealDeposit) return true;
+    
     // No pending statuses
     if (deposit.status === 'pending') return false;
     
@@ -642,9 +657,11 @@ const StableDepositsTable = React.memo(({ deposits, onViewDetails, showAllDeposi
               onClick={() => onViewDetails(deposit)} 
               style={{ 
                 cursor: 'pointer',
-                backgroundColor: (deposit.direction === 'IN' || deposit.transactionType === 'deposit') 
-                  ? 'rgba(20, 203, 129, 0.05)' 
-                  : 'transparent'
+                backgroundColor: deposit.isRealDeposit 
+                  ? 'rgba(20, 203, 129, 0.1)' 
+                  : (deposit.direction === 'IN' || deposit.transactionType === 'deposit') 
+                    ? 'rgba(20, 203, 129, 0.05)' 
+                    : 'transparent'
               }}
             >
               <td>
@@ -657,6 +674,7 @@ const StableDepositsTable = React.memo(({ deposits, onViewDetails, showAllDeposi
               <td>
                 <UserLink to={`/admin/deposits/${deposit.userId}`}>
                   {deposit.userName || 'Guest User'}
+                  {deposit.isRealDeposit && <RealBlockchainIndicator>REAL</RealBlockchainIndicator>}
                 </UserLink>
                 <div style={{ color: '#8b949e', fontSize: '12px' }}>
                   {deposit.userEmail || 'No email'}
@@ -732,15 +750,23 @@ const StableDepositsTable = React.memo(({ deposits, onViewDetails, showAllDeposi
                   >
                     <i className="far fa-copy"></i>
                   </CopyButton>
+                  {!deposit.isRealDeposit && (
+                    <DummyIndicator>TEST</DummyIndicator>
+                  )}
                 </div>
               </td>
               <td className="amount-cell">
                 {parseFloat(deposit.amount).toFixed(6)} {deposit.token}
               </td>
               <td>
-                <StatusBadge $status="completed">
-                  <i className="fas fa-check-circle" />
-                  completed
+                <StatusBadge $status={deposit.status || "completed"}>
+                  <i className={`fas fa-${
+                    deposit.status === 'completed' ? 'check-circle' :
+                    deposit.status === 'pending' ? 'clock' :
+                    deposit.status === 'failed' ? 'times-circle' :
+                    'check-circle'
+                  }`} />
+                  {deposit.status || "completed"}
                 </StatusBadge>
               </td>
             </tr>
@@ -748,7 +774,7 @@ const StableDepositsTable = React.memo(({ deposits, onViewDetails, showAllDeposi
         ) : (
           <tr>
             <td colSpan="9" style={{textAlign: 'center', padding: '30px 0'}}>
-              No real blockchain deposits found
+              No deposits found. Waiting for blockchain activity...
             </td>
           </tr>
         )}
@@ -830,6 +856,56 @@ const UserDepositItem = styled.div`
   }
 `;
 
+// Add blockchain status banner component
+const BlockchainStatusBanner = styled.div`
+  background-color: rgba(20, 203, 129, 0.1);
+  color: #14cb81;
+  padding: 10px 20px;
+  margin-bottom: 20px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  
+  .status-icon {
+    margin-right: 10px;
+    font-size: 18px;
+  }
+  
+  .status-text {
+    flex-grow: 1;
+  }
+  
+  &.warning {
+    background-color: rgba(243, 186, 47, 0.1);
+    color: #f3ba2f;
+  }
+  
+  &.error {
+    background-color: rgba(246, 70, 93, 0.1);
+    color: #f6465d;
+  }
+`;
+
+const BlockchainBanner = ({ monitoringStatus }) => {
+  return (
+    <BlockchainStatusBanner className={monitoringStatus?.status || 'active'}>
+      <div className="status-icon">
+        {monitoringStatus?.status === 'error' ? (
+          <i className="fas fa-exclamation-triangle"></i>
+        ) : monitoringStatus?.status === 'warning' ? (
+          <i className="fas fa-exclamation-circle"></i>
+        ) : (
+          <i className="fas fa-check-circle"></i>
+        )}
+      </div>
+      <div className="status-text">
+        <strong>Blockchain Deposit Monitoring:</strong> {monitoringStatus?.message || 'Active - Listening for deposits via Infura'}
+      </div>
+    </BlockchainStatusBanner>
+  );
+};
+
 const AllDeposits = () => {
   const navigate = useNavigate();
   const [deposits, setDeposits] = useState([]);
@@ -843,6 +919,13 @@ const AllDeposits = () => {
     timeRange: 'all',
     network: 'all',
     direction: 'all'
+  });
+  
+  // Add monitoring status state
+  const [monitoringStatus, setMonitoringStatus] = useState({
+    status: 'active',
+    message: 'Active - Listening for deposits via Infura',
+    lastUpdated: new Date()
   });
   
   // Add filters state and filterOpen state
@@ -934,9 +1017,39 @@ const AllDeposits = () => {
     // Also monitor wallet addresses for new deposits
     const unsubscribeWallets = monitorWalletAddresses((depositInfo) => {
       console.log('New wallet deposit detected:', depositInfo);
+      
+      // Update monitoring status to show real-time activity
+      setMonitoringStatus({
+        status: 'active',
+        message: `Active - Last deposit detected at ${new Date().toLocaleTimeString()}`,
+        lastUpdated: new Date()
+      });
+      
       toast.success(`Wallet deposit detected: ${depositInfo.amount} ${depositInfo.token} to ${depositInfo.userId}`);
       
       // Deposits will be added automatically through the deposits monitor
+    }, 
+    // Add status callback
+    (status) => {
+      if (status.type === 'error') {
+        setMonitoringStatus({
+          status: 'error',
+          message: `Error: ${status.message}`,
+          lastUpdated: new Date()
+        });
+      } else if (status.type === 'warning') {
+        setMonitoringStatus({
+          status: 'warning',
+          message: `Warning: ${status.message}`,
+          lastUpdated: new Date()
+        });
+      } else if (status.type === 'connected') {
+        setMonitoringStatus({
+          status: 'active',
+          message: `Connected to ${status.chains?.join(', ')} via Infura`,
+          lastUpdated: new Date()
+        });
+      }
     });
     
     // Store unsubscribe function
@@ -1286,6 +1399,8 @@ const AllDeposits = () => {
           </div>
         </Controls>
       </Header>
+      
+      <BlockchainBanner monitoringStatus={monitoringStatus} />
       
       <ActionBar>
         <div className="left">
