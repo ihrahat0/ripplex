@@ -891,6 +891,12 @@ const Header = () => {
                                 }}></span>
                             )}
                         </NavLink>
+                        <NavLink 
+                            onClick={() => handleNavLinkClick('/competition')}
+                            className={location.pathname === '/competition' ? 'active' : ''}
+                        >
+                            Competition
+                        </NavLink>
                     </Navigation>
                 </NavContainer>
                 
@@ -1065,6 +1071,15 @@ const Header = () => {
                                     animation: 'pulse 2s infinite'
                                 }}></span>
                             )}
+                        </MobileNavLink>
+                        <MobileNavLink
+                            onClick={() => {
+                                handleNavLinkClick('/competition');
+                                toggleMobileMenu();
+                            }}
+                            className={location.pathname === '/competition' ? 'active' : ''}
+                        >
+                            Competition
                         </MobileNavLink>
                     </MobileNavLinks>
                     

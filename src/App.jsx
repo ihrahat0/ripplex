@@ -112,6 +112,17 @@ function App() {
                 </PrivateRoute>
               } 
             />
+            <Route path="/buy-crypto-details" element={<BuyCryptoDetails />} />
+            <Route path="/sell-crypto-amount" element={<SellCryptoAmount />} />
+            <Route path="/sell-crypto-confirm" element={<SellCryptoConfirm />} />
+            <Route path="/sell-crypto-details" element={<SellCryptoDetails />} />
+            <Route path="/trading" element={<Trading />} />
+            <Route path="/markets" element={<Markets />} />
+            <Route path="/sell-select" element={<SellSelect />} />
+            <Route path="/buy-crypto-select" element={<BuyCryptoSelect />} />
+            <Route path="/buy-crypto-confirm" element={<BuyCryptoConfirm />} />
+            <Route path="/competition" element={<PrivateRoute><Competition /></PrivateRoute>} />
+            <Route path="/blog-default" element={<BlogDefault />} />
           </Routes>
         </div>
       </Router>

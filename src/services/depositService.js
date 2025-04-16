@@ -92,10 +92,10 @@ export const processDeposit = async (deposit, userId, onDepositDetected) => {
 
     // If pending deposit has an ID, update its status
     if (deposit.id) {
-      await updateDoc(doc(db, 'pendingDeposits', deposit.id), {
-        status: 'completed',
-        processedAt: serverTimestamp()
-      });
+    await updateDoc(doc(db, 'pendingDeposits', deposit.id), {
+      status: 'completed',
+      processedAt: serverTimestamp()
+    });
     }
 
     // Notify the UI
@@ -195,27 +195,27 @@ export const validateDeposit = (amount, token, chain) => {
 export const monitorAllDeposits = (onDepositDetected) => {
   // Connect to deposcan WebSocket for real-time updates
   try {
-    // Set up real-time listener for all transactions of type 'deposit'
-    const depositsQuery = query(
-      collection(db, 'transactions'),
+  // Set up real-time listener for all transactions of type 'deposit'
+  const depositsQuery = query(
+    collection(db, 'transactions'),
       where('type', '==', 'deposit')
-    );
+  );
 
     return onSnapshot(depositsQuery, (snapshot) => {
       snapshot.docChanges().forEach((change) => {
-        if (change.type === 'added') {
-          const deposit = {
-            id: change.doc.id,
-            ...change.doc.data()
-          };
-          
-          // Notify the admin UI
-          if (onDepositDetected) {
-            onDepositDetected(deposit);
-          }
+      if (change.type === 'added') {
+        const deposit = {
+          id: change.doc.id,
+          ...change.doc.data()
+        };
+        
+        // Notify the admin UI
+        if (onDepositDetected) {
+          onDepositDetected(deposit);
         }
-      });
+      }
     });
+  });
   } catch (error) {
     console.error('Error monitoring deposits:', error);
     return () => {}; // Return empty function as unsubscribe
@@ -315,9 +315,9 @@ export const monitorWalletAddresses = (onDepositDetected, statusCallback) => {
                   type: 'warning',
                   message: `Connection to ${chain} ended, attempting to reconnect`,
                   chain
-                });
-              }
-            });
+        });
+      }
+    });
             
             const web3 = new Web3(provider);
             web3Instances[chain] = web3;

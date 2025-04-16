@@ -24,7 +24,9 @@ import {
     addDoc,
     writeBatch,
     limit,
-    increment
+    increment,
+    orderBy,
+    arrayUnion
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Link } from 'react-router-dom';
@@ -1246,6 +1248,9 @@ function UserProfile(props) {
     const [sendModalLoading, setSendModalLoading] = useState(false);
     // Add state to store coin metadata from Firestore
     const [coinMetadata, setCoinMetadata] = useState({});
+    // Add state for user deposits
+    const [userDeposits, setUserDeposits] = useState([]);
+    const [loadingDeposits, setLoadingDeposits] = useState(false);
     
     // Add back the dataCoinTab for the tabs
     const [dataCoinTab] = useState([
@@ -1261,21 +1266,26 @@ function UserProfile(props) {
         },
         {
             id: 3,
+            title: 'Deposits',
+            icon: 'fa-arrow-down-to-line'
+        },
+        {
+            id: 4,
             title: 'Bonus',
             icon: 'fa-gift'
         },
         {
-            id: 4,
+            id: 5,
             title: 'Referrals',
             icon: 'fa-share-nodes'
         },
         {
-            id: 5,
+            id: 6,
             title: '2FA',
             icon: 'fa-barcode'
         },
         {
-            id: 6,
+            id: 7,
             title: 'Change password',
             icon: 'fa-lock'
         },
@@ -1293,7 +1303,7 @@ function UserProfile(props) {
             }
         }
     };
-    
+
     const calculateTotalBalance = useMemo(() => {
         return Object.entries(balances).reduce((total, [asset, balance]) => {
             // Use a fixed price of $1 for RIPPLEX token
@@ -1332,6 +1342,9 @@ function UserProfile(props) {
             checkAdminStatusOnMount().catch(err => {
                 console.error("Error checking admin status:", err);
             });
+            
+            // Fetch user deposits
+            fetchUserDeposits(auth.currentUser.uid);
             
             // Fetch authenticated user's data
             const fetchUserData = async () => {
@@ -1372,11 +1385,11 @@ function UserProfile(props) {
                     userDataLoaded = true;
                     // If balances are already loaded, we can set loading to false
                     if (balancesLoaded) {
-                        setLoading(false);
+                      setLoading(false);
                     } else {
-                        // Set loading to false after getting user data anyway
-                        // This will allow the UI to render with partial data
-                        setTimeout(() => setLoading(false), 500);
+                      // Set loading to false after getting user data anyway
+                      // This will allow the UI to render with partial data
+                      setTimeout(() => setLoading(false), 500);
                     }
                 } catch (error) {
                     console.error('Error fetching user data:', error);
@@ -1445,6 +1458,9 @@ function UserProfile(props) {
                     if (userDataLoaded) {
                       setLoading(false);
                     }
+                    
+                    // Fetch token prices after loading balances
+                    fetchPrices();
                 } catch (error) {
                     console.error('Error fetching balances:', error);
                     setError('Failed to fetch balances');
@@ -1657,18 +1673,20 @@ function UserProfile(props) {
     // Function to fetch cryptocurrency prices
     const fetchPrices = async () => {
         try {
+            console.log("Starting to fetch token prices...");
             // Create an empty price map
             let prices = {
                 ...tokenPrices, // Preserve existing prices, especially RIPPLEX
                 USDT: 1, // USDT is pegged to USD
+                RIPPLEX: 1, // RIPPLEX is $1
             };
             
             // Try to fetch prices from CoinGecko
             try {
                 const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,ripple,cardano,dogecoin,solana,binancecoin,matic-network,polkadot,avalanche-2,chainlink,uniswap,cosmos,tron,litecoin,bitcoin-cash,stellar,monero,tezos,aave,maker,compound,synthetix,yearn-finance,sushi,pancakeswap-token,curve-dao-token,1inch,the-graph,decentraland,axie-infinity,chiliz,enjincoin,basic-attention-token,loopring,harmony,theta-token,fantom,near,algorand,flow,hedera-hashgraph,elrond-erd-2,eos,kusama,vechain,iota,filecoin,theta-fuel,zilliqa,qtum,icon,waves,ontology,ravencoin,nano,digibyte,decred,dash,doge-killer,safemoon,baby-doge-coin,shiba-inu&vs_currencies=usd');
-                const data = await response.json();
-                
-                // Map from CoinGecko IDs to our token symbols
+            const data = await response.json();
+            
+                // Mapping for common symbol IDs
                 const idToSymbol = {
                     'bitcoin': 'BTC',
                     'ethereum': 'ETH',
@@ -1730,8 +1748,6 @@ function UserProfile(props) {
                     'decred': 'DCR',
                     'dash': 'DASH',
                     'doge-killer': 'LEASH',
-                    'safemoon': 'SAFEMOON',
-                    'baby-doge-coin': 'BABYDOGE',
                     'shiba-inu': 'SHIB'
                 };
                 
@@ -1742,6 +1758,8 @@ function UserProfile(props) {
                         prices[symbol] = priceData.usd;
                     }
                 }
+                
+                console.log("Fetched prices from CoinGecko:", Object.keys(prices).length);
             } catch (error) {
                 console.error('Error fetching prices from CoinGecko:', error);
             }
@@ -1799,11 +1817,12 @@ function UserProfile(props) {
                 
                 // Set coin names in state for use in the UI
                 setCoinNames(coinNameMap);
+                console.log("Fetched prices from Firebase:", Object.keys(prices).length);
             } catch (error) {
                 console.error('Error fetching coin data from Firebase:', error);
             }
             
-            // For tokens that still don't have prices, try DexScreener API
+            // Find tokens that still don't have prices, specifically the ones we need
             const tokensWithoutPrices = Object.keys(balances || {}).filter(token => 
                 balances[token] > 0 && !prices[token]
             );
@@ -2765,6 +2784,46 @@ function UserProfile(props) {
       fetchCoinMetadata();
     }, []);
 
+    // Fetch user deposits
+    const fetchUserDeposits = async (userId) => {
+        try {
+            setLoadingDeposits(true);
+            // Create a query for this user's transactions (deposits only)
+            const depositsQuery = query(
+                collection(db, 'transactions'),
+                where('userId', '==', userId),
+                where('type', '==', 'deposit'),
+                orderBy('timestamp', 'desc')
+            );
+            
+            // Get all deposits
+            const depositsSnapshot = await getDocs(depositsQuery);
+            const depositsList = [];
+            
+            depositsSnapshot.forEach((doc) => {
+                depositsList.push({
+                    id: doc.id,
+                    ...doc.data()
+                });
+            });
+            
+            setUserDeposits(depositsList);
+        } catch (error) {
+            console.error('Error fetching user deposits:', error);
+            setError('Failed to fetch deposit history');
+        } finally {
+            setLoadingDeposits(false);
+        }
+    };
+
+    // Add useEffect to fetch prices whenever balances change
+    useEffect(() => {
+        if (Object.keys(balances).length > 0) {
+            console.log("Balances changed, fetching prices...");
+            fetchPrices();
+        }
+    }, [balances]);
+
     if (loading) {
         return (
             <div style={{
@@ -3337,10 +3396,19 @@ function UserProfile(props) {
                                                         // Sort tokens by balance value in USD, in descending order
                                                         Object.entries(balances)
                                                             .map(([asset, balance]) => {
-                                                                // Use a fixed price of $1 for RIPPLEX token
-                                                                const price = asset === 'RIPPLEX' ? 1 : (tokenPrices[asset] || 0);
+                                                                // Use a fixed price of $1 for RIPPLEX and USDT tokens, default to 1 if no price found
+                                                                let price = 0;
+                                                                if (asset === 'RIPPLEX' || asset === 'USDT') {
+                                                                    price = 1;
+                                                                } else if (tokenPrices[asset]) {
+                                                                    price = tokenPrices[asset];
+                                                                } else {
+                                                                    // Use a default price of $1 if no price found - for debug only
+                                                                    console.log(`No price found for ${asset}, using default $1`);
+                                                                    price = 1;
+                                                                }
                                                                 const usdValue = balance * price;
-                                                                return { asset, balance, usdValue };
+                                                                return { asset, balance, usdValue, price };
                                                             })
                                                             .sort((a, b) => {
                                                                 // First: Always put tokens with non-zero balances at the top
@@ -3424,7 +3492,7 @@ function UserProfile(props) {
                                                                                     }}>
                                                                                         {coinNames[asset] || // Try to use the name from our map
                                                                                          (asset === 'USDT' ? 'Tether USD' : 
-                                                                                          asset === 'RIPPLEX' ? 'Ripple Exchange Token' : 
+                                                                                         asset === 'RIPPLEX' ? 'Ripple Exchange Token' : 
                                                                                           asset)} {/* Fallback to predefined names or the symbol itself */}
                                                                                     </div>
                                                                                 </div>
@@ -3454,7 +3522,10 @@ function UserProfile(props) {
                                                                             textAlign: 'right',
                                                                             borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
                                                                         }}>
-                                                                            <span style={{ fontWeight: '500' }}>${usdValue.toFixed(2)}</span>
+                                                                            <span style={{ fontWeight: '500' }}>
+                                                                                ${usdValue.toFixed(2)}
+                                                                                {/* Comment for debugging: price=${price}, balance=${balance} */}
+                                                                            </span>
                                                                         </td>
                                                                     </tr>
                                                                 );
@@ -3882,6 +3953,260 @@ function UserProfile(props) {
                                     </button>
                                 </ResponsiveForm>
                             </ResponsiveCard>
+                        </ContentInnerContainer>
+                            </TabPanel>
+
+                    {/* Deposits TabPanel */}
+                            <TabPanel>
+                        <ContentInnerContainer className="content-inner profile">
+                                    <h4 className="balance-title">Deposit History</h4>
+                                    <AnimatedBorder>
+                                        <div className="deposits-table" style={{
+                                            background: '#1E1E2D',
+                                            borderRadius: '16px',
+                                            padding: '24px',
+                                            position: 'relative',
+                                            zIndex: 1
+                                        }}>
+                                            <ResponsiveTableWrapper>
+                                                <table className="table" style={{
+                                                    width: '100%',
+                                                    borderCollapse: 'separate',
+                                                    borderSpacing: '0',
+                                                    color: '#fff'
+                                                }}>
+                                                    <thead>
+                                                        <tr>
+                                                            <th style={{
+                                                                padding: '16px',
+                                                                color: '#7A7A7A',
+                                                                fontSize: '14px',
+                                                                fontWeight: '500',
+                                                                textAlign: 'left',
+                                                                borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+                                                            }}>Date</th>
+                                                            <th style={{
+                                                                padding: '16px',
+                                                                color: '#7A7A7A',
+                                                                fontSize: '14px',
+                                                                fontWeight: '500',
+                                                                textAlign: 'left',
+                                                                borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+                                                            }}>Token</th>
+                                                            <th style={{
+                                                                padding: '16px',
+                                                                color: '#7A7A7A',
+                                                                fontSize: '14px',
+                                                                fontWeight: '500',
+                                                                textAlign: 'right',
+                                                                borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+                                                            }}>Amount</th>
+                                                            <th style={{
+                                                                padding: '16px',
+                                                                color: '#7A7A7A',
+                                                                fontSize: '14px',
+                                                                fontWeight: '500',
+                                                                textAlign: 'left',
+                                                                borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+                                                            }}>Network</th>
+                                                            <th style={{
+                                                                padding: '16px',
+                                                                color: '#7A7A7A',
+                                                                fontSize: '14px',
+                                                                fontWeight: '500',
+                                                                textAlign: 'left',
+                                                                borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+                                                            }}>Transaction</th>
+                                                            <th style={{
+                                                                padding: '16px',
+                                                                color: '#7A7A7A',
+                                                                fontSize: '14px',
+                                                                fontWeight: '500',
+                                                                textAlign: 'center',
+                                                                borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+                                                            }}>Status</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {loadingDeposits ? (
+                                                            <tr>
+                                                                <td colSpan="6" style={{
+                                                                    textAlign: 'center',
+                                                                    padding: '20px',
+                                                                    color: '#7A7A7A'
+                                                                }}>
+                                                                    <div style={{
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        gap: '10px'
+                                                                    }}>
+                                                                        <div style={{
+                                                                            border: '2px solid rgba(255, 255, 255, 0.1)',
+                                                                            borderTop: '2px solid #f3c121',
+                                                                            borderRadius: '50%',
+                                                                            width: '20px',
+                                                                            height: '20px',
+                                                                            animation: 'spin 1s linear infinite'
+                                                                        }} />
+                                                                        Loading deposit history...
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ) : userDeposits.length > 0 ? (
+                                                            userDeposits.map((deposit) => {
+                                                                const date = deposit.timestamp ? 
+                                                                    (deposit.timestamp.toDate ? 
+                                                                        deposit.timestamp.toDate() : 
+                                                                        new Date(deposit.timestamp)) : 
+                                                                    new Date();
+                                                                
+                                                                return (
+                                                                    <tr key={deposit.id}>
+                                                                        <td style={{
+                                                                            padding: '16px',
+                                                                            fontSize: '14px',
+                                                                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+                                                                        }}>
+                                                                            {date.toLocaleDateString()} {date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                                        </td>
+                                                                        <td style={{
+                                                                            padding: '16px',
+                                                                            fontSize: '14px',
+                                                                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+                                                                        }}>
+                                                                            <div style={{
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '8px'
+                                                                            }}>
+                                                                                <img 
+                                                                                    src={
+                                                                                        // First priority: Check if we have metadata from Firestore
+                                                                                        (coinMetadata[deposit.token] && coinMetadata[deposit.token].logoUrl) 
+                                                                                        // Second priority: Use predefined logos
+                                                                                        || COIN_LOGOS[deposit.token] 
+                                                                                        // Last fallback: Try cryptologos
+                                                                                        || `https://s2.coinmarketcap.com/static/img/coins/64x64/1.png`
+                                                                                    } 
+                                                                                    alt={deposit.token}
+                                                                                    style={{
+                                                                                        width: '24px',
+                                                                                        height: '24px',
+                                                                                        borderRadius: '50%',
+                                                                                        background: '#2A2A3C'
+                                                                                    }}
+                                                                                    onError={(e) => {
+                                                                                        e.target.onerror = null;
+                                                                                        e.target.src = 'https://s2.coinmarketcap.com/static/img/coins/64x64/1.png';
+                                                                                    }}
+                                                                                />
+                                                                                {deposit.token}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td style={{
+                                                                            padding: '16px',
+                                                                            fontSize: '14px',
+                                                                            textAlign: 'right',
+                                                                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+                                                                        }}>
+                                                                            {parseFloat(deposit.amount).toFixed(8)}
+                                                                        </td>
+                                                                        <td style={{
+                                                                            padding: '16px',
+                                                                            fontSize: '14px',
+                                                                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+                                                                        }}>
+                                                                            <span style={{
+                                                                                display: 'inline-block',
+                                                                                padding: '4px 8px',
+                                                                                borderRadius: '4px',
+                                                                                fontSize: '12px',
+                                                                                backgroundColor: 
+                                                                                    deposit.chain === 'ethereum' ? 'rgba(98, 126, 234, 0.2)' :
+                                                                                    deposit.chain === 'bsc' ? 'rgba(243, 186, 47, 0.2)' :
+                                                                                    deposit.chain === 'polygon' ? 'rgba(130, 71, 229, 0.2)' :
+                                                                                    deposit.chain === 'solana' ? 'rgba(20, 241, 149, 0.2)' :
+                                                                                    deposit.chain === 'arbitrum' ? 'rgba(40, 160, 240, 0.2)' :
+                                                                                    deposit.chain === 'base' ? 'rgba(0, 137, 123, 0.2)' :
+                                                                                    'rgba(255, 255, 255, 0.1)',
+                                                                                color: 
+                                                                                    deposit.chain === 'ethereum' ? '#627eea' :
+                                                                                    deposit.chain === 'bsc' ? '#f3ba2f' :
+                                                                                    deposit.chain === 'polygon' ? '#8247e5' :
+                                                                                    deposit.chain === 'solana' ? '#14f195' :
+                                                                                    deposit.chain === 'arbitrum' ? '#28a0f0' :
+                                                                                    deposit.chain === 'base' ? '#00897b' :
+                                                                                    'white'
+                                                                            }}>
+                                                                                {deposit.chain}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td style={{
+                                                                            padding: '16px',
+                                                                            fontSize: '14px',
+                                                                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+                                                                        }}>
+                                                                            {deposit.txHash ? (
+                                                                                <a 
+                                                                                    href={`${
+                                                                                        deposit.chain === 'ethereum' ? 'https://etherscan.io/tx/' :
+                                                                                        deposit.chain === 'bsc' ? 'https://bscscan.com/tx/' :
+                                                                                        deposit.chain === 'polygon' ? 'https://polygonscan.com/tx/' :
+                                                                                        deposit.chain === 'solana' ? 'https://solscan.io/tx/' :
+                                                                                        deposit.chain === 'arbitrum' ? 'https://arbiscan.io/tx/' :
+                                                                                        deposit.chain === 'base' ? 'https://basescan.org/tx/' :
+                                                                                        'https://etherscan.io/tx/'
+                                                                                    }${deposit.txHash}`}
+                                                                                    target="_blank"
+                                                                                    rel="noopener noreferrer"
+                                                                                    style={{
+                                                                                        color: '#0ECB81',
+                                                                                        textDecoration: 'none'
+                                                                                    }}
+                                                                                >
+                                                                                    {deposit.txHash.substring(0, 6)}...{deposit.txHash.substring(deposit.txHash.length - 4)}
+                                                                                </a>
+                                                                            ) : 'N/A'}
+                                                                        </td>
+                                                                        <td style={{
+                                                                            padding: '16px',
+                                                                            fontSize: '14px',
+                                                                            textAlign: 'center',
+                                                                            borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+                                                                        }}>
+                                                                            <span style={{
+                                                                                display: 'inline-block',
+                                                                                padding: '4px 12px',
+                                                                                borderRadius: '30px',
+                                                                                fontSize: '12px',
+                                                                                backgroundColor: deposit.status === 'completed' ? 'rgba(14, 203, 129, 0.2)' : 'rgba(243, 186, 47, 0.2)',
+                                                                                color: deposit.status === 'completed' ? '#0ECB81' : '#f3ba2f'
+                                                                            }}>
+                                                                                {deposit.status === 'completed' ? 'Completed' : 'Pending'}
+                                                                            </span>
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })
+                                                        ) : (
+                                                            <tr>
+                                                                <td colSpan="6" style={{
+                                                                    textAlign: 'center',
+                                                                    padding: '40px 20px',
+                                                                    color: '#7A7A7A'
+                                                                }}>
+                                                                    <div style={{ fontSize: '18px', marginBottom: '10px' }}>No deposits found</div>
+                                                                    <p style={{ fontSize: '14px' }}>Make your first deposit to start trading</p>
+                                                                    <DepositButton style={{ marginTop: '20px' }} />
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </ResponsiveTableWrapper>
+                                        </div>
+                                    </AnimatedBorder>
                         </ContentInnerContainer>
                             </TabPanel>
                 </StyledTabs>

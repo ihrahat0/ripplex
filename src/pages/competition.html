@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gaming Tournament Leaderboard</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        body {
+            background-color: #0f111a;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .toggle-container {
+            display: flex;
+            background-color: #1a1e2e;
+            border-radius: 30px;
+            width: 400px;
+            margin-bottom: 30px;
+            overflow: hidden;
+        }
+        
+        .toggle-btn {
+            flex: 1;
+            padding: 12px 0;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .toggle-btn.active {
+            background-color: #2a304a;
+        }
+        
+        .characters-container {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 1200px;
+            margin-bottom: 30px;
+        }
+        
+        .character-card {
+            background-color: #1a1e2e;
+            border-radius: 20px;
+            width: 30%;
+            padding-top: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow: hidden;
+        }
+        
+        .character-avatar {
+            width: 100px;
+            height: 100px;
+            border-radius: 20px;
+            margin-bottom: 10px;
+            object-fit: cover;
+        }
+        
+        .character-name {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        
+        .trophy-icon {
+            background-color: #f0d78c;
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .trophy-icon.silver {
+            background-color: #e0e0e0;
+        }
+        
+        .points-text {
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .prize-container {
+            background-color: #141824;
+            width: 100%;
+            padding: 20px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .prize-amount {
+            font-size: 28px;
+            font-weight: 700;
+            color: white;
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        
+        .diamond-icon {
+            color: #5e9eff;
+            margin-right: 10px;
+        }
+        
+        .prize-label {
+            font-size: 14px;
+            color: #8a8d98;
+        }
+        
+        .timer-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 30px 0;
+        }
+        
+        .timer-label {
+            color: #8a8d98;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .timer-value {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .status-bar {
+            background-color: #1a1e2e;
+            border-radius: 30px;
+            padding: 15px 30px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .leaderboard {
+            width: 100%;
+            max-width: 1200px;
+        }
+        
+        .leaderboard-header {
+            display: grid;
+            grid-template-columns: 100px 1fr 100px 100px;
+            padding: 10px 20px;
+            color: #8a8d98;
+            font-size: 14px;
+        }
+        
+        .leaderboard-row {
+            display: grid;
+            grid-template-columns: 100px 1fr 100px 100px;
+            padding: 20px;
+            background-color: #1a1e2e;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        
+        .place {
+            display: flex;
+            align-items: center;
+        }
+        
+        .place-icon {
+            color: #5e9eff;
+            margin-right: 10px;
+        }
+        
+        .featured {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(94, 158, 255, 0.3);
+        }
+        
+        .alarm-icon {
+            color: #8a8d98;
+            margin-right: 8px;
+        }
+        
+        @media (max-width: 1200px) {
+            .characters-container {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .character-card {
+                width: 80%;
+                max-width: 350px;
+                margin-bottom: 20px;
+            }
+            
+            .leaderboard-header, .leaderboard-row {
+                grid-template-columns: 70px 1fr 70px 70px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Toggle Switch -->
+    <div class="toggle-container">
+        <div class="toggle-btn active">Daily</div>
+        <div class="toggle-btn">Monthly</div>
+    </div>
+    
+    <!-- Character Cards -->
+    <div class="characters-container">
+        <!-- Skulldugger Card -->
+        <div class="character-card">
+            <img src="/placeholder.svg?height=100&width=100" alt="Skulldugger" class="character-avatar">
+            <h2 class="character-name">Skulldugger</h2>
+            <div class="trophy-icon silver">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
+                    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
+                    <path d="M4 22h16"></path>
+                    <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
+                    <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
+                    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
+                </svg>
+            </div>
+            <p class="points-text">Earn 500 points</p>
+            <div class="prize-container">
+                <div class="prize-amount">
+                    <span class="diamond-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z"></path>
+                        </svg>
+                    </span>
+                    5 000
+                </div>
+                <div class="prize-label">Prize</div>
+            </div>
+        </div>
+        
+        <!-- Klaxxon Card (Featured) -->
+        <div class="character-card featured">
+            <img src="/placeholder.svg?height=100&width=100" alt="Klaxxon" class="character-avatar">
+            <h2 class="character-name">Klaxxon</h2>
+            <div class="trophy-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
+                    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
+                    <path d="M4 22h16"></path>
+                    <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
+                    <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
+                    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
+                </svg>
+            </div>
+            <p class="points-text">Earn 1500 points</p>
+            <div class="prize-container">
+                <div class="prize-amount">
+                    <span class="diamond-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z"></path>
+                        </svg>
+                    </span>
+                    10 000
+                </div>
+                <div class="prize-label">Prize</div>
+            </div>
+        </div>
+        
+        <!-- Ultralex Card -->
+        <div class="character-card">
+            <img src="/placeholder.svg?height=100&width=100" alt="Ultralex" class="character-avatar">
+            <h2 class="character-name">Ultralex</h2>
+            <div class="trophy-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
+                    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
+                    <path d="M4 22h16"></path>
+                    <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
+                    <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
+                    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
+                </svg>
+            </div>
+            <p class="points-text">Earn 250 points</p>
+            <div class="prize-container">
+                <div class="prize-amount">
+                    <span class="diamond-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z"></path>
+                        </svg>
+                    </span>
+                    2 500
+                </div>
+                <div class="prize-label">Prize</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Timer -->
+    <div class="timer-container">
+        <div class="timer-label">
+            <span class="alarm-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+            </span>
+            Ends In
+        </div>
+        <div class="timer-value">00d 00h 43m 51s</div>
+    </div>
+    
+    <!-- Status Bar -->
+    <div class="status-bar">
+        You earned 
+        <span class="diamond-icon" style="margin: 0 5px;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z"></path>
+            </svg>
+        </span>
+        50 today and are ranked - out of 13868 users
+    </div>
+    
+    <!-- Leaderboard -->
+    <div class="leaderboard">
+        <div class="leaderboard-header">
+            <div>Place</div>
+            <div>Username</div>
+            <div>Points</div>
+            <div>Prize</div>
+        </div>
+        
+        <!-- Leaderboard Rows -->
+        <div class="leaderboard-row">
+            <div class="place">
+                <span class="place-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
+                        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
+                        <path d="M4 22h16"></path>
+                        <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
+                        <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
+                        <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
+                    </svg>
+                </span>
+                4
+            </div>
+            <div>Protesian</div>
+            <div>156</div>
+            <div class="prize-amount" style="font-size: 16px;">
+                <span class="diamond-icon" style="margin-right: 5px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z"></path>
+                    </svg>
+                </span>
+                750
+            </div>
+        </div>
+        
+        <div class="leaderboard-row">
+            <div class="place">
+                <span class="place-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
+                        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
+                        <path d="M4 22h16"></path>
+                        <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
+                        <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
+                        <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
+                    </svg>
+                </span>
+                5
+            </div>
+            <div>Protesian</div>
+            <div>156</div>
+            <div class="prize-amount" style="font-size: 16px;">
+                <span class="diamond-icon" style="margin-right: 5px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z"></path>
+                    </svg>
+                </span>
+                750
+            </div>
+        </div>
+        
+        <div class="leaderboard-row">
+            <div class="place">
+                <span class="place-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
+                        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
+                        <path d="M4 22h16"></path>
+                        <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
+                        <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
+                        <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
+                    </svg>
+                </span>
+                6
+            </div>
+            <div>Protesian</div>
+            <div>156</div>
+            <div class="prize-amount" style="font-size: 16px;">
+                <span class="diamond-icon" style="margin-right: 5px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z"></path>
+                    </svg>
+                </span>
+                750
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Toggle between Daily and Monthly views
+        const toggleBtns = document.querySelectorAll('.toggle-btn');
+        toggleBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                toggleBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+        });
+        
+        // For a real implementation, you would add a countdown timer here
+        // Example:
+        /*
+        function updateTimer() {
+            // Logic to update the timer
+        }
+        setInterval(updateTimer, 1000);
+        */
+    </script>
+</body>
+</html>
