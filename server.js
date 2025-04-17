@@ -5,6 +5,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
 const emailService = require('./server/utils/emailService');
+const proxyRoutes = require('./api/proxy');
 
 // Force development mode for local testing
 // Set NODE_ENV=production on your server to use real Firebase Admin
@@ -365,6 +366,9 @@ app.post('/send-verification-code', cors(corsOptions), async (req, res) => {
     });
   }
 });
+
+// Add this line where you setup other routes
+app.use('/api', proxyRoutes);
 
 // Serve static files from build directory with proper MIME types
 app.use(express.static(path.join(__dirname, 'build'), {

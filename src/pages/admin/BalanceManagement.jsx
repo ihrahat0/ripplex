@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { db } from '../../firebase';
-import { collection, doc, getDoc, getDocs, updateDoc, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, updateDoc, query, where, limit, writeBatch } from 'firebase/firestore';
 import styled from 'styled-components';
 import { toast } from 'react-hot-toast';
 import { DEFAULT_COINS } from '../../utils/constants';
@@ -217,6 +217,63 @@ const StatusMessage = styled.div`
   border: 1px solid ${props => props.$type === 'error' ? 'rgba(248, 81, 73, 0.2)' : 'rgba(63, 185, 80, 0.2)'};
 `;
 
+const AdminActions = styled.div`
+  margin-bottom: 30px;
+  padding: 20px;
+  background: #1c2333;
+  border-radius: 8px;
+  border: 1px solid #30363d;
+`;
+
+const ActionTitle = styled.h3`
+  color: #e6edf3;
+  margin: 0 0 15px 0;
+  font-size: 18px;
+  font-weight: 600;
+`;
+
+const ActionDescription = styled.p`
+  color: #8b949e;
+  margin-bottom: 20px;
+  font-size: 14px;
+  line-height: 1.5;
+`;
+
+const ActionButtons = styled.div`
+  display: flex;
+  gap: 15px;
+`;
+
+const ActionButton = styled(Button)`
+  background: ${props => props.$variant === 'warning' ? '#bd3e1b' : props.$variant === 'info' ? '#0d6eff' : '#ff725a'};
+  
+  &:hover {
+    background: ${props => props.$variant === 'warning' ? '#a42800' : props.$variant === 'info' ? '#0052cc' : '#e65a42'};
+  }
+  
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+`;
+
+const ProgressBar = styled.div`
+  height: 6px;
+  background: #30363d;
+  border-radius: 3px;
+  margin-top: 15px;
+  overflow: hidden;
+  
+  &::after {
+    content: '';
+    display: block;
+    height: 100%;
+    width: ${props => props.$progress || 0}%;
+    background: #0d6eff;
+    transition: width 0.3s ease;
+  }
+`;
+
 const BalanceManagement = () => {
   const { userId } = useParams();
   const navigate = useNavigate();
@@ -232,6 +289,9 @@ const BalanceManagement = () => {
   const [activeTab, setActiveTab] = useState('all'); // all, main, tokens, defi
   const [allCoins, setAllCoins] = useState([]);
   const [hasChanges, setHasChanges] = useState(false);
+  const [migrationLoading, setMigrationLoading] = useState(false);
+  const [migrationProgress, setMigrationProgress] = useState(0);
+  const [migrationStats, setMigrationStats] = useState({ total: 0, updated: 0 });
 
   // Parse query parameters
   const searchParams = new URLSearchParams(location.search);
@@ -382,6 +442,130 @@ const BalanceManagement = () => {
     updateBalance(coinId, '0');
   };
 
+  // Add all missing coins to current user
+  const addAllCoinsToCurrentUser = async () => {
+    if (!user || !userId) {
+      setError('No user selected');
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      // Create a copy of current balances
+      const updatedBalances = { ...balances };
+      
+      // Get all possible coin symbols
+      const allCoinSymbols = allCoins.map(coin => coin.symbol);
+      let updated = false;
+      
+      // Add any missing coins with 0 balance
+      for (const symbol of allCoinSymbols) {
+        if (updatedBalances[symbol] === undefined) {
+          updatedBalances[symbol] = '0';
+          updated = true;
+        }
+      }
+      
+      if (!updated) {
+        setSuccess('User already has all coins in their balance');
+        setLoading(false);
+        return;
+      }
+      
+      // Update user document
+      await updateDoc(doc(db, 'users', userId), {
+        balances: updatedBalances
+      });
+      
+      // Update local state
+      setBalances(updatedBalances);
+      setOriginalBalances(JSON.parse(JSON.stringify(updatedBalances)));
+      setSuccess('Successfully added all missing coins to user balance');
+    } catch (error) {
+      console.error('Error adding coins to user:', error);
+      setError('Error adding coins: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Add all missing coins to ALL users (batch process)
+  const addAllCoinsToAllUsers = async () => {
+    if (!window.confirm('This will add all missing coins with 0 balance to ALL users. This operation could take some time. Continue?')) {
+      return;
+    }
+    
+    try {
+      setMigrationLoading(true);
+      setMigrationProgress(0);
+      setError('');
+      setSuccess('');
+      
+      // Get all coin symbols from the tokens collection
+      const allCoinSymbols = allCoins.map(coin => coin.symbol);
+      
+      // Get total count of users for progress tracking
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      const totalUsers = usersSnapshot.size;
+      let updatedUsers = 0;
+      
+      setMigrationStats({ total: totalUsers, updated: 0 });
+      
+      // Process in batches of 500 users
+      const batchSize = 500;
+      let processedUsers = 0;
+      
+      while (processedUsers < totalUsers) {
+        const q = query(collection(db, 'users'), limit(batchSize));
+        const batch = writeBatch(db);
+        const querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) break;
+        
+        let batchUpdates = 0;
+        
+        for (const userDoc of querySnapshot.docs) {
+          const userData = userDoc.data();
+          const userBalances = userData.balances || {};
+          let needsUpdate = false;
+          
+          // Check if any coins are missing
+          for (const symbol of allCoinSymbols) {
+            if (userBalances[symbol] === undefined) {
+              userBalances[symbol] = '0';
+              needsUpdate = true;
+            }
+          }
+          
+          // Add to batch if update needed
+          if (needsUpdate) {
+            batch.update(doc(db, 'users', userDoc.id), { balances: userBalances });
+            batchUpdates++;
+          }
+          
+          processedUsers++;
+          setMigrationProgress(Math.floor((processedUsers / totalUsers) * 100));
+        }
+        
+        // Commit batch if there are updates
+        if (batchUpdates > 0) {
+          await batch.commit();
+          updatedUsers += batchUpdates;
+          setMigrationStats({ total: totalUsers, updated: updatedUsers });
+        }
+      }
+      
+      setSuccess(`Migration complete. Added missing coins to ${updatedUsers} out of ${totalUsers} users.`);
+    } catch (error) {
+      console.error('Error in migration:', error);
+      setError('Migration error: ' + error.message);
+    } finally {
+      setMigrationLoading(false);
+      setMigrationProgress(100);
+    }
+  };
+
   // Filter coins based on active tab and search
   const getFilteredBalances = () => {
     const allBalanceTokens = new Set([
@@ -437,6 +621,42 @@ const BalanceManagement = () => {
           {loading ? 'Searching...' : 'Search'}
         </Button>
       </SearchForm>
+      
+      <AdminActions>
+        <ActionTitle>Administrator Actions</ActionTitle>
+        <ActionDescription>
+          Use these tools to manage coin balances across users. Handle with care as these actions affect multiple user accounts.
+        </ActionDescription>
+        
+        <ActionButtons>
+          {userId && (
+            <ActionButton 
+              onClick={addAllCoinsToCurrentUser} 
+              disabled={loading}
+              $variant="info"
+            >
+              Add All Coins to Current User
+            </ActionButton>
+          )}
+          
+          <ActionButton 
+            onClick={addAllCoinsToAllUsers} 
+            disabled={migrationLoading}
+            $variant="warning"
+          >
+            {migrationLoading ? 'Processing...' : 'Add All Coins to ALL Users'}
+          </ActionButton>
+        </ActionButtons>
+        
+        {migrationLoading && (
+          <>
+            <div style={{ marginTop: '15px', color: '#8b949e' }}>
+              Processing users: {migrationStats.updated} updated out of {migrationStats.total} total
+            </div>
+            <ProgressBar $progress={migrationProgress} />
+          </>
+        )}
+      </AdminActions>
       
       {error && <StatusMessage $type="error">{error}</StatusMessage>}
       {success && <StatusMessage $type="success">{success}</StatusMessage>}

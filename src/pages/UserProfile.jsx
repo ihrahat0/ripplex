@@ -1308,7 +1308,9 @@ function UserProfile(props) {
         return Object.entries(balances).reduce((total, [asset, balance]) => {
             // Use a fixed price of $1 for RIPPLEX token
             const price = asset === 'RIPPLEX' ? 1 : (tokenPrices[asset] || 0);
-            const usdValue = balance * price;
+            // Make sure balance is a number
+            const numericBalance = typeof balance === 'number' ? balance : 0;
+            const usdValue = numericBalance * price;
             return total + usdValue;
         }, 0);
     }, [balances, tokenPrices]);
@@ -1837,7 +1839,7 @@ function UserProfile(props) {
                             
                             for (const network of networks) {
                                 try {
-                                    const response = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${token}`);
+                                    const response = await fetch(`/api/dexscreener/search?q=${token}`);
                                     const data = await response.json();
                                     
                                     if (data && data.pairs && data.pairs.length > 0) {
@@ -3315,7 +3317,7 @@ function UserProfile(props) {
                                                             Calculating...
                                                         </div>
                                                     ) : (
-                                                        `$${calculateTotalBalance.toFixed(2)}`
+                                                        `$${typeof calculateTotalBalance === 'number' ? calculateTotalBalance.toFixed(2) : '0.00'}`
                                                     )}
                                                 </h3>
                                                         <p style={{
@@ -3323,7 +3325,7 @@ function UserProfile(props) {
                                                             fontSize: '14px',
                                                             fontWeight: '500'
                                                         }}>
-                                                            Total PnL: ${totalPnL.toFixed(2)}
+                                                            Total PnL: ${typeof totalPnL === 'number' ? totalPnL.toFixed(2) : '0.00'}
                                                         </p>
                                                     </div>
                                                     {renderBalanceActions()}
@@ -3504,7 +3506,7 @@ function UserProfile(props) {
                                                                             textAlign: 'right',
                                                                             borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
                                                                         }}>
-                                                                            <span style={{ fontWeight: '500' }}>{balance.toFixed(8)}</span>
+                                                                            <span style={{ fontWeight: '500' }}>{(typeof balance === 'number' ? balance.toFixed(8) : '0.00000000')}</span>
                                                                             <span style={{ color: '#7A7A7A', marginLeft: '4px' }}>{asset}</span>
                                                                         </td>
                                                                         <td style={{
@@ -3523,7 +3525,7 @@ function UserProfile(props) {
                                                                             borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
                                                                         }}>
                                                                             <span style={{ fontWeight: '500' }}>
-                                                                                ${usdValue.toFixed(2)}
+                                                                                ${(typeof usdValue === 'number' ? usdValue.toFixed(2) : '0.00')}
                                                                                 {/* Comment for debugging: price=${price}, balance=${balance} */}
                                                                             </span>
                                                                         </td>
@@ -4421,7 +4423,7 @@ function UserProfile(props) {
                                                 .filter(([_, balance]) => balance > 0)
                                                 .map(([token, balance]) => (
                                                     <option key={token} value={token}>
-                                                        {token} - Balance: {balance.toFixed(4)}
+                                                        {token} - Balance: {typeof balance === 'number' ? balance.toFixed(4) : '0.0000'}
                                                     </option>
                                                 ))
                                             }

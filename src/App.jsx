@@ -16,6 +16,7 @@ import PairManagement from './pages/admin/PairManagement';
 import AllDeposits from './pages/admin/AllDeposits';
 import UserDeposits from './pages/admin/UserDeposits';
 import AllUsers from './pages/admin/AllUsers';
+import AddCoinsToAllUsers from './scripts/AddCoinsToAllUsers';
 
 function App() {
   return (
@@ -112,6 +113,7 @@ function App() {
                 </PrivateRoute>
               } 
             />
+            <Route path="/admin/add-coins-to-all-users" element={<AddCoinsToAllUsers />} />
             <Route path="/buy-crypto-details" element={<BuyCryptoDetails />} />
             <Route path="/sell-crypto-amount" element={<SellCryptoAmount />} />
             <Route path="/sell-crypto-confirm" element={<SellCryptoConfirm />} />
@@ -121,8 +123,9 @@ function App() {
             <Route path="/sell-select" element={<SellSelect />} />
             <Route path="/buy-crypto-select" element={<BuyCryptoSelect />} />
             <Route path="/buy-crypto-confirm" element={<BuyCryptoConfirm />} />
-            <Route path="/competition" element={<PrivateRoute><Competition /></PrivateRoute>} />
+            <Route path="/competition" element={<Competition />} />
             <Route path="/blog-default" element={<BlogDefault />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
       </Router>

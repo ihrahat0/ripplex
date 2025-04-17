@@ -1363,7 +1363,7 @@ function CryptoPrices({ searchFilter = '', onClearSearch }) {
             // Fetch DEX data
             try {
               const response = await axios.get(
-                `https://api.dexscreener.com/latest/dex/tokens/${normalizedToken.address}`
+                `/api/dexscreener/tokens/${normalizedToken.address}`
               );
               console.log(`DexScreener response for ${normalizedToken.symbol}:`, response.data);
               

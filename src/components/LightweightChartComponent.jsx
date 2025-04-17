@@ -169,7 +169,7 @@ const LightweightChartComponent = ({
           console.log(`Trying search endpoint for address: ${address}`);
           try {
             const response = await axios.get(
-              `https://api.dexscreener.com/latest/dex/search?q=${address}`,
+              `/api/dexscreener/search?q=${address}`,
               { timeout: 10000 } // 10 second timeout
             );
             console.log('DexScreener search API response:', response.data);
@@ -199,7 +199,7 @@ const LightweightChartComponent = ({
           console.log(`Trying token endpoint: ${address}`);
           try {
             const response = await axios.get(
-              `https://api.dexscreener.com/latest/dex/tokens/${address}`,
+              `/api/dexscreener/tokens/${address}`,
               { timeout: 10000 } // 10 second timeout
             );
             console.log('DexScreener tokens API response:', response.data);

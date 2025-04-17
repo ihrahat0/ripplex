@@ -70,7 +70,7 @@ export const useRealTimeData = () => {
     const fetchData = async () => {
         try {
             const promises = Object.values(TOKENS).map(token => 
-                fetch(`https://api.dexscreener.com/latest/dex/tokens/${token.pairAddress}`)
+                fetch(`/api/dexscreener/tokens/${token.pairAddress}`)
                 .then(res => res.json())
             );
 
