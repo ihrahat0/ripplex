@@ -294,7 +294,7 @@ function MyList() {
       
       // First, try the pairs endpoint
       try {
-        const response = await axios.get(`https://api.dexscreener.com/latest/dex/pairs/${chainId}/${address}`);
+        const response = await axios.get(`/api/dexscreener/pairs/${chainId}/${address}`);
         
         const pairs = response.data?.pairs;
         if (pairs && pairs.length > 0) {
@@ -317,7 +317,7 @@ function MyList() {
       
       // If the first method fails, try the search endpoint
       try {
-        const response = await axios.get(`https://api.dexscreener.com/latest/dex/search?q=${address}`);
+        const response = await axios.get(`/api/dexscreener/search?q=${address}`);
         
         const pairs = response.data?.pairs;
         if (pairs && pairs.length > 0) {
@@ -341,7 +341,7 @@ function MyList() {
       
       // If both methods fail, try the tokens endpoint
       try {
-        const response = await axios.get(`https://api.dexscreener.com/latest/dex/tokens/${address}`);
+        const response = await axios.get(`/api/dexscreener/tokens/${address}`);
         
         const pairs = response.data?.pairs;
         if (pairs && pairs.length > 0) {
@@ -447,7 +447,7 @@ function MyList() {
     // First fetch the current price from DexScreener
     setLoading(true);
     try {
-      const response = await axios.get(`https://api.dexscreener.com/latest/dex/pairs/${token.chainId}/${token.address}`);
+      const response = await axios.get(`/api/dexscreener/pairs/${token.chainId}/${token.address}`);
       
       // Check if we have valid price data
       let price = 0;

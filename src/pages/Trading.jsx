@@ -2146,7 +2146,7 @@ const Trading = () => {
         try {
           // First attempt: Use pairs/{chain}/{pairAddress} format
           response = await axios.get(
-            `https://api.dexscreener.com/latest/dex/pairs/${chain}/${pairAddress}`
+            `/api/dexscreener/pairs/${chain}/${pairAddress}`
           );
           console.log('DexScreener API response (pairs endpoint):', response.data);
         } catch (error) {
@@ -2155,7 +2155,7 @@ const Trading = () => {
           // Second attempt: Use direct address endpoint
           try {
             response = await axios.get(
-              `https://api.dexscreener.com/latest/dex/search?q=${pairAddress}`
+              `/api/dexscreener/search?q=${pairAddress}`
             );
             console.log('DexScreener API response (search endpoint):', response.data);
           } catch (searchError) {

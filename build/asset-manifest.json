@@ -1,12 +1,14 @@
 {
   "files": {
-    "main.css": "https://rippleexchange.org/static/css/main.66c976a5.css",
-    "main.js": "https://rippleexchange.org/static/js/main.6ee8b8c5.js",
+    "main.css": "https://rippleexchange.org/static/css/main.b7c16611.css",
+    "main.js": "https://rippleexchange.org/static/js/main.088939d5.js",
     "static/js/702.1910fd11.chunk.js": "https://rippleexchange.org/static/js/702.1910fd11.chunk.js",
     "static/js/641.be77e7cd.chunk.js": "https://rippleexchange.org/static/js/641.be77e7cd.chunk.js",
     "static/js/144.c97a039d.chunk.js": "https://rippleexchange.org/static/js/144.c97a039d.chunk.js",
     "static/js/219.454870ab.chunk.js": "https://rippleexchange.org/static/js/219.454870ab.chunk.js",
     "static/js/794.6d3a7ad0.chunk.js": "https://rippleexchange.org/static/js/794.6d3a7ad0.chunk.js",
+    "static/js/184.9221bd97.chunk.js": "https://rippleexchange.org/static/js/184.9221bd97.chunk.js",
+    "static/js/752.cd183759.chunk.js": "https://rippleexchange.org/static/js/752.cd183759.chunk.js",
     "static/media/3.gif": "https://rippleexchange.org/static/media/3.5f4ff26b17db0ddf67b0.gif",
     "static/media/2.gif": "https://rippleexchange.org/static/media/2.e033f74c7e7525de5a9e.gif",
     "static/media/fa-duotone-900.svg": "https://rippleexchange.org/static/media/fa-duotone-900.bac7a949fdfa983ff8a5.svg",
@@ -50,10 +52,12 @@
     "static/media/fa-brands-400.woff2": "https://rippleexchange.org/static/media/fa-brands-400.0ffa8f97ca92f387e47f.woff2",
     "static/media/banner.jpg": "https://rippleexchange.org/static/media/banner.536262bda591e1967a43.jpg",
     "static/media/matic.png": "https://rippleexchange.org/static/media/matic.f9e6d46350bf54e1b0b8.png",
+    "static/media/oscar.png": "https://rippleexchange.org/static/media/oscar.e904126bb17cdf4253a6.png",
     "static/media/contact.jpg": "https://rippleexchange.org/static/media/contact.be9fb8f4f189167aff32.jpg",
     "static/media/blog-details-3.jpg": "https://rippleexchange.org/static/media/blog-details-3.3682e7396efdfe18e326.jpg",
     "static/media/testimonials.png": "https://rippleexchange.org/static/media/testimonials.861a3f8908acc672bff8.png",
     "static/media/qrcode.png": "https://rippleexchange.org/static/media/qrcode.f9f8a74adc8877da5c7f.png",
+    "static/media/solana.png": "https://rippleexchange.org/static/media/solana.40621cec0c4c39fbba45.png",
     "static/media/blog-details-2.jpg": "https://rippleexchange.org/static/media/blog-details-2.e8dbd5f3646256d384b2.jpg",
     "static/media/blog-details-1.jpg": "https://rippleexchange.org/static/media/blog-details-1.e1d77f7a2252e1e37d25.jpg",
     "static/media/blog-01.jpg": "https://rippleexchange.org/static/media/blog-01.eae548472edff263110a.jpg",
@@ -65,7 +69,7 @@
     "index.html": "https://rippleexchange.org/index.html"
   },
   "entrypoints": [
-    "static/css/main.66c976a5.css",
-    "static/js/main.6ee8b8c5.js"
+    "static/css/main.b7c16611.css",
+    "static/js/main.088939d5.js"
   ]
 }
