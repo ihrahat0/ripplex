@@ -1,22 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
-import { collection, query, getDocs, where, orderBy, limit } from 'firebase/firestore';
-import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import Loading from '../components/Loading/Loading';
-import trophy from '../assets/images/trophy.png';
-import oscarLogo from '../assets/images/coin/oscar.png';
-import { Link } from 'react-router-dom';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
+import defaultAvatar from '../assets/images/avatar.png';
+import { FaTrophy, FaMedal } from 'react-icons/fa';
+import { GiLaurelCrown } from 'react-icons/gi';
 
 // Animations
 const fadeIn = keyframes`
   from { opacity: 0; }
   to { opacity: 1; }
-`;
-
-const slideUp = keyframes`
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
 `;
 
 const pulse = keyframes`
@@ -25,49 +19,157 @@ const pulse = keyframes`
   100% { transform: scale(1); }
 `;
 
-const float = keyframes`
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-5px); }
-  100% { transform: translateY(0px); }
+const shine = keyframes`
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
 `;
 
-const glow = keyframes`
-  0% { box-shadow: 0 0 5px rgba(255, 143, 36, 0.6); }
-  50% { box-shadow: 0 0 20px rgba(255, 143, 36, 0.8), 0 0 30px rgba(255, 143, 36, 0.4); }
-  100% { box-shadow: 0 0 5px rgba(255, 143, 36, 0.6); }
-`;
-
-const shimmer = keyframes`
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-`;
-
-// Main container
-const CompetitionContainer = styled.div`
+const Container = styled.div`
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
-  color: white;
-  animation: ${fadeIn} 0.8s ease-out;
-  font-family: 'Inter', sans-serif;
+  animation: ${fadeIn} 0.5s ease-in-out;
+  
+  @media (max-width: 768px) {
+    padding: 1rem;
+  }
+`;
+
+const CompetitionHeader = styled.div`
+  background: #13141C;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 1px solid #282B3E;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+`;
+
+const Title = styled.h1`
+  font-size: 2.2rem;
+  margin-bottom: 1rem;
+  color: #f0b90b;
+  grid-column: 1 / -1;
+  text-align: center;
+  letter-spacing: 0.5px;
+  
+  @media (max-width: 768px) {
+    font-size: 1.8rem;
+  }
+`;
+
+const CompetitionInfo = styled.div`
+  background: #1A1C2A;
+  border-radius: 8px;
+  padding: 1.2rem;
+  
+  h3 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    color: #fff;
+    font-size: 1.2rem;
+  }
+  
+  p {
+    margin: 0.5rem 0;
+    font-size: 0.9rem;
+    color: #B7BDC6;
+  }
+  
+  .highlight {
+    color: #f0b90b;
+    font-weight: bold;
+    font-size: 1.5rem;
+  }
+`;
+
+const RewardTable = styled.div`
+  background: #1A1C2A;
+  border-radius: 8px;
+  padding: 1.2rem;
+  
+  h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    color: #fff;
+    font-size: 1.2rem;
+  }
+  
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid #282B3E;
+  }
+  
+  .row:last-child {
+    border-bottom: none;
+  }
+  
+  .cell {
+    font-size: 0.9rem;
+    color: #B7BDC6;
+  }
+  
+  .cell:last-child {
+    text-align: right;
+    color: #f0b90b;
+  }
+`;
+
+const PodiumContainer = styled.div`
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-end;
+  margin: 3rem 0;
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+`;
+
+const PodiumPosition = styled.div`
+  position: relative;
+  width: 220px;
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 0.5rem;
+  transform: translateY(${props => props.$position === 0 ? '-15px' : '0'});
+  
+  @media (max-width: 768px) {
+    transform: none;
+    order: ${props => props.$position === 0 ? '0' : props.$position === 1 ? '1' : '2'};
+  }
 `;
 
-// OSCAR Logo Box
-const OscarLogoContainer = styled.div`
+const PodiumBox = styled.div`
+  background: #1A1C2A;
+  border-radius: 12px;
+  width: 100%;
+  padding: 1.5rem 1rem;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  background: linear-gradient(135deg, #1a1e2e, #2a304a);
-  border-radius: 15px;
-  padding: 10px 25px;
-  margin-bottom: 30px;
-  border: 1px solid rgba(255, 143, 36, 0.3);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 1px solid ${props => props.$position === 0 ? '#f0b90b' : props.$position === 1 ? '#A3A3A3' : '#CD7F32'};
+  transform: scale(${props => props.$position === 0 ? '1.1' : '1'});
   position: relative;
   overflow: hidden;
-  animation: ${glow} 3s infinite ease-in-out;
   
   &::before {
     content: '';
@@ -75,704 +177,496 @@ const OscarLogoContainer = styled.div`
     top: 0;
     left: 0;
     right: 0;
-    bottom: 0;
-    background: linear-gradient(
-      90deg, 
-      rgba(255, 255, 255, 0) 0%, 
-      rgba(255, 255, 255, 0.1) 50%, 
-      rgba(255, 255, 255, 0) 100%
-    );
-    background-size: 200% 100%;
-    animation: ${shimmer} 3s infinite linear;
-    z-index: 1;
+    height: ${props => props.$position === 0 ? '4px' : '2px'};
+    background: ${props => 
+      props.$position === 0 
+        ? 'linear-gradient(90deg, #f0b90b, #ffee58, #f0b90b)' 
+        : props.$position === 1 
+          ? 'linear-gradient(90deg, #A3A3A3, #FFFFFF, #A3A3A3)' 
+          : 'linear-gradient(90deg, #CD7F32, #FFA07A, #CD7F32)'};
+    background-size: 200% auto;
+    animation: ${shine} 3s linear infinite;
   }
-`;
-
-const OscarLogo = styled.img`
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  margin-right: 15px;
-  animation: ${pulse} 3s infinite ease-in-out;
-  z-index: 2;
-`;
-
-const OscarTitle = styled.h2`
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin: 0;
-  background: linear-gradient(90deg, #FF8F24, #FFD700);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  letter-spacing: 1px;
-  z-index: 2;
-`;
-
-// Toggle section
-const ToggleContainer = styled.div`
-  display: flex;
-  background-color: #1a1e2e;
-  border-radius: 30px;
-  width: 400px;
-  margin-bottom: 30px;
-  overflow: hidden;
-  
-  @media (max-width: 600px) {
-    width: 100%;
-    max-width: 400px;
-  }
-`;
-
-const ToggleButton = styled.div`
-  flex: 1;
-  padding: 12px 0;
-  text-align: center;
-  cursor: pointer;
-  transition: background-color 0.3s;
-  
-  &.active {
-    background-color: #2a304a;
-  }
-`;
-
-// Info box in dark theme with border
-const InfoBox = styled.div`
-  background: #0f111a;
-  border-radius: 12px;
-  padding: 2.5rem;
-  margin-bottom: 3rem;
-  width: 100%;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-`;
-
-// Title area
-const TitleArea = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2.5rem;
-  
-  @media (max-width: 768px) {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1.5rem;
-  }
-`;
-
-const MainTitle = styled.h1`
-  font-size: 2.5rem;
-  color: #FF8F24;
-  margin: 0;
-  font-weight: 700;
-`;
-
-const RewardPool = styled.div`
-  background: #000;
-  padding: 1.5rem 2rem;
-  border-radius: 8px;
-  text-align: center;
-  color: #fff;
-  border: 1px solid rgba(255, 143, 36, 0.3);
   
   h3 {
-    font-size: 1rem;
-    font-weight: 400;
-    margin: 0 0 0.5rem 0;
-    text-transform: uppercase;
-    opacity: 0.8;
+    margin: 0;
+    color: ${props => props.$position === 0 ? '#f0b90b' : props.$position === 1 ? '#A3A3A3' : '#CD7F32'};
+    font-size: 1.2rem;
+  }
+  
+  @media (max-width: 768px) {
+    transform: none;
+    width: 220px;
+  }
+`;
+
+const Avatar = styled.div`
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+  background: #282B3E;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  border: 2px solid ${props => 
+    props.$rank === 1 ? '#f0b90b' : 
+    props.$rank === 2 ? '#A3A3A3' : 
+    props.$rank === 3 ? '#CD7F32' : 'transparent'};
+  
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  
+  .initials {
+    color: ${props => 
+      props.$rank === 1 ? '#f0b90b' : 
+      props.$rank === 2 ? '#A3A3A3' : 
+      props.$rank === 3 ? '#CD7F32' : '#ffffff'};
+    font-size: 1.5rem;
+    font-weight: bold;
+  }
+`;
+
+const Trophy = styled.div`
+  position: absolute;
+  top: -30px;
+  z-index: 2;
+  color: ${props => props.$position === 0 ? '#f0b90b' : props.$position === 1 ? '#A3A3A3' : '#CD7F32'};
+  font-size: 2.2rem;
+  animation: ${pulse} 2s infinite ease-in-out;
+  background: rgba(26, 28, 42, 0.8);
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+`;
+
+const UserDetails = styled.div`
+  text-align: center;
+  margin-top: 0.5rem;
+  
+  .name {
+    font-weight: bold;
+    color: #fff;
+    margin-bottom: 0.2rem;
+  }
+  
+  .amount {
+    color: #f0b90b;
+    font-size: 1.1rem;
+  }
+`;
+
+const Podium = styled.div`
+  width: 100%;
+  height: ${props => props.$position === 0 ? '80px' : props.$position === 1 ? '60px' : '40px'};
+  background: ${props => props.$position === 0 ? '#f0b90b' : props.$position === 1 ? '#A3A3A3' : '#CD7F32'};
+  border-radius: 8px 8px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #000;
+  font-weight: bold;
+  font-size: 1.2rem;
+  
+  @media (max-width: 768px) {
+    height: 40px;
+  }
+`;
+
+const UserStatsContainer = styled.div`
+  background: #1A1C2A;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 1px solid #282B3E;
+  text-align: center;
+  
+  h3 {
+    margin-top: 0;
+    color: #fff;
   }
   
   p {
-    font-size: 1.8rem;
-    font-weight: 700;
-    margin: 0;
-    color: #FF8F24;
+    margin: 0.5rem 0;
+    color: #B7BDC6;
+    font-size: 1rem;
+  }
+  
+  .highlight {
+    color: #f0b90b;
+    font-weight: bold;
   }
 `;
 
-// Content grid
-const ContentGrid = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 3rem;
+const LeaderboardContainer = styled.div`
+  background: #13141C;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 1px solid #282B3E;
   
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-    gap: 2rem;
+  h2 {
+    margin-top: 0;
+    color: #fff;
+    margin-bottom: 1.5rem;
   }
-`;
-
-// Section styling
-const Section = styled.div`
-  margin-bottom: 2rem;
-`;
-
-const SectionHeader = styled.h2`
-  color: #FF8F24;
-  font-size: 1.25rem;
-  margin: 0 0 1.2rem 0;
-  display: flex;
-  align-items: center;
-  
-  &::before {
-    content: '•';
-    margin-right: 0.75rem;
-    color: #FF8F24;
-  }
-`;
-
-const SectionContent = styled.div`
-  font-size: 1.1rem;
-  color: #fff;
-  line-height: 1.6;
-  margin-left: 1.5rem;
-`;
-
-// Table styling for reward breakdown
-const RewardTable = styled.div`
-  width: 100%;
-  margin-left: 1.5rem;
-`;
-
-const RewardRow = styled.div`
-  display: flex;
-  justify-content: space-between;
-  padding: 0.85rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  
-  &:last-child {
-    border-bottom: none;
-  }
-`;
-
-const RewardPlace = styled.div`
-  font-size: 1.1rem;
-  color: #fff;
-`;
-
-const RewardAmount = styled.div`
-  font-size: 1.1rem;
-  color: #fff;
-  font-weight: 600;
-  text-align: right;
-`;
-
-// Characters container
-const CharactersContainer = styled.div`
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
-  max-width: 1200px;
-  margin-bottom: 30px;
-  
-  @media (max-width: 1200px) {
-    flex-direction: column;
-    align-items: center;
-  }
-`;
-
-// Character card
-const CharacterCard = styled.div`
-  background-color: #1a1e2e;
-  border-radius: 20px;
-  width: 30%;
-  padding-top: 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  overflow: hidden;
-  animation: ${float} 4s ease-in-out infinite;
-  animation-delay: ${props => props.$delay || '0s'};
-  
-  ${props => props.$featured && `
-    transform: scale(1.05);
-    box-shadow: 0 0 20px rgba(94, 158, 255, 0.3);
-  `}
-  
-  @media (max-width: 1200px) {
-    width: 80%;
-    max-width: 350px;
-    margin-bottom: 20px;
-  }
-`;
-
-const TrophyIcon = styled.div`
-  background-color: ${props => props.$color || '#f0d78c'};
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-bottom: 10px;
-  
-  img {
-    width: 24px;
-    height: 24px;
-  }
-`;
-
-const CharacterAvatar = styled.div`
-  width: 100px;
-  height: 100px;
-  border-radius: 20px;
-  margin-bottom: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: ${props => props.$color || '#f0d78c'};
-  font-size: 3.5rem;
-  font-weight: 800;
-  color: rgba(0, 0, 0, 0.7);
-`;
-
-const CharacterName = styled.h2`
-  font-size: 24px;
-  font-weight: 600;
-  margin-bottom: 20px;
-  color: ${props => props.$color || 'white'};
-`;
-
-const PrizeContainer = styled.div`
-  background-color: #141824;
-  width: 100%;
-  padding: 20px 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-`;
-
-// User stats
-const StatusBar = styled.div`
-  background-color: #1a1e2e;
-  border-radius: 30px;
-  padding: 15px 30px;
-  margin-bottom: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  
-  span {
-    color: #5e9eff;
-    margin: 0 5px;
-  }
-`;
-
-// Leaderboard
-const Leaderboard = styled.div`
-  width: 100%;
-  max-width: 1200px;
 `;
 
 const LeaderboardHeader = styled.div`
   display: grid;
-  grid-template-columns: 100px 1fr 100px;
-  padding: 10px 20px;
-  color: #8a8d98;
-  font-size: 14px;
+  grid-template-columns: 80px 1fr 1fr;
+  padding: 0.5rem 1rem;
+  background: #1A1C2A;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  font-weight: bold;
+  color: #B7BDC6;
+  
+  span {
+    font-size: 0.9rem;
+  }
 `;
 
 const LeaderboardRow = styled.div`
   display: grid;
-  grid-template-columns: 100px 1fr 100px;
-  padding: 20px;
-  background-color: #1a1e2e;
-  border-radius: 10px;
-  margin-bottom: 10px;
+  grid-template-columns: 80px 1fr 1fr;
+  padding: 0.8rem 1rem;
+  background: ${props => props.$isCurrentUser ? 'rgba(240, 185, 11, 0.08)' : '#1A1C2A'};
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
   align-items: center;
-  animation: ${fadeIn} 0.5s ease-out;
-`;
-
-const Place = styled.div`
-  display: flex;
-  align-items: center;
-  color: ${props => {
-    if (props.$rank === 1) return '#FFD700';
-    if (props.$rank === 2) return '#C0C0C0';
-    if (props.$rank === 3) return '#CD7F32';
-    return '#fff';
-  }};
+  animation: ${fadeIn} 0.3s ease-in-out;
   
-  svg, img {
-    width: 16px;
-    height: 16px;
-    margin-right: 10px;
+  &:hover {
+    background: ${props => props.$isCurrentUser ? 'rgba(240, 185, 11, 0.12)' : '#242738'};
   }
 `;
 
-// Empty state
-const NoData = styled.div`
-  text-align: center;
-  padding: 3.5rem;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 1.1rem;
+const RankCell = styled.div`
+  font-weight: bold;
+  color: ${props => props.$isTop3 ? (
+    props.$rank === 1 ? '#f0b90b' : 
+    props.$rank === 2 ? '#A3A3A3' : 
+    '#CD7F32'
+  ) : '#fff'};
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  
+  .rank-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 `;
 
-// Loading state
-const LoadingWrapper = styled.div`
+const UserCell = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  
+  .avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: #282B3E;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid ${props => 
+      props.$rank === 1 ? '#f0b90b' : 
+      props.$rank === 2 ? '#A3A3A3' : 
+      props.$rank === 3 ? '#CD7F32' : 'transparent'};
+    
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    .initials {
+      color: ${props => 
+        props.$rank === 1 ? '#f0b90b' : 
+        props.$rank === 2 ? '#A3A3A3' : 
+        props.$rank === 3 ? '#CD7F32' : '#ffffff'};
+      font-weight: bold;
+    }
+  }
+  
+  .name {
+    color: #fff;
+    font-size: 0.95rem;
+  }
+`;
+
+const AmountCell = styled.div`
+  color: #f0b90b;
+  text-align: right;
+  font-weight: 500;
+`;
+
+const LoadingContainer = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 300px;
+  min-height: 200px;
+  
+  .loader {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #282B3E;
+    border-radius: 50%;
+    border-top: 4px solid #f0b90b;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
 `;
 
-// Diamond icon SVG
-const DiamondIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2.7 10.3a2.41 2.41 0 0 0 0 3.41l7.59 7.59a2.41 2.41 0 0 0 3.41 0l7.59-7.59a2.41 2.41 0 0 0 0-3.41l-7.59-7.59a2.41 2.41 0 0 0-3.41 0Z"></path>
-  </svg>
-);
+const EmptyState = styled.div`
+  text-align: center;
+  padding: 2rem;
+  color: #B7BDC6;
+  
+  p {
+    margin-bottom: 1rem;
+  }
+`;
 
-// Trophy icon SVG
-const TrophySvg = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
-    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
-    <path d="M4 22h16"></path>
-    <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
-    <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
-    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
-  </svg>
-);
-
-// Function to get prize amount based on rank
-const getPrizeAmount = (rank) => {
-  if (rank === 1) return '2000';
-  if (rank === 2) return '1000';
-  if (rank === 3) return '800';
-  if (rank === 4) return '700';
-  if (rank === 5) return '500';
-  if (rank >= 6 && rank <= 10) return '400';
-  if (rank >= 11 && rank <= 50) return '200';
-  if (rank >= 51 && rank <= 100) return '100';
-  return '0';
-};
-
-// Add this function near the top of the component
-const getSampleUserData = () => {
-  return [
-    {
-      id: 'sample1',
-      displayName: 'Developer Rahat',
-      oscarBalance: 32000.00,
-      email: 'developer@example.com'
-    },
-    {
-      id: 'sample2',
-      displayName: 'Heather Youssefi',
-      oscarBalance: 200.83,
-      email: 'heather@example.com'
-    },
-    {
-      id: 'sample3',
-      displayName: 'Blessed Tonderai Marimba',
-      oscarBalance: 0,
-      email: 'blessed@example.com'
-    },
-    {
-      id: 'sample4',
-      displayName: 'Kiru',
-      oscarBalance: 0,
-      email: 'kiru@example.com'
-    }
-  ];
-};
-
-// Competition component
 const Competition = () => {
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [userRank, setUserRank] = useState(null);
-  const [loading, setLoading] = useState(true);
   const { currentUser } = useAuth();
-  const [activeTab, setActiveTab] = useState('daily');
-
+  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState([]);
+  const [userRank, setUserRank] = useState(null);
+  const [totalUsers, setTotalUsers] = useState(0);
+  
+  // Fetch users with OSCAR token balances
   useEffect(() => {
-    const fetchLeaderboard = async () => {
-      setLoading(true);
+    const fetchUsers = async () => {
       try {
-        // Get ALL users, not just users with OSCAR balance
-        const usersRef = collection(db, 'users');
-        // Use a query with no restrictions to ensure all data is visible to everyone
-        const usersSnapshot = await getDocs(usersRef);
+        setLoading(true);
         
-        // Include sample data first to ensure it's always visible
-        let leaderboardData = [...getSampleUserData()];
-        const adminEmails = ['admin@example.com', 'admin@rippleexchange.com', 'ihrahat@gmail.com']; // Add actual admin emails
+        // Get all users and filter for those with OSCAR balance
+        const usersRef = collection(db, "users");
+        const querySnapshot = await getDocs(usersRef);
         
-        // Process each user document
-        for (const userDoc of usersSnapshot.docs) {
-          const userData = userDoc.data();
+        const userData = [];
+        querySnapshot.forEach(doc => {
+          const user = doc.data();
+          // Check if user has OSCAR balance
+          const oscarBalance = user.balances?.OSCAR || 0;
           
-          // Skip sample IDs to prevent duplicates
-          if (userData.id && ['sample1', 'sample2', 'sample3', 'sample4'].includes(userData.id)) {
-            continue;
+          if (oscarBalance > 0) {
+            userData.push({
+              id: doc.id,
+              name: user.displayName || 'Anonymous',
+              email: user.email || '',
+              photoURL: user.photoURL || '',
+              balance: oscarBalance
+            });
           }
-          
-          // Get OSCAR balance (default to 0 if not available)
-          // For admins or test accounts, ensure their data is always visible
-          const isAdminOrTestAccount = userData.isAdmin === true || 
-                                     userData.role === 'admin' || 
-                                     (userData.email && adminEmails.includes(userData.email));
-          
-          const oscarBalance = userData.balances && userData.balances.OSCAR ? 
-            parseFloat(userData.balances.OSCAR) : (isAdminOrTestAccount ? Math.random() * 100 : 0);
-          
-          // Format display name for better readability
-          let displayName = 'Anonymous';
-          
-          if (userData.displayName && userData.displayName.trim() !== '') {
-            // Use display name if available
-            displayName = userData.displayName;
-          } else if (userData.email) {
-            // If no display name, use email username part (before @)
-            const emailParts = userData.email.split('@');
-            if (emailParts.length > 0) {
-              displayName = emailParts[0];
-              // Partially mask long usernames for privacy
-              if (displayName.length > 8) {
-                displayName = displayName.substring(0, 5) + '...';
-              }
-            }
-          }
-          
-          // Add all users to the leaderboard, even those with 0 balances
-          leaderboardData.push({
-            id: userDoc.id,
-            email: userData.email || 'Anonymous',
-            displayName: displayName,
-            oscarBalance: oscarBalance,
-            isAdmin: isAdminOrTestAccount
-          });
-        }
+        });
         
-        // Sort by OSCAR balance (descending)
-        leaderboardData.sort((a, b) => b.oscarBalance - a.oscarBalance);
+        // Sort by OSCAR balance descending
+        const sortedUsers = userData.sort((a, b) => b.balance - a.balance);
         
-        // Add rank to each entry
-        leaderboardData = leaderboardData.map((entry, index) => ({
-          ...entry,
-          rank: index + 1,
-          prize: getPrizeAmount(index + 1)
-        }));
-        
-        console.log('Leaderboard data retrieved:', leaderboardData.length, 'users'); // Debug log
-        setLeaderboard(leaderboardData);
+        setUsers(sortedUsers);
+        setTotalUsers(sortedUsers.length);
         
         // Find current user's rank if logged in
         if (currentUser) {
-          const currentUserRank = leaderboardData.find(entry => entry.id === currentUser.uid);
-          setUserRank(currentUserRank);
+          const userIndex = sortedUsers.findIndex(user => user.id === currentUser.uid);
+          if (userIndex !== -1) {
+            setUserRank(userIndex + 1);
+          }
         }
+        
       } catch (error) {
-        console.error('Error fetching leaderboard data:', error);
-        // If there's an error, still show sample data
-        const sampleData = getSampleUserData().map((entry, index) => ({
-          ...entry,
-          rank: index + 1,
-          prize: getPrizeAmount(index + 1)
-        }));
-        setLeaderboard(sampleData);
+        console.error("Error fetching user data:", error);
       } finally {
         setLoading(false);
       }
     };
     
-    fetchLeaderboard();
+    fetchUsers();
   }, [currentUser]);
-
-  // Format number with commas and 2 decimal places
-  const formatNumber = (num) => {
-    return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  
+  const getInitials = (name) => {
+    if (!name || name === 'Anonymous') return 'AN';
+    return name.split(' ').map(part => part[0]).join('').toUpperCase().substring(0, 2);
   };
-
-  // Get user's initial for avatar
-  const getUserInitial = (displayName) => {
-    return displayName && displayName.charAt(0).toUpperCase();
+  
+  // Get trophy icon based on rank
+  const getTrophyIcon = (rank) => {
+    switch(rank) {
+      case 1:
+        return <GiLaurelCrown size={28} />;
+      case 2:
+        return <FaTrophy size={24} />;
+      case 3:
+        return <FaMedal size={24} />;
+      default:
+        return null;
+    }
   };
-
-  const getTopThreeUsers = () => {
-    return [
-      leaderboard.find(entry => entry.rank === 1) || null,
-      leaderboard.find(entry => entry.rank === 2) || null,
-      leaderboard.find(entry => entry.rank === 3) || null
-    ];
-  };
-
-  const topThree = getTopThreeUsers();
-
+  
+  // Get top 3 users for podium
+  const topUsers = users.slice(0, 3);
+  
   return (
-    <CompetitionContainer>
-      {/* OSCAR Logo and Title */}
-      <OscarLogoContainer>
-        <OscarLogo src={oscarLogo} alt="OSCAR" />
-        <OscarTitle>OSCAR</OscarTitle>
-      </OscarLogoContainer>
-      
-      {/* Toggle Section */}
-      
-      {/* Competition Info Box */}
-      <InfoBox>
-        <TitleArea>
-          <MainTitle>$OSCAR Deposit Competition</MainTitle>
-          <RewardPool>
-            <h3>Reward Pool</h3>
-            <p>20,000 USDT</p>
-          </RewardPool>
-        </TitleArea>
+    <Container>
+      <CompetitionHeader>
+        <Title>OSCAR Holders Competition</Title>
         
-        <ContentGrid>
-          <div>
-            <Section>
-              <SectionHeader>Competition Details</SectionHeader>
-              <SectionContent>
-                Top 100 users who deposit the highest amount of $OSCAR
-              </SectionContent>
-            </Section>
-            
-            <Section>
-              <SectionHeader>Competition Period</SectionHeader>
-              <SectionContent>
-                6 days (Start - 16th April 4pm UTC) (End - 22nd April 4pm UTC)
-              </SectionContent>
-            </Section>
-            
-            <Section>
-              <SectionHeader>Reward Distribution</SectionHeader>
-              <SectionContent>
-                23rd April 4pm UTC
-              </SectionContent>
-            </Section>
+        <CompetitionInfo>
+          <h3>Reward Pool</h3>
+          <p className="highlight">5,000 OSCAR</p>
+          <p>Hold OSCAR tokens to qualify for rewards</p>
+        </CompetitionInfo>
+        
+        <RewardTable>
+          <h3>Reward Distribution</h3>
+          <div className="table">
+            <div className="row">
+              <div className="cell">1st Place</div>
+              <div className="cell">2,000 OSCAR</div>
+            </div>
+            <div className="row">
+              <div className="cell">2nd Place</div>
+              <div className="cell">1,500 OSCAR</div>
+            </div>
+            <div className="row">
+              <div className="cell">3rd Place</div>
+              <div className="cell">1,000 OSCAR</div>
+            </div>
+            <div className="row">
+              <div className="cell">4th-10th Places</div>
+              <div className="cell">500 OSCAR</div>
+            </div>
           </div>
+        </RewardTable>
+      </CompetitionHeader>
+      
+      {loading ? (
+        <LoadingContainer>
+          <div className="loader"></div>
+        </LoadingContainer>
+      ) : (
+        <>
+          {topUsers.length > 0 ? (
+            <PodiumContainer>
+              {/* Order podium as 2nd, 1st, 3rd */}
+              {[1, 0, 2].map((index) => {
+                const position = index;
+                const actualRank = position + 1;
+                const user = topUsers[position];
+                
+                if (!user) return null;
+                
+                return (
+                  <PodiumPosition key={position} $position={position}>
+                    <Trophy $position={position}>
+                      {getTrophyIcon(actualRank)}
+                    </Trophy>
+                    
+                    <PodiumBox $position={position}>
+                      <h3>{position === 0 ? 'Skulldugger' : position === 1 ? 'Klaxxon' : 'Ultralex'}</h3>
+                      <Avatar $rank={actualRank}>
+                        {user.photoURL ? (
+                          <img src={user.photoURL} alt={user.name} />
+                        ) : (
+                          <div className="initials">{getInitials(user.name)}</div>
+                        )}
+                      </Avatar>
+                      <UserDetails>
+                        <div className="name">{user.name}</div>
+                        <div className="amount">{user.balance.toLocaleString()} OSCAR</div>
+                      </UserDetails>
+                    </PodiumBox>
+                    
+                    <Podium $position={position}>
+                      {actualRank}
+                    </Podium>
+                  </PodiumPosition>
+                );
+              })}
+            </PodiumContainer>
+          ) : null}
           
-          <div>
-            <Section>
-              <SectionHeader>Reward Breakdown</SectionHeader>
-              <RewardTable>
-                <RewardRow>
-                  <RewardPlace>1st Place</RewardPlace>
-                  <RewardAmount>2000 USDT</RewardAmount>
-                </RewardRow>
-                <RewardRow>
-                  <RewardPlace>2nd Place</RewardPlace>
-                  <RewardAmount>1000 USDT</RewardAmount>
-                </RewardRow>
-                <RewardRow>
-                  <RewardPlace>3rd Place</RewardPlace>
-                  <RewardAmount>800 USDT</RewardAmount>
-                </RewardRow>
-                <RewardRow>
-                  <RewardPlace>4th Place</RewardPlace>
-                  <RewardAmount>700 USDT</RewardAmount>
-                </RewardRow>
-                <RewardRow>
-                  <RewardPlace>5th Place</RewardPlace>
-                  <RewardAmount>500 USDT</RewardAmount>
-                </RewardRow>
-                <RewardRow>
-                  <RewardPlace>6th - 10th Place</RewardPlace>
-                  <RewardAmount>400 USDT/each</RewardAmount>
-                </RewardRow>
-                <RewardRow>
-                  <RewardPlace>11th - 50th Place</RewardPlace>
-                  <RewardAmount>200 USDT/each</RewardAmount>
-                </RewardRow>
-                <RewardRow>
-                  <RewardPlace>51st - 100th Place</RewardPlace>
-                  <RewardAmount>100 USDT/each</RewardAmount>
-                </RewardRow>
-              </RewardTable>
-            </Section>
-          </div>
-        </ContentGrid>
-      </InfoBox>
-      
-      {/* Character Cards */}
-      <CharactersContainer>
-        {/* Second Place */}
-        <CharacterCard $delay="0.3s">
-          <TrophyIcon $color="#e0e0e0">
-            <TrophySvg />
-          </TrophyIcon>
-          <CharacterAvatar $color="#C0C0C0">
-            {topThree[1] ? getUserInitial(topThree[1].displayName) : "?"}
-          </CharacterAvatar>
-          <CharacterName>
-            {topThree[1] ? topThree[1].displayName : "No User Yet"}
-          </CharacterName>
-        </CharacterCard>
-        
-        {/* First Place */}
-        <CharacterCard $featured={true}>
-          <TrophyIcon>
-            <TrophySvg />
-          </TrophyIcon>
-          <CharacterAvatar $color="#FFD700">
-            {topThree[0] ? getUserInitial(topThree[0].displayName) : "?"}
-          </CharacterAvatar>
-          <CharacterName>
-            {topThree[0] ? topThree[0].displayName : "No User Yet"}
-          </CharacterName>
-        </CharacterCard>
-        
-        {/* Third Place */}
-        <CharacterCard $delay="0.6s">
-          <TrophyIcon $color="#CD7F32">
-            <TrophySvg />
-          </TrophyIcon>
-          <CharacterAvatar $color="#CD7F32">
-            {topThree[2] ? getUserInitial(topThree[2].displayName) : "?"}
-          </CharacterAvatar>
-          <CharacterName>
-            {topThree[2] ? topThree[2].displayName : "No User Yet"}
-          </CharacterName>
-        </CharacterCard>
-      </CharactersContainer>
-      
-      {/* User Stats - only shown if user is logged in */}
-      {currentUser && userRank && (
-        <StatusBar>
-          You are ranked <span>#{userRank.rank}</span> out of <span>{leaderboard.length}</span> users
-        </StatusBar>
+          {currentUser && userRank && (
+            <UserStatsContainer>
+              <h3>Your Ranking</h3>
+              <p>
+                You are ranked <span className="highlight">#{userRank}</span> out of {totalUsers} competitors
+              </p>
+            </UserStatsContainer>
+          )}
+          
+          <LeaderboardContainer>
+            <h2>Leaderboard</h2>
+            
+            <LeaderboardHeader>
+              <span>Rank</span>
+              <span>User</span>
+              <span style={{ textAlign: 'right' }}>Amount</span>
+            </LeaderboardHeader>
+            
+            {users.length > 0 ? (
+              <>
+                {users.map((user, index) => {
+                  const rank = index + 1;
+                  const isCurrentUser = currentUser && user.id === currentUser.uid;
+                  const isTop3 = rank <= 3;
+                  
+                  return (
+                    <LeaderboardRow 
+                      key={user.id}
+                      $isCurrentUser={isCurrentUser}
+                    >
+                      <RankCell $isTop3={isTop3} $rank={rank}>
+                        {isTop3 && <div className="rank-icon">{getTrophyIcon(rank)}</div>}
+                        {rank}
+                      </RankCell>
+                      <UserCell $rank={rank}>
+                        <div className="avatar">
+                          {user.photoURL ? (
+                            <img src={user.photoURL} alt={user.name} />
+                          ) : (
+                            <div className="initials">{getInitials(user.name)}</div>
+                          )}
+                        </div>
+                        <div className="name">{user.name}</div>
+                      </UserCell>
+                      <AmountCell>
+                        {user.balance.toLocaleString()} OSCAR
+                      </AmountCell>
+                    </LeaderboardRow>
+                  );
+                })}
+              </>
+            ) : (
+              <EmptyState>
+                <p>No users found with OSCAR tokens.</p>
+              </EmptyState>
+            )}
+          </LeaderboardContainer>
+        </>
       )}
-      
-      {/* If user is not logged in, show a message encouraging them to login */}
-      {!currentUser && (
-        <StatusBar style={{ background: 'rgba(255, 143, 36, 0.15)' }}>
-          <Link to="/login" style={{ color: '#FF8F24', textDecoration: 'underline' }}>Log in</Link> to see your ranking in the competition
-        </StatusBar>
-      )}
-      
-      {/* Leaderboard */}
-      <Leaderboard>
-        <LeaderboardHeader>
-          <div>Place</div>
-          <div>Username</div>
-          <div>OSCAR Amount</div>
-        </LeaderboardHeader>
-        
-        {loading ? (
-          <LoadingWrapper>
-            <Loading />
-          </LoadingWrapper>
-        ) : leaderboard.length > 0 ? (
-          leaderboard.map((entry) => (
-            <LeaderboardRow key={entry.id}>
-              <Place $rank={entry.rank}>
-                {entry.rank <= 3 && <TrophySvg />}
-                {entry.rank}
-              </Place>
-              <div>{entry.displayName}</div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                <DiamondIcon style={{ marginRight: '5px' }} />
-                {formatNumber(entry.oscarBalance)}
-              </div>
-            </LeaderboardRow>
-          ))
-        ) : (
-          <NoData>No participants yet. Be the first to join!</NoData>
-        )}
-      </Leaderboard>
-    </CompetitionContainer>
+    </Container>
   );
 };
 
