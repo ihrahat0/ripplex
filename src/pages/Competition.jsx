@@ -1,3 +1,5 @@
+// Competition component - Shows the leaderboard for OSCAR token holders
+// Updated with improved visuals and trophy icons
 import React, { useState, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { useAuth } from '../contexts/AuthContext';
