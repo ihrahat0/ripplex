@@ -532,36 +532,75 @@ const Competition = () => {
   return (
     <Container>
       <CompetitionHeader>
-        <Title>OSCAR Holders Competition</Title>
+        <Title>$OSCAR Deposit Competition</Title>
         
         <CompetitionInfo>
           <h3>Reward Pool</h3>
-          <p className="highlight">5,000 OSCAR</p>
-          <p>Hold OSCAR tokens to qualify for rewards</p>
+          <p className="highlight">20,000 USDT</p>
+          <p>Top 100 users who deposit the highest amount of $OSCAR</p>
         </CompetitionInfo>
         
         <RewardTable>
           <h3>Reward Distribution</h3>
           <div className="table">
             <div className="row">
-              <div className="cell">1st Place</div>
-              <div className="cell">2,000 OSCAR</div>
+              <div className="cell">Competition Period</div>
+              <div className="cell">6 days</div>
             </div>
             <div className="row">
-              <div className="cell">2nd Place</div>
-              <div className="cell">1,500 OSCAR</div>
+              <div className="cell">Start Date</div>
+              <div className="cell">16th April 4pm UTC</div>
             </div>
             <div className="row">
-              <div className="cell">3rd Place</div>
-              <div className="cell">1,000 OSCAR</div>
+              <div className="cell">End Date</div>
+              <div className="cell">22nd April 4pm UTC</div>
             </div>
             <div className="row">
-              <div className="cell">4th-10th Places</div>
-              <div className="cell">500 OSCAR</div>
+              <div className="cell">Rewards Distribution</div>
+              <div className="cell">23rd April 4pm UTC</div>
             </div>
           </div>
         </RewardTable>
       </CompetitionHeader>
+      
+      {/* Additional Reward Breakdown */}
+      <RewardTable style={{ marginBottom: '2rem' }}>
+        <h3>Reward Breakdown</h3>
+        <div className="table">
+          <div className="row">
+            <div className="cell">1st Place</div>
+            <div className="cell">2,000 USDT</div>
+          </div>
+          <div className="row">
+            <div className="cell">2nd Place</div>
+            <div className="cell">1,000 USDT</div>
+          </div>
+          <div className="row">
+            <div className="cell">3rd Place</div>
+            <div className="cell">800 USDT</div>
+          </div>
+          <div className="row">
+            <div className="cell">4th Place</div>
+            <div className="cell">700 USDT</div>
+          </div>
+          <div className="row">
+            <div className="cell">5th Place</div>
+            <div className="cell">500 USDT</div>
+          </div>
+          <div className="row">
+            <div className="cell">6th - 10th Places</div>
+            <div className="cell">400 USDT/each</div>
+          </div>
+          <div className="row">
+            <div className="cell">11th - 50th Places</div>
+            <div className="cell">200 USDT/each</div>
+          </div>
+          <div className="row">
+            <div className="cell">51st - 100th Places</div>
+            <div className="cell">100 USDT/each</div>
+          </div>
+        </div>
+      </RewardTable>
       
       {loading ? (
         <LoadingContainer>
