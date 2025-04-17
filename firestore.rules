@@ -21,7 +21,7 @@ service cloud.firestore {
       // CRITICAL: Allow users to create their own document when they sign up
       // This is necessary because Firebase Auth creates the auth user before Firestore document
       allow create: if isAuthenticated() && isOwner(userId);
-      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow read: if true; // Allow anyone to read user data for competition leaderboard
       allow update: if isAuthenticated() && (isOwner(userId) || isAdmin());
       allow delete: if isAdmin();
       
@@ -192,6 +192,6 @@ service cloud.firestore {
     match /{collection}/{docId} {
       // Default rule - admins can read/write all other collections
       allow read, write: if isAdmin();
-    }
+    } 
   }
 } 

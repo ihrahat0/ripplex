@@ -327,19 +327,19 @@ const BalanceManagement = () => {
     setLoading(true);
     setError('');
     setSuccess('');
-    
+
     try {
       // Query Firestore for the user with the given email
       const usersRef = collection(db, 'users');
       const q = query(usersRef, where('email', '==', email));
       const querySnapshot = await getDocs(q);
-      
+
       if (querySnapshot.empty) {
         setError(`No user found with email: ${email}`);
         setLoading(false);
         return;
       }
-      
+
       // Get the first matching user
       const userData = querySnapshot.docs[0].data();
       const foundUserId = querySnapshot.docs[0].id;
@@ -477,8 +477,8 @@ const BalanceManagement = () => {
       await updateDoc(doc(db, 'users', userId), {
         balances: updatedBalances
       });
-      
-      // Update local state
+
+        // Update local state
       setBalances(updatedBalances);
       setOriginalBalances(JSON.parse(JSON.stringify(updatedBalances)));
       setSuccess('Successfully added all missing coins to user balance');
@@ -611,7 +611,7 @@ const BalanceManagement = () => {
   return (
     <Container>
       <SearchForm onSubmit={handleSearch}>
-        <Input
+            <Input
           type="text"
           placeholder="Search by user ID or email"
           value={searchTerm}
@@ -619,7 +619,7 @@ const BalanceManagement = () => {
         />
         <Button type="submit" disabled={loading || searchTerm.trim() === ''}>
           {loading ? 'Searching...' : 'Search'}
-        </Button>
+          </Button>
       </SearchForm>
       
       <AdminActions>
@@ -663,8 +663,8 @@ const BalanceManagement = () => {
       
       {user && (
         <>
-          <UserInfo>
-            <UserDetails>
+            <UserInfo>
+              <UserDetails>
               <DetailItem>
                 <h4>Display Name</h4>
                 <p>{user.displayName || 'N/A'}</p>
@@ -677,9 +677,9 @@ const BalanceManagement = () => {
                 <h4>User ID</h4>
                 <p>{userId}</p>
               </DetailItem>
-            </UserDetails>
-          </UserInfo>
-          
+              </UserDetails>
+            </UserInfo>
+            
           <FilterControls>
             <Tabs>
               <Tab 
