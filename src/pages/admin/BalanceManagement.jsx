@@ -1,632 +1,552 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { db } from '../../firebase';
 import { collection, doc, getDoc, getDocs, updateDoc, query, where } from 'firebase/firestore';
 import styled from 'styled-components';
 import { toast } from 'react-hot-toast';
 import { DEFAULT_COINS } from '../../utils/constants';
 
+// Enhanced styling for balance management
 const Container = styled.div`
-  padding: 20px;
-  color: var(--text);
+  background: #161b22;
+  border-radius: 10px;
+  padding: 25px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  border: 1px solid #30363d;
 `;
 
-const SearchContainer = styled.div`
+const SearchForm = styled.form`
+  display: flex;
   margin-bottom: 30px;
-  background: var(--bg2);
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-`;
-
-const UserCard = styled.div`
-  background: var(--bg2);
-  padding: 20px;
-  border-radius: 10px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-`;
-
-const UserInfo = styled.div`
-  display: flex;
-  align-items: center;
-  margin-bottom: 20px;
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 15px;
-`;
-
-const Avatar = styled.div`
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background: var(--primary);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  margin-right: 15px;
-`;
-
-const UserDetails = styled.div`
-  flex: 1;
-`;
-
-const BalanceGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 20px;
-  margin-top: 20px;
-`;
-
-const BalanceCard = styled.div`
-  background: var(--bg1);
-  padding: 15px;
-  border-radius: 8px;
-  position: relative;
-`;
-
-const EditIcon = styled.button`
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  
-  &:hover {
-    color: var(--primary);
-  }
-`;
-
-const FormGroup = styled.div`
-  margin-bottom: 20px;
-`;
-
-const Label = styled.label`
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
+  gap: 10px;
 `;
 
 const Input = styled.input`
-  width: 100%;
-  padding: 10px;
-  border-radius: 4px;
-  border: 1px solid var(--line);
-  background: var(--bg1);
-  color: var(--text);
-  margin-bottom: 8px;
+  flex: 1;
+  padding: 12px 15px;
+  border-radius: 6px;
+  border: 1px solid #30363d;
+  background: #0d1117;
+  color: #e6edf3;
+  font-size: 16px;
+  
+  &:focus {
+    outline: none;
+    border-color: #ff725a;
+    box-shadow: 0 0 0 2px rgba(255, 114, 90, 0.2);
+  }
 `;
 
 const Button = styled.button`
-  padding: 10px 20px;
-  background: var(--primary);
-  color: white;
+  padding: 12px 20px;
+  border-radius: 6px;
   border: none;
-  border-radius: 4px;
-  cursor: pointer;
+  background: #ff725a;
+  color: white;
   font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
   
   &:hover {
-    background: #3a5bd9;
+    background: #e65a42;
   }
   
   &:disabled {
-    opacity: 0.5;
+    opacity: 0.7;
     cursor: not-allowed;
   }
 `;
 
-const ErrorMessage = styled.div`
-  color: #ff3b30;
-  margin: 10px 0;
-  padding: 10px;
-  background: rgba(255, 59, 48, 0.1);
-  border-radius: 4px;
-`;
-
-const SuccessMessage = styled.div`
-  color: #4cd964;
-  margin: 10px 0;
-  padding: 10px;
-  background: rgba(76, 217, 100, 0.1);
-  border-radius: 4px;
-`;
-
-const NoResultsMessage = styled.div`
-  padding: 20px;
-  text-align: center;
-  color: var(--text-secondary);
-  background: var(--bg2);
+const UserInfo = styled.div`
+  background: #0d1117;
   border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 25px;
+  border: 1px solid #30363d;
+`;
+
+const UserDetails = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  margin-bottom: 20px;
+  
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const DetailItem = styled.div`
+  h4 {
+    margin: 0 0 5px 0;
+    color: #8b949e;
+    font-size: 14px;
+    font-weight: 500;
+  }
+  
+  p {
+    margin: 0;
+    font-size: 16px;
+    color: #e6edf3;
+  }
+`;
+
+const BalancesTitle = styled.h3`
+  color: #e6edf3;
+  margin: 0 0 15px 0;
+  font-size: 18px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+`;
+
+const BalancesGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 15px;
   margin-top: 20px;
 `;
 
-const QuickCoinButtons = styled.div`
+const BalanceCard = styled.div`
+  background: ${props => props.$isHighlighted ? 'rgba(255, 114, 90, 0.1)' : 'rgba(13, 17, 23, 0.5)'};
+  border: 1px solid ${props => props.$isHighlighted ? '#ff725a' : '#30363d'};
+  border-radius: 8px;
+  padding: 15px;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+  
+  h4 {
+    margin: 0 0 10px 0;
+    color: ${props => props.$isHighlighted ? '#ff725a' : '#e6edf3'};
+    font-size: 16px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    
+    img {
+      width: 20px;
+      height: 20px;
+      margin-right: 8px;
+      border-radius: 50%;
+    }
+  }
+`;
+
+const BalanceControls = styled.div`
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 15px;
+  gap: 10px;
+  align-items: center;
 `;
 
-const QuickAmountButtons = styled.div`
+const BalanceInfo = styled.div`
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 15px;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
 `;
 
-const CoinButton = styled.button`
-  padding: 8px 12px;
-  background: ${props => props.selected ? 'var(--primary)' : 'var(--bg1)'};
-  color: ${props => props.selected ? 'white' : 'var(--text)'};
-  border: 1px solid ${props => props.selected ? 'var(--primary)' : 'var(--line)'};
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-  
-  &:hover {
-    background: ${props => props.selected ? 'var(--primary)' : 'rgba(58, 91, 217, 0.1)'};
-    border-color: var(--primary);
-  }
+const BalanceAmount = styled.div`
+  font-size: 18px;
+  font-weight: 500;
+  color: #e6edf3;
 `;
 
-const AmountButton = styled.button`
-  padding: 6px 12px;
-  background-color: ${props => props.selected ? '#ff6b00' : '#333'};
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
+const BalanceValue = styled.div`
   font-size: 14px;
-  transition: all 0.2s;
-  
-  &:hover {
-    background-color: ${props => props.selected ? '#ff8c00' : '#444'};
-  }
+  color: #8b949e;
 `;
 
-// Common coins for quick selection
-const COMMON_COINS = ['BTC', 'ETH', 'USDT', 'USDC', 'BNB', 'SOL', 'XRP', 'ADA', 'DOGE'];
+const NoResults = styled.div`
+  text-align: center;
+  padding: 30px;
+  color: #8b949e;
+`;
 
-// Add quick amounts in your component
-const quickAmounts = [0.1, 0.5, 1, 5, 10, 50, 100];
+const Tabs = styled.div`
+  display: flex;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #30363d;
+`;
 
-// Add definition for QuickCoinButton
-const QuickCoinButton = styled.button`
-  padding: 6px 12px;
-  background-color: ${props => props.selected ? '#ff6b00' : '#333'};
-  color: white;
+const Tab = styled.button`
+  padding: 12px 20px;
+  background: transparent;
   border: none;
-  border-radius: 4px;
+  color: ${props => props.active ? '#ff725a' : '#8b949e'};
+  font-weight: ${props => props.active ? '600' : '400'};
+  border-bottom: 2px solid ${props => props.active ? '#ff725a' : 'transparent'};
   cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
   
   &:hover {
-    background-color: ${props => props.selected ? '#ff8c00' : '#444'};
+    color: ${props => props.active ? '#ff725a' : '#e6edf3'};
   }
 `;
 
-const UserSearch = () => {
-  const { userId } = useParams(); // Get userId from URL parameters if available
-  const [searchEmail, setSearchEmail] = useState('');
-  const [searchResults, setSearchResults] = useState(null);
+const SaveAllButton = styled(Button)`
+  background: #238636;
+  margin-left: auto;
+  
+  &:hover {
+    background: #2ea043;
+  }
+`;
+
+const FilterControls = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+`;
+
+const SearchInput = styled(Input)`
+  max-width: 300px;
+`;
+
+const StatusMessage = styled.div`
+  padding: 15px;
+  margin-bottom: 20px;
+  border-radius: 6px;
+  color: ${props => props.$type === 'error' ? '#f85149' : '#3fb950'};
+  background: ${props => props.$type === 'error' ? 'rgba(248, 81, 73, 0.1)' : 'rgba(63, 185, 80, 0.1)'};
+  border: 1px solid ${props => props.$type === 'error' ? 'rgba(248, 81, 73, 0.2)' : 'rgba(63, 185, 80, 0.2)'};
+`;
+
+const BalanceManagement = () => {
+  const { userId } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [editingBalance, setEditingBalance] = useState({ userId: '', coin: '', amount: '' });
-  const [userBalances, setUserBalances] = useState({});
-  const navigate = useNavigate();
-  const [showEditForm, setShowEditForm] = useState(false);
-  const [editBalance, setEditBalance] = useState({ userId: '', token: '', amount: 0, operation: 'set' });
+  const [balances, setBalances] = useState({});
+  const [originalBalances, setOriginalBalances] = useState({});
+  const [balanceSearch, setBalanceSearch] = useState('');
+  const [activeTab, setActiveTab] = useState('all'); // all, main, tokens, defi
+  const [allCoins, setAllCoins] = useState([]);
+  const [hasChanges, setHasChanges] = useState(false);
 
-  // Check for userId in URL params on component mount
+  // Parse query parameters
+  const searchParams = new URLSearchParams(location.search);
+  const emailParam = searchParams.get('email');
+
   useEffect(() => {
-    const loadUserFromId = async () => {
-      if (userId) {
-        setLoading(true);
-        setError('');
-        
-        try {
-          const userDoc = await getDoc(doc(db, 'users', userId));
-          
-          if (userDoc.exists()) {
-            const userData = userDoc.data();
-            setSearchResults({
-              id: userId,
-              ...userData
-            });
-            setSearchEmail(userData.email || '');
-            
-            // Load user balances
-            await fetchUserBalances(userId);
-            
-            setSuccess('User loaded successfully');
-          } else {
-            setError('User not found with that ID');
-          }
-        } catch (err) {
-          console.error('Error loading user from ID:', err);
-          setError('Failed to load user details: ' + err.message);
-        } finally {
-          setLoading(false);
-        }
-      }
-    };
-    
-    loadUserFromId();
-  }, [userId]);
-
-  const searchUserByEmail = async (e) => {
-    e.preventDefault();
-    if (!searchEmail.trim()) {
-      setError('Please enter an email to search');
-      return;
+    // Check for email parameter
+    if (emailParam) {
+      setSearchTerm(emailParam);
+      searchUserByEmail(emailParam);
+    } else if (userId) {
+      fetchUserData(userId);
     }
+    
+    fetchAllCoins();
+  }, [userId, emailParam]);
 
+  const fetchAllCoins = async () => {
+    try {
+      const coinsRef = collection(db, 'tokens');
+      const coinsSnapshot = await getDocs(coinsRef);
+      const coinsData = coinsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setAllCoins(coinsData);
+    } catch (error) {
+      console.error('Error fetching all coins:', error);
+    }
+  };
+
+  const searchUserByEmail = async (email) => {
     setLoading(true);
     setError('');
     setSuccess('');
-    setSearchResults(null);
-
+    
     try {
       // Query Firestore for the user with the given email
       const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('email', '==', searchEmail.trim()));
+      const q = query(usersRef, where('email', '==', email));
       const querySnapshot = await getDocs(q);
-
+      
       if (querySnapshot.empty) {
-        setError('No user found with that email');
+        setError(`No user found with email: ${email}`);
         setLoading(false);
         return;
       }
-
+      
       // Get the first matching user
       const userData = querySnapshot.docs[0].data();
-      const userId = querySnapshot.docs[0].id;
+      const foundUserId = querySnapshot.docs[0].id;
       
-      // Fetch user balances
-      await fetchUserBalances(userId);
-
-      setSearchResults({
-        id: userId,
-        ...userData
-      });
+      // Navigate to the user's balance page
+      navigate(`/admin/balances/${foundUserId}`, { replace: true });
       
-      setSuccess('User found successfully');
-    } catch (err) {
-      console.error('Error searching for user:', err);
-      setError('Failed to search for user: ' + err.message);
-    } finally {
+      // No need to set user data here, as navigation will trigger the userId effect
+    } catch (error) {
+      console.error('Error searching for user:', error);
+      setError(`Error searching for user: ${error.message}`);
       setLoading(false);
     }
   };
 
-  const fetchUserBalances = async (userId) => {
-    try {
-      const userDoc = await getDoc(doc(db, 'users', userId));
-      
-      if (userDoc.exists() && userDoc.data().balances) {
-        setUserBalances(userDoc.data().balances);
-      } else {
-        setUserBalances({});
-      }
-    } catch (err) {
-      console.error('Error fetching user balances:', err);
-      setError('Failed to fetch user balances');
-    }
-  };
-
-  const handleEditBalance = (userId, coin) => {
-    setEditBalance({
-      userId,
-      token: coin,
-      amount: userBalances[coin] || 0,
-      operation: 'set'
-    });
-    setShowEditForm(true);
-  };
-
-  const handleAddDeposit = () => {
-    if (!searchResults) return;
-    
-    setEditBalance({
-      userId: searchResults.id,
-      token: Object.keys(DEFAULT_COINS)[0] || 'USDT',
-      amount: 0,
-      operation: 'deposit'
-    });
-    setShowEditForm(true);
-  };
-
-  const handleSubmitBalanceChange = async (e) => {
-    e.preventDefault();
+  const fetchUserData = async (uid) => {
     setLoading(true);
     setError('');
     setSuccess('');
-
+    
     try {
-      const { userId, token, amount, operation } = editBalance;
-      const numericAmount = parseFloat(amount);
-
-      if (isNaN(numericAmount)) {
-        throw new Error('Amount must be a valid number');
-      }
-
-      // For deposit operation, we'll use the dedicated API endpoint
-      if (operation === 'deposit') {
-        const response = await fetch('/api/mock-deposit', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            userId,
-            token,
-            amount: numericAmount
-          })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-          toast.success(`Successfully added deposit of ${numericAmount} ${token}`);
-          // Refresh the user's balances
-          await fetchUserBalances(userId);
-        } else {
-          toast.error(`Failed to add deposit: ${data.error}`);
-        }
-      } else {
-        // Existing code for setting or updating balance
-        const userRef = doc(db, 'users', userId);
-        const userDoc = await getDoc(userRef);
-
-        if (!userDoc.exists()) {
-          throw new Error('User not found');
-        }
-
+      const userDoc = await getDoc(doc(db, 'users', uid));
+      
+      if (userDoc.exists()) {
         const userData = userDoc.data();
-        const updatedBalances = { ...userData.balances } || {};
-        updatedBalances[token] = numericAmount;
-
-        await updateDoc(userRef, { balances: updatedBalances });
-
-        // Update local state
-        setUserBalances(updatedBalances);
-        setEditBalance({ userId: '', token: '', amount: '', operation: 'set' });
-        setSuccess(`Successfully updated ${token} balance to ${numericAmount}`);
+        setUser(userData);
+        
+        // Initialize all possible balances
+        const userBalances = userData.balances || {};
+        setBalances(userBalances);
+        setOriginalBalances(JSON.parse(JSON.stringify(userBalances))); // Deep copy
+        setSuccess('User loaded successfully');
+      } else {
+        setError('User not found');
       }
-    } catch (err) {
-      console.error('Error updating balance:', err);
-      setError('Failed to update balance: ' + err.message);
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+      setError('Error fetching user data: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const getUserInitials = (name) => {
-    if (!name) return 'U';
-    return name.split(' ').map(n => n[0]).join('').toUpperCase();
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (searchTerm.trim() === '') return;
+    
+    // Check if it looks like an email
+    const isEmail = searchTerm.includes('@');
+    
+    if (isEmail) {
+      // Search directly by email instead of navigating
+      searchUserByEmail(searchTerm.trim());
+    } else {
+      // Assume it's a user ID
+      navigate(`/admin/balances/${searchTerm.trim()}`);
+    }
+  };
+
+  const updateBalance = (token, value) => {
+    setBalances(prev => ({
+      ...prev,
+      [token]: value
+    }));
+    
+    // Check if there are any changes from original
+    const newBalances = {
+      ...balances,
+      [token]: value
+    };
+    
+    const hasAnyChanges = Object.keys(newBalances).some(key => 
+      newBalances[key] !== originalBalances[key]
+    );
+    
+    setHasChanges(hasAnyChanges);
+  };
+
+  const saveAllChanges = async () => {
+    if (!user || !hasChanges) return;
+    
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        balances: balances
+      });
+      
+      // Update original balances after save
+      setOriginalBalances(JSON.parse(JSON.stringify(balances)));
+      setHasChanges(false);
+      setSuccess('All balances updated successfully');
+    } catch (error) {
+      console.error('Error updating balances:', error);
+      setError('Error updating balances: ' + error.message);
+    }
+  };
+
+  const addNewCoinBalance = (coinId) => {
+    if (balances[coinId] !== undefined) return;
+    
+    updateBalance(coinId, '0');
+  };
+
+  // Filter coins based on active tab and search
+  const getFilteredBalances = () => {
+    const allBalanceTokens = new Set([
+      ...Object.keys(balances || {}),
+      ...allCoins.map(coin => coin.symbol)
+    ]);
+    
+    let filtered = [...allBalanceTokens];
+    
+    // Apply tab filter
+    if (activeTab === 'main') {
+      filtered = filtered.filter(token => 
+        ['BTC', 'ETH', 'USDT', 'USDC', 'BNB', 'XRP'].includes(token)
+      );
+    } else if (activeTab === 'tokens') {
+      const mainCoins = ['BTC', 'ETH', 'USDT', 'USDC', 'BNB', 'XRP'];
+      filtered = filtered.filter(token => !mainCoins.includes(token));
+    } else if (activeTab === 'defi') {
+      filtered = filtered.filter(token => {
+        const coin = allCoins.find(c => c.symbol === token);
+        return coin?.type === 'defi' || token.includes('LP-');
+      });
+    }
+    
+    // Apply search filter
+    if (balanceSearch) {
+      filtered = filtered.filter(token => 
+        token.toLowerCase().includes(balanceSearch.toLowerCase())
+      );
+    }
+    
+    return filtered;
+  };
+
+  const getCoinInfo = (symbol) => {
+    return allCoins.find(coin => coin.symbol === symbol) || {
+      name: symbol,
+      symbol: symbol,
+      logo: null
+    };
   };
 
   return (
     <Container>
-      <h2>User Search</h2>
+      <SearchForm onSubmit={handleSearch}>
+        <Input
+          type="text"
+          placeholder="Search by user ID or email"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+        <Button type="submit" disabled={loading || searchTerm.trim() === ''}>
+          {loading ? 'Searching...' : 'Search'}
+        </Button>
+      </SearchForm>
       
-      <SearchContainer>
-        <form onSubmit={searchUserByEmail}>
-          <FormGroup>
-            <Label htmlFor="searchEmail">Search User by Email</Label>
-            <Input
-              id="searchEmail"
-              type="email"
-              value={searchEmail}
-              onChange={(e) => setSearchEmail(e.target.value)}
-              placeholder="Enter user email"
-              required
-            />
-          </FormGroup>
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Searching...' : 'Search User'}
-          </Button>
-        </form>
-        
-        {error && <ErrorMessage>{error}</ErrorMessage>}
-        {success && <SuccessMessage>{success}</SuccessMessage>}
-      </SearchContainer>
-
-      {searchResults ? (
-        <div>
-          <UserCard>
-            <UserInfo>
-              <Avatar>{getUserInitials(searchResults.displayName)}</Avatar>
-              <UserDetails>
-                <h3>{searchResults.displayName || 'No Name'}</h3>
-                <p>Email: {searchResults.email}</p>
-                <p>User ID: {searchResults.id}</p>
-              </UserDetails>
-            </UserInfo>
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <h3>User Balances</h3>
-              <button 
-                onClick={handleAddDeposit}
-                style={{
-                  background: 'var(--primary)',
-                  color: 'white',
-                  border: 'none',
-                  padding: '8px 16px',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
+      {error && <StatusMessage $type="error">{error}</StatusMessage>}
+      {success && <StatusMessage $type="success">{success}</StatusMessage>}
+      
+      {user && (
+        <>
+          <UserInfo>
+            <UserDetails>
+              <DetailItem>
+                <h4>Display Name</h4>
+                <p>{user.displayName || 'N/A'}</p>
+              </DetailItem>
+              <DetailItem>
+                <h4>Email</h4>
+                <p>{user.email || 'N/A'}</p>
+              </DetailItem>
+              <DetailItem>
+                <h4>User ID</h4>
+                <p>{userId}</p>
+              </DetailItem>
+            </UserDetails>
+          </UserInfo>
+          
+          <FilterControls>
+            <Tabs>
+              <Tab 
+                active={activeTab === 'all'} 
+                onClick={() => setActiveTab('all')}
               >
-                Add Deposit
-              </button>
-            </div>
-            
-            {Object.keys(userBalances).length > 0 ? (
-              <BalanceGrid>
-                {Object.entries(userBalances).map(([coin, balance]) => (
-                  <BalanceCard key={coin}>
-                    <h4>{coin.toUpperCase()}</h4>
-                    <p>{balance}</p>
-                    <EditIcon onClick={() => handleEditBalance(searchResults.id, coin)}>
-                      <i className="bi bi-pencil"></i>
-                    </EditIcon>
-                  </BalanceCard>
-                ))}
-              </BalanceGrid>
-            ) : (
-              <p>No balances found for this user.</p>
+                All Coins
+              </Tab>
+              <Tab 
+                active={activeTab === 'main'} 
+                onClick={() => setActiveTab('main')}
+              >
+                Main Coins
+              </Tab>
+              <Tab 
+                active={activeTab === 'tokens'} 
+                onClick={() => setActiveTab('tokens')}
+              >
+                Tokens
+              </Tab>
+              <Tab 
+                active={activeTab === 'defi'} 
+                onClick={() => setActiveTab('defi')}
+              >
+                DeFi
+              </Tab>
+            </Tabs>
+            <SearchInput
+              type="text"
+              placeholder="Search coins..."
+              value={balanceSearch}
+              onChange={(e) => setBalanceSearch(e.target.value)}
+            />
+          </FilterControls>
+          
+          <BalancesTitle>
+            User Balances
+            {hasChanges && (
+              <SaveAllButton onClick={saveAllChanges}>
+                Save All Changes
+              </SaveAllButton>
             )}
-            
-            {showEditForm && (
-              <UserCard>
-                <h3>{editBalance.operation === 'deposit' ? 'Add Deposit' : 'Set Balance'}</h3>
-                <form onSubmit={handleSubmitBalanceChange}>
-                  <FormGroup>
-                    <Label htmlFor="token">Select Token</Label>
+          </BalancesTitle>
+          
+          <BalancesGrid>
+            {getFilteredBalances().map(token => {
+              const coinInfo = getCoinInfo(token);
+              const balance = balances[token] || '0';
+              const isChanged = balance !== (originalBalances[token] || '0');
+              
+              return (
+                <BalanceCard key={token} $isHighlighted={isChanged}>
+                  <h4>
+                    {coinInfo.logo && <img src={coinInfo.logo} alt={token} />}
+                    {coinInfo.name || token}
+                  </h4>
+                  <BalanceInfo>
+                    <BalanceAmount>{balance} {token}</BalanceAmount>
+                  </BalanceInfo>
+                  <BalanceControls>
                     <Input
-                      id="token"
-                      as="select"
-                      value={editBalance.token}
-                      onChange={(e) => setEditBalance({...editBalance, token: e.target.value})}
-                      required
-                    >
-                      {Object.keys(DEFAULT_COINS || {}).map(coin => (
-                        <option key={coin} value={coin}>{coin}</option>
-                      ))}
-                    </Input>
-                    
-                    <QuickCoinButtons>
-                      {Object.keys(DEFAULT_COINS || {}).slice(0, 8).map(coin => (
-                        <CoinButton 
-                          key={coin} 
-                          type="button"
-                          selected={editBalance.token === coin}
-                          onClick={() => setEditBalance({...editBalance, token: coin})}
-                        >
-                          {coin}
-                        </CoinButton>
-                      ))}
-                    </QuickCoinButtons>
-                  </FormGroup>
-                  
-                  <FormGroup>
-                    <Label htmlFor="amount">
-                      {editBalance.operation === 'deposit' ? 'Deposit Amount' : 'New Balance'}
-                    </Label>
-                    <Input
-                      id="amount"
                       type="number"
-                      step="0.00000001"
-                      value={editBalance.amount}
-                      onChange={(e) => setEditBalance({...editBalance, amount: e.target.value})}
-                      required
+                      value={balance}
+                      onChange={(e) => updateBalance(token, e.target.value)}
+                      step="0.0000001"
                     />
-                    
-                    {editBalance.operation === 'deposit' && (
-                      <QuickAmountButtons>
-                        {quickAmounts.map(amount => (
-                          <AmountButton 
-                            key={amount} 
-                            type="button"
-                            selected={parseFloat(editBalance.amount) === amount}
-                            onClick={() => setEditBalance({...editBalance, amount: amount})}
-                          >
-                            {amount}
-                          </AmountButton>
-                        ))}
-                      </QuickAmountButtons>
-                    )}
-                  </FormGroup>
-                  
-                  {error && <ErrorMessage>{error}</ErrorMessage>}
-                  {success && <SuccessMessage>{success}</SuccessMessage>}
-                  
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <Button type="submit" disabled={loading}>
-                      {loading ? 'Processing...' : editBalance.operation === 'deposit' ? 'Add Deposit' : 'Update Balance'}
-                    </Button>
-                    <Button type="button" onClick={() => setShowEditForm(false)} style={{ background: 'var(--bg1)' }}>
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              </UserCard>
-            )}
-            
-            {/* Option to add a new balance */}
-            {!showEditForm && (
-              <div style={{ marginTop: '30px' }}>
-                <h3>Add New Balance</h3>
-                <form onSubmit={(e) => {
-                  e.preventDefault();
-                  const coin = e.target.elements.coin.value.trim().toUpperCase();
-                  const amount = parseFloat(e.target.elements.amount.value);
-                  if (coin && !isNaN(amount)) {
-                    setEditBalance({
-                      userId: searchResults.id,
-                      token: coin,
-                      amount: amount.toString(),
-                      operation: 'set'
-                    });
-                  }
-                }}>
-                  <FormGroup>
-                    <Label htmlFor="coin">Coin</Label>
-                    <Input
-                      id="coin"
-                      type="text"
-                      placeholder="e.g. BTC, ETH, USDT"
-                      required
-                    />
-                    <Label>Quick Select:</Label>
-                    <QuickCoinButtons>
-                      {COMMON_COINS.map(coin => (
-                        <QuickCoinButton 
-                          key={coin} 
-                          type="button"
-                          onClick={() => {
-                            document.getElementById('coin').value = coin;
-                          }}
-                        >
-                          {coin}
-                        </QuickCoinButton>
-                      ))}
-                    </QuickCoinButtons>
-                  </FormGroup>
-                  <FormGroup>
-                    <Label htmlFor="amount">Amount</Label>
-                    <Input
-                      id="amount"
-                      type="number"
-                      step="any"
-                      placeholder="Enter amount"
-                      required
-                    />
-                  </FormGroup>
-                  <Button type="submit">
-                    Add Balance
-                  </Button>
-                </form>
-              </div>
-            )}
-          </UserCard>
+                  </BalanceControls>
+                </BalanceCard>
+              );
+            })}
+          </BalancesGrid>
+          
+          {getFilteredBalances().length === 0 && (
+            <NoResults>
+              No coins found matching your filter criteria.
+            </NoResults>
+          )}
+        </>
+      )}
+      
+      {!userId && !user && !loading && !error && (
+        <div style={{ textAlign: 'center', padding: '30px' }}>
+          <p>Enter a user ID or email address to search for a user</p>
         </div>
-      ) : (
-        searchEmail && !loading && error && (
-          <NoResultsMessage>
-            <i className="bi bi-search" style={{ fontSize: '24px', display: 'block', marginBottom: '10px' }}></i>
-            <p>No user found with that email. Please try a different search.</p>
-          </NoResultsMessage>
-        )
       )}
     </Container>
   );
 };
 
-export default UserSearch; 
+export default BalanceManagement; 
