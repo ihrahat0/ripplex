@@ -1196,17 +1196,8 @@ const Competition = () => {
           
           setCompetitions(sortedCompetitions);
           
-          // If there's only one active competition, select it automatically
-          const activeCompetitions = sortedCompetitions.filter(comp => {
-            const now = new Date();
-            const start = new Date(comp.startDate);
-            const end = new Date(comp.endDate);
-            return now >= start && now <= end;
-          });
-          
-          if (activeCompetitions.length === 1) {
-            setSelectedCompetition(activeCompetitions[0]);
-          }
+          // Don't automatically select a competition
+          // Let the user choose instead
         }
       } catch (error) {
         console.error("Error fetching competitions:", error);
@@ -1291,15 +1282,31 @@ const Competition = () => {
     }
   };
   
-  // Calculate the status of a competition
+  // Get competition status with more detailed information
   const getCompetitionStatus = (startDate, endDate) => {
     const now = new Date();
     const start = new Date(startDate);
     const end = new Date(endDate);
     
-    if (now < start) return 'upcoming';
-    if (now > end) return 'ended';
-    return 'active';
+    if (now < start) {
+      const daysToStart = Math.ceil((start - now) / (1000 * 60 * 60 * 24));
+      return {
+        status: 'upcoming',
+        label: `Starts in ${daysToStart} day${daysToStart !== 1 ? 's' : ''}`
+      };
+    }
+    if (now > end) {
+      return {
+        status: 'ended',
+        label: 'Ended'
+      };
+    }
+    
+    const daysLeft = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
+    return {
+      status: 'active',
+      label: `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`
+    };
   };
   
   // Format date for display
@@ -1342,57 +1349,123 @@ const Competition = () => {
       );
     }
     
+    // Group competitions by coin
+    const coinGroups = competitions.reduce((groups, competition) => {
+      const symbol = competition.coinSymbol;
+      if (!groups[symbol]) {
+        groups[symbol] = [];
+      }
+      groups[symbol].push(competition);
+      return groups;
+    }, {});
+    
     return (
       <CompetitionSelectContainer>
         <PageHeader>
           <Label>COMPETITIONS</Label>
         </PageHeader>
         
-        <Title style={{ textAlign: 'center', marginBottom: '2rem' }}>Select a Competition</Title>
+        <Title style={{ textAlign: 'center', marginBottom: '1rem' }}>Select a Competition</Title>
+        <Subtitle style={{ textAlign: 'center', marginBottom: '2rem' }}>Choose a coin to view its competitions</Subtitle>
         
-        <CompetitionGrid>
-          {competitions.map(competition => {
-            const status = getCompetitionStatus(competition.startDate, competition.endDate);
-            const totalReward = getTotalRewardAmount(competition.rewards);
-            
-            return (
-              <CompetitionCard 
-                key={competition.id} 
-                onClick={() => handleSelectCompetition(competition)}
-              >
-                <CompetitionCardHeader>
-                  <div className="coin-logo">
-                    <img src={competition.coinLogoUrl} alt={competition.coinSymbol} />
+        {Object.entries(coinGroups).map(([coinSymbol, coinCompetitions]) => {
+          // Use the first competition to get the coin info
+          const coinInfo = coinCompetitions[0];
+          
+          // Find if there's any active competition for this coin
+          const hasActive = coinCompetitions.some(comp => 
+            getCompetitionStatus(comp.startDate, comp.endDate).status === 'active'
+          );
+          
+          return (
+            <div key={coinSymbol} style={{ marginBottom: '2rem' }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.8rem', 
+                marginBottom: '1rem',
+                background: 'rgba(20, 22, 36, 0.6)',
+                padding: '0.8rem 1.2rem',
+                borderRadius: '12px',
+                border: '1px solid #282B3E'
+              }}>
+                <img 
+                  src={coinInfo.coinLogoUrl} 
+                  alt={coinSymbol} 
+                  style={{ 
+                    width: '36px', 
+                    height: '36px', 
+                    borderRadius: '50%',
+                    border: `2px solid ${hasActive ? '#4cd964' : '#f0b90b'}`
+                  }} 
+                />
+                <div>
+                  <h3 style={{ margin: 0, color: '#fff', fontSize: '1.2rem' }}>{coinSymbol}</h3>
+                  <div style={{ 
+                    fontSize: '0.8rem', 
+                    color: hasActive ? '#4cd964' : '#8b949e',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem'
+                  }}>
+                    <span style={{ 
+                      width: '8px', 
+                      height: '8px', 
+                      borderRadius: '50%', 
+                      background: hasActive ? '#4cd964' : '#8b949e',
+                      display: 'inline-block'
+                    }}></span>
+                    {hasActive ? 'Active competitions available' : 'No active competitions'}
                   </div>
-                  <h3>{competition.title}</h3>
-                  <p>{competition.subtitle}</p>
-                </CompetitionCardHeader>
-                <CompetitionCardBody status={status}>
-                  <div className="date-row">
-                    <span className="label">Start Date:</span>
-                    <span className="value">{formatDate(competition.startDate)}</span>
-                  </div>
-                  <div className="date-row">
-                    <span className="label">End Date:</span>
-                    <span className="value">{formatDate(competition.endDate)}</span>
-                  </div>
-                  <div className="status">
-                    {status === 'active' ? 'Active' : status === 'upcoming' ? 'Upcoming' : 'Ended'}
-                  </div>
-                </CompetitionCardBody>
-                <CompetitionCardFooter>
-                  <div>
-                    <div className="rewards">Total Rewards:</div>
-                    <div className="amount">{totalReward.toLocaleString()} USDT</div>
-                  </div>
-                  <div className="enter">
-                    View Details <FaChevronRight />
-                  </div>
-                </CompetitionCardFooter>
-              </CompetitionCard>
-            );
-          })}
-        </CompetitionGrid>
+                </div>
+              </div>
+              
+              <CompetitionGrid>
+                {coinCompetitions.map(competition => {
+                  const statusInfo = getCompetitionStatus(competition.startDate, competition.endDate);
+                  const totalReward = getTotalRewardAmount(competition.rewards);
+                  
+                  return (
+                    <CompetitionCard 
+                      key={competition.id} 
+                      onClick={() => handleSelectCompetition(competition)}
+                    >
+                      <CompetitionCardHeader>
+                        <div className="coin-logo">
+                          <img src={competition.coinLogoUrl} alt={competition.coinSymbol} />
+                        </div>
+                        <h3 className="title">{competition.title}</h3>
+                        <p className="subtitle">{competition.subtitle}</p>
+                      </CompetitionCardHeader>
+                      <CompetitionCardBody status={statusInfo.status}>
+                        <div className="date-row">
+                          <span className="label">Start Date:</span>
+                          <span className="value">{formatDate(competition.startDate)}</span>
+                        </div>
+                        <div className="date-row">
+                          <span className="label">End Date:</span>
+                          <span className="value">{formatDate(competition.endDate)}</span>
+                        </div>
+                        <div className="status">
+                          {statusInfo.label}
+                        </div>
+                      </CompetitionCardBody>
+                      <CompetitionCardFooter>
+                        <div>
+                          <div className="rewards">Total Rewards:</div>
+                          <div className="amount">{totalReward.toLocaleString()} USDT</div>
+                        </div>
+                        <div className="enter">
+                          View Details <FaChevronRight />
+                        </div>
+                      </CompetitionCardFooter>
+                    </CompetitionCard>
+                  );
+                })}
+              </CompetitionGrid>
+            </div>
+          );
+        })}
       </CompetitionSelectContainer>
     );
   };
