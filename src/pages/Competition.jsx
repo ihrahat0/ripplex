@@ -110,8 +110,8 @@ const pulseGlow = keyframes`
 
 // After the particleFloat keyframes definition, add a new keyframe animation for the reward amount
 const numberPulse = keyframes`
-  0%, 100% { transform: scale(1); filter: brightness(1); }
-  50% { transform: scale(1.05); filter: brightness(1.2); }
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); filter: brightness(1.1); }
 `;
 
 const sparkle = keyframes`
@@ -291,6 +291,23 @@ const Title = styled.h1`
   }
 `;
 
+const Subtitle = styled.h2`
+  font-size: 1.8rem;
+  margin-bottom: 1rem;
+  background: linear-gradient(90deg, #f0b90b, #ffee58);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  grid-column: 1 / -1;
+  text-align: center;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  
+  @media (max-width: 768px) {
+    font-size: 1.6rem;
+  }
+`;
+
 const CompetitionInfo = styled.div`
   background: rgba(26, 28, 42, 0.7);
   border-radius: 12px;
@@ -330,23 +347,19 @@ const CompetitionInfo = styled.div`
   }
 `;
 
-// After the CompetitionInfo styled component definition, add a new styled component for the reward amount
 const RewardAmount = styled.div`
   position: relative;
   display: inline-block;
   font-size: 3.2rem;
-  font-weight: 800;
+  font-weight: 900;
   color: transparent;
   margin: 1rem 0;
-  perspective: 1000px;
   
-  /* Main text with gradient */
+  /* Crisp, sharp gradient */
   background: linear-gradient(
     to right,
     #ffd700 0%,
-    #f0b90b 25%,
-    #fff78a 50%,
-    #f0b90b 75%,
+    #ffec73 50%,
     #ffd700 100%
   );
   background-size: 200% auto;
@@ -354,61 +367,26 @@ const RewardAmount = styled.div`
   -webkit-background-clip: text;
   animation: ${shimmerAnimation} 4s linear infinite;
   
-  /* 3D float effect */
-  transform-style: preserve-3d;
-  animation: ${float3D} 6s ease-in-out infinite;
-  
-  /* Text outline/shadow effect */
+  /* Sharper text shadow with minimal blur */
   text-shadow: 
-    0 0 5px rgba(255, 215, 0, 0.7),
-    0 0 15px rgba(255, 215, 0, 0.5),
-    0 0 30px rgba(255, 215, 0, 0.3);
+    0 0 1px rgba(255, 215, 0, 1),
+    0 0 2px rgba(255, 215, 0, 0.8);
   
-  /* Sparkle effects */
-  &::before,
-  &::after {
-    content: '';
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    top: 0;
-    left: 0;
-    background-image: 
-      radial-gradient(circle, rgba(255, 215, 0, 0.8) 0%, transparent 20%),
-      radial-gradient(circle, rgba(255, 215, 0, 0.6) 0%, transparent 20%),
-      radial-gradient(circle, rgba(255, 215, 0, 0.4) 0%, transparent 20%);
-    background-position: 
-      20% 30%,
-      80% 40%,
-      40% 70%;
-    background-size: 10px 10px;
-    background-repeat: no-repeat;
-    mix-blend-mode: screen;
-    opacity: 0;
-    animation: ${sparkle} 3s ease-in-out infinite;
-    animation-delay: 0s, 0.3s, 0.6s;
-  }
-  
-  &::after {
-    background-position: 
-      70% 40%,
-      30% 60%,
-      50% 20%;
-    animation-delay: 0.5s, 0.8s, 1.1s;
-  }
+  /* Static positioning instead of 3D transforms that can cause blur */
+  transform: none;
   
   span {
     display: inline-block;
+    /* Reduced movement animation to prevent blur */
     animation: ${numberPulse} 3s ease-in-out infinite;
     animation-delay: calc(var(--i) * 0.1s);
   }
   
   small {
-    font-size: 1.6rem;
-    font-weight: 700;
+    font-size: 1.8rem;
+    font-weight: 800;
     margin-left: 0.5rem;
     vertical-align: middle;
-    opacity: 0.9;
   }
 `;
 
@@ -1095,7 +1073,8 @@ const Competition = () => {
       </PageHeader>
     
       <CompetitionHeader>
-        <Title>$OSCAR Deposit Competition</Title>
+        <Title>OSCAR Competition</Title>
+        <Subtitle>Top 100 users who deposit the highest amount of $OSCAR</Subtitle>
         
         <CompetitionInfo>
           <h3><BiDollar /> Reward Pool</h3>
@@ -1110,7 +1089,7 @@ const Competition = () => {
               <small>USDT</small>
             </RewardAmount>
             {[...Array(8)].map((_, i) => (
-              <RewardParticle 
+              <RewardParticle
                 key={i}
                 $size={`${4 + Math.random() * 8}px`}
                 $color={`rgba(255, 215, ${Math.floor(Math.random() * 100)}, ${0.4 + Math.random() * 0.5})`}
