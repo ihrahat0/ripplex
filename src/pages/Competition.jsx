@@ -108,6 +108,23 @@ const pulseGlow = keyframes`
   }
 `;
 
+// After the particleFloat keyframes definition, add a new keyframe animation for the reward amount
+const numberPulse = keyframes`
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.05); filter: brightness(1.2); }
+`;
+
+const sparkle = keyframes`
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+`;
+
+const float3D = keyframes`
+  0% { transform: translateZ(0) translateY(0); }
+  50% { transform: translateZ(20px) translateY(-5px); }
+  100% { transform: translateZ(0) translateY(0); }
+`;
+
 const Container = styled.div`
   max-width: 1200px;
   margin: 0 auto;
@@ -311,6 +328,105 @@ const CompetitionInfo = styled.div`
   svg {
     color: #f0b90b;
   }
+`;
+
+// After the CompetitionInfo styled component definition, add a new styled component for the reward amount
+const RewardAmount = styled.div`
+  position: relative;
+  display: inline-block;
+  font-size: 3.2rem;
+  font-weight: 800;
+  color: transparent;
+  margin: 1rem 0;
+  perspective: 1000px;
+  
+  /* Main text with gradient */
+  background: linear-gradient(
+    to right,
+    #ffd700 0%,
+    #f0b90b 25%,
+    #fff78a 50%,
+    #f0b90b 75%,
+    #ffd700 100%
+  );
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: ${shimmerAnimation} 4s linear infinite;
+  
+  /* 3D float effect */
+  transform-style: preserve-3d;
+  animation: ${float3D} 6s ease-in-out infinite;
+  
+  /* Text outline/shadow effect */
+  text-shadow: 
+    0 0 5px rgba(255, 215, 0, 0.7),
+    0 0 15px rgba(255, 215, 0, 0.5),
+    0 0 30px rgba(255, 215, 0, 0.3);
+  
+  /* Sparkle effects */
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    background-image: 
+      radial-gradient(circle, rgba(255, 215, 0, 0.8) 0%, transparent 20%),
+      radial-gradient(circle, rgba(255, 215, 0, 0.6) 0%, transparent 20%),
+      radial-gradient(circle, rgba(255, 215, 0, 0.4) 0%, transparent 20%);
+    background-position: 
+      20% 30%,
+      80% 40%,
+      40% 70%;
+    background-size: 10px 10px;
+    background-repeat: no-repeat;
+    mix-blend-mode: screen;
+    opacity: 0;
+    animation: ${sparkle} 3s ease-in-out infinite;
+    animation-delay: 0s, 0.3s, 0.6s;
+  }
+  
+  &::after {
+    background-position: 
+      70% 40%,
+      30% 60%,
+      50% 20%;
+    animation-delay: 0.5s, 0.8s, 1.1s;
+  }
+  
+  span {
+    display: inline-block;
+    animation: ${numberPulse} 3s ease-in-out infinite;
+    animation-delay: calc(var(--i) * 0.1s);
+  }
+  
+  small {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+    opacity: 0.9;
+  }
+`;
+
+// Add a component for decorative particles
+const RewardParticle = styled.div`
+  position: absolute;
+  width: ${props => props.$size || '10px'};
+  height: ${props => props.$size || '10px'};
+  border-radius: 50%;
+  background: ${props => props.$color || 'rgba(255, 215, 0, 0.8)'};
+  top: ${props => props.$top || '0'};
+  left: ${props => props.$left || '0'};
+  transform-style: preserve-3d;
+  filter: blur(1px);
+  opacity: 0;
+  animation: ${particleFloat} ${props => props.$duration || '4s'} ease-in-out infinite;
+  animation-delay: ${props => props.$delay || '0s'};
+  z-index: -1;
 `;
 
 const RewardTable = styled.div`
@@ -983,7 +1099,28 @@ const Competition = () => {
         
         <CompetitionInfo>
           <h3><BiDollar /> Reward Pool</h3>
-          <p className="highlight">20,000 USDT</p>
+          <div style={{ position: 'relative', padding: '0.5rem 0' }}>
+            <RewardAmount>
+              <span style={{ '--i': 1 }}>2</span>
+              <span style={{ '--i': 2 }}>0</span>
+              <span style={{ '--i': 3 }}>.</span>
+              <span style={{ '--i': 4 }}>0</span>
+              <span style={{ '--i': 5 }}>0</span>
+              <span style={{ '--i': 6 }}>0</span>
+              <small>USDT</small>
+            </RewardAmount>
+            {[...Array(8)].map((_, i) => (
+              <RewardParticle 
+                key={i}
+                $size={`${4 + Math.random() * 8}px`}
+                $color={`rgba(255, 215, ${Math.floor(Math.random() * 100)}, ${0.4 + Math.random() * 0.5})`}
+                $top={`${Math.random() * 100}%`}
+                $left={`${Math.random() * 100}%`}
+                $duration={`${3 + Math.random() * 5}s`}
+                $delay={`${Math.random() * 3}s`}
+              />
+            ))}
+          </div>
           <p><FaCoins /> Top 100 users who deposit the highest amount of $OSCAR</p>
         </CompetitionInfo>
         
