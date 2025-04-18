@@ -3,13 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import styled, { keyframes, css } from 'styled-components';
 import { useAuth } from '../contexts/AuthContext';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import defaultAvatar from '../assets/images/avatar.png';
 import oscarLogo from '../assets/images/coin/oscar.png';
-import { FaTrophy, FaMedal, FaCoins, FaCalendarAlt, FaClock } from 'react-icons/fa';
+import { FaTrophy, FaMedal, FaCoins, FaCalendarAlt, FaClock, FaChevronRight } from 'react-icons/fa';
 import { GiLaurelCrown, GiPodium } from 'react-icons/gi';
-import { BiDollar } from 'react-icons/bi';
+import { BiDollar, BiArrowBack } from 'react-icons/bi';
 
 // Animations
 const fadeIn = keyframes`
@@ -976,20 +976,257 @@ const Particle = styled.div`
   left: ${props => props.$left || '50%'};
 `;
 
+// Add new styled components for competition selection
+const CompetitionSelectContainer = styled.div`
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+  animation: ${fadeIn} 0.5s ease-in-out;
+  
+  @media (max-width: 768px) {
+    padding: 1rem;
+  }
+`;
+
+const CompetitionGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2rem;
+  
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const CompetitionCard = styled.div`
+  background: linear-gradient(135deg, #13141C, #1e2033);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  border: 1px solid #282B3E;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  
+  &:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+    border-color: rgba(240, 185, 11, 0.5);
+  }
+`;
+
+const CompetitionCardHeader = styled.div`
+  padding: 1.5rem;
+  background: rgba(20, 22, 36, 0.6);
+  border-bottom: 1px solid #282B3E;
+  position: relative;
+  
+  .coin-logo {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid #f0b90b;
+    background: #13141C;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    box-shadow: 0 0 10px rgba(240, 185, 11, 0.3);
+    
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+  }
+  
+  h3 {
+    font-size: 1.5rem;
+    margin: 0 0 0.5rem 0;
+    color: #f0b90b;
+  }
+  
+  p {
+    margin: 0;
+    color: #B7BDC6;
+    font-size: 0.9rem;
+  }
+`;
+
+const CompetitionCardBody = styled.div`
+  padding: 1.5rem;
+  
+  .date-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.8rem;
+    font-size: 0.9rem;
+    
+    .label {
+      color: #8b949e;
+    }
+    
+    .value {
+      color: #e6edf3;
+    }
+  }
+  
+  .status {
+    margin-top: 1rem;
+    padding: 0.5rem 0;
+    text-align: center;
+    border-radius: 6px;
+    font-weight: 500;
+    font-size: 0.9rem;
+    background: ${props => 
+      props.status === 'active' ? 'rgba(76, 217, 100, 0.15)' : 
+      props.status === 'upcoming' ? 'rgba(255, 204, 0, 0.15)' : 
+      'rgba(255, 59, 48, 0.15)'
+    };
+    color: ${props => 
+      props.status === 'active' ? '#4cd964' : 
+      props.status === 'upcoming' ? '#ffcc00' : 
+      '#ff3b30'
+    };
+  }
+`;
+
+const CompetitionCardFooter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  background: rgba(20, 22, 36, 0.4);
+  border-top: 1px solid #282B3E;
+  
+  .rewards {
+    font-size: 0.9rem;
+    color: #B7BDC6;
+  }
+  
+  .amount {
+    font-weight: 500;
+    color: #f0b90b;
+  }
+  
+  .enter {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #f0b90b;
+    font-weight: 500;
+  }
+`;
+
+const BackButtonContainer = styled.div`
+  margin-bottom: 1.5rem;
+`;
+
+const BackButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: none;
+  border: none;
+  color: #B7BDC6;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #fff;
+  }
+  
+  svg {
+    font-size: 1.2rem;
+  }
+`;
+
+const NoCompetitionsMessage = styled.div`
+  text-align: center;
+  padding: 3rem;
+  background: rgba(26, 28, 42, 0.6);
+  border-radius: 12px;
+  border: 1px solid #282B3E;
+  margin-top: 2rem;
+  
+  h3 {
+    color: #e6edf3;
+    margin-bottom: 1rem;
+  }
+  
+  p {
+    color: #B7BDC6;
+  }
+`;
+
 const Competition = () => {
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [loadingCompetitions, setLoadingCompetitions] = useState(true);
+  const [competitions, setCompetitions] = useState([]);
+  const [selectedCompetition, setSelectedCompetition] = useState(null);
   const [users, setUsers] = useState([]);
   const [userRank, setUserRank] = useState(null);
   const [totalUsers, setTotalUsers] = useState(0);
   
-  // Fetch users with OSCAR token balances
+  // Fetch available competitions
   useEffect(() => {
+    const fetchCompetitions = async () => {
+      try {
+        setLoadingCompetitions(true);
+        const competitionsRef = collection(db, "competitions");
+        const competitionsSnapshot = await getDocs(competitionsRef);
+        
+        if (!competitionsSnapshot.empty) {
+          const competitionsData = competitionsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          
+          // Sort by created date, newest first
+          const sortedCompetitions = competitionsData.sort((a, b) => {
+            return b.createdAt?.seconds - a.createdAt?.seconds;
+          });
+          
+          setCompetitions(sortedCompetitions);
+          
+          // If there's only one active competition, select it automatically
+          const activeCompetitions = sortedCompetitions.filter(comp => {
+            const now = new Date();
+            const start = new Date(comp.startDate);
+            const end = new Date(comp.endDate);
+            return now >= start && now <= end;
+          });
+          
+          if (activeCompetitions.length === 1) {
+            setSelectedCompetition(activeCompetitions[0]);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching competitions:", error);
+      } finally {
+        setLoadingCompetitions(false);
+      }
+    };
+    
+    fetchCompetitions();
+  }, []);
+  
+  // Fetch users for the selected competition
+  useEffect(() => {
+    if (!selectedCompetition) return;
+    
     const fetchUsers = async () => {
       try {
         setLoading(true);
         
-        // Get all users and include those with zero OSCAR balance
+        // Get all users
         const usersRef = collection(db, "users");
         const querySnapshot = await getDocs(usersRef);
         
@@ -997,18 +1234,18 @@ const Competition = () => {
         querySnapshot.forEach(doc => {
           const user = doc.data();
           // Include all users, even with zero balance
-          const oscarBalance = user.balances?.OSCAR || 0;
+          const coinBalance = user.balances?.[selectedCompetition.coinSymbol] || 0;
           
           userData.push({
             id: doc.id,
             name: user.displayName || 'Anonymous',
             email: user.email || '',
             photoURL: user.photoURL || '',
-            balance: oscarBalance
+            balance: coinBalance
           });
         });
         
-        // Sort by OSCAR balance descending
+        // Sort by balance descending
         const sortedUsers = userData.sort((a, b) => b.balance - a.balance);
         
         // Get top 100 users
@@ -1033,7 +1270,7 @@ const Competition = () => {
     };
     
     fetchUsers();
-  }, [currentUser]);
+  }, [currentUser, selectedCompetition]);
   
   const getInitials = (name) => {
     if (!name || name === 'Anonymous') return 'AN';
@@ -1054,247 +1291,348 @@ const Competition = () => {
     }
   };
   
-  // Get top 3 users for podium
-  const topUsers = users.slice(0, 3);
-  
-  return (
-    <Container>
-      {/* Add Oscar Logo Box */}
-      <LogoContainer>
-        <LogoBox>
-          <LogoImage>
-            <img src={oscarLogo} alt="OSCAR" />
-          </LogoImage>
-          <LogoText>OSCAR</LogoText>
-        </LogoBox>
-      </LogoContainer>
-      
-      <PageHeader>
-        <Label>COMPETITION</Label>
-      </PageHeader>
+  // Calculate the status of a competition
+  const getCompetitionStatus = (startDate, endDate) => {
+    const now = new Date();
+    const start = new Date(startDate);
+    const end = new Date(endDate);
     
-      <CompetitionHeader>
-        <Title>OSCAR Competition</Title>
-        <Subtitle>Top 100 users who deposit the highest amount of $OSCAR</Subtitle>
+    if (now < start) return 'upcoming';
+    if (now > end) return 'ended';
+    return 'active';
+  };
+  
+  // Format date for display
+  const formatDate = (dateString) => {
+    const options = { year: 'numeric', month: 'short', day: 'numeric' };
+    return new Date(dateString).toLocaleDateString(undefined, options);
+  };
+  
+  // Handle competition selection
+  const handleSelectCompetition = (competition) => {
+    setSelectedCompetition(competition);
+  };
+  
+  // Handle going back to competition selection
+  const handleBackToList = () => {
+    setSelectedCompetition(null);
+  };
+  
+  // Get total reward amount
+  const getTotalRewardAmount = (rewards) => {
+    return rewards.reduce((total, reward) => total + parseFloat(reward.amount), 0);
+  };
+  
+  // Render competition selection screen
+  const renderCompetitionSelection = () => {
+    if (loadingCompetitions) {
+      return (
+        <LoadingContainer>
+          <div className="loader"></div>
+        </LoadingContainer>
+      );
+    }
+    
+    if (competitions.length === 0) {
+      return (
+        <NoCompetitionsMessage>
+          <h3>No Competitions Available</h3>
+          <p>There are currently no competitions running or scheduled.</p>
+        </NoCompetitionsMessage>
+      );
+    }
+    
+    return (
+      <CompetitionSelectContainer>
+        <PageHeader>
+          <Label>COMPETITIONS</Label>
+        </PageHeader>
         
-        <CompetitionInfo>
-          <h3><BiDollar /> Reward Pool</h3>
-          <div style={{ position: 'relative', padding: '0.5rem 0' }}>
-            <RewardAmount>
-              <span style={{ '--i': 1 }}>2</span>
-              <span style={{ '--i': 2 }}>0</span>
-              <span style={{ '--i': 3 }}>,</span>
-              <span style={{ '--i': 4 }}>0</span>
-              <span style={{ '--i': 5 }}>0</span>
-              <span style={{ '--i': 6 }}>0</span>
-              <small>USDT</small>
-            </RewardAmount>
-            {[...Array(8)].map((_, i) => (
-              <RewardParticle
+        <Title style={{ textAlign: 'center', marginBottom: '2rem' }}>Select a Competition</Title>
+        
+        <CompetitionGrid>
+          {competitions.map(competition => {
+            const status = getCompetitionStatus(competition.startDate, competition.endDate);
+            const totalReward = getTotalRewardAmount(competition.rewards);
+            
+            return (
+              <CompetitionCard 
+                key={competition.id} 
+                onClick={() => handleSelectCompetition(competition)}
+              >
+                <CompetitionCardHeader>
+                  <div className="coin-logo">
+                    <img src={competition.coinLogoUrl} alt={competition.coinSymbol} />
+                  </div>
+                  <h3>{competition.title}</h3>
+                  <p>{competition.subtitle}</p>
+                </CompetitionCardHeader>
+                <CompetitionCardBody status={status}>
+                  <div className="date-row">
+                    <span className="label">Start Date:</span>
+                    <span className="value">{formatDate(competition.startDate)}</span>
+                  </div>
+                  <div className="date-row">
+                    <span className="label">End Date:</span>
+                    <span className="value">{formatDate(competition.endDate)}</span>
+                  </div>
+                  <div className="status">
+                    {status === 'active' ? 'Active' : status === 'upcoming' ? 'Upcoming' : 'Ended'}
+                  </div>
+                </CompetitionCardBody>
+                <CompetitionCardFooter>
+                  <div>
+                    <div className="rewards">Total Rewards:</div>
+                    <div className="amount">{totalReward.toLocaleString()} USDT</div>
+                  </div>
+                  <div className="enter">
+                    View Details <FaChevronRight />
+                  </div>
+                </CompetitionCardFooter>
+              </CompetitionCard>
+            );
+          })}
+        </CompetitionGrid>
+      </CompetitionSelectContainer>
+    );
+  };
+  
+  // Render competition details screen
+  const renderCompetitionDetails = () => {
+    if (!selectedCompetition) return null;
+    
+    // Get top 3 users for podium
+    const topUsers = users.slice(0, 3);
+    
+    return (
+      <Container>
+        <BackButtonContainer>
+          <BackButton onClick={handleBackToList}>
+            <BiArrowBack /> Back to All Competitions
+          </BackButton>
+        </BackButtonContainer>
+        
+        {/* Add Coin Logo Box */}
+        <LogoContainer>
+          <LogoBox>
+            <LogoImage>
+              <img src={selectedCompetition.coinLogoUrl} alt={selectedCompetition.coinSymbol} />
+            </LogoImage>
+            <LogoText>{selectedCompetition.coinSymbol}</LogoText>
+          </LogoBox>
+        </LogoContainer>
+        
+        <PageHeader>
+          <Label>COMPETITION</Label>
+        </PageHeader>
+      
+        <CompetitionHeader>
+          <Title>{selectedCompetition.title}</Title>
+          <Subtitle>{selectedCompetition.subtitle}</Subtitle>
+          
+          <CompetitionInfo>
+            <h3><BiDollar /> Reward Pool</h3>
+            <div style={{ position: 'relative', padding: '0.5rem 0' }}>
+              <RewardAmount>
+                <span style={{ '--i': 1 }}>{getTotalRewardAmount(selectedCompetition.rewards).toLocaleString().split(',')[0]}</span>
+                {getTotalRewardAmount(selectedCompetition.rewards).toLocaleString().includes(',') && (
+                  <>
+                    <span style={{ '--i': 2 }}>,</span>
+                    {getTotalRewardAmount(selectedCompetition.rewards).toLocaleString().split(',')[1].split('').map((char, i) => (
+                      <span key={i} style={{ '--i': i + 3 }}>{char}</span>
+                    ))}
+                  </>
+                )}
+                <small>USDT</small>
+              </RewardAmount>
+              {[...Array(8)].map((_, i) => (
+                <RewardParticle
+                  key={i}
+                  $size={`${4 + Math.random() * 8}px`}
+                  $color={`rgba(255, 215, ${Math.floor(Math.random() * 100)}, ${0.4 + Math.random() * 0.5})`}
+                  $top={`${Math.random() * 100}%`}
+                  $left={`${Math.random() * 100}%`}
+                  $duration={`${3 + Math.random() * 5}s`}
+                  $delay={`${Math.random() * 3}s`}
+                />
+              ))}
+            </div>
+            <p><FaCoins /> {selectedCompetition.subtitle}</p>
+          </CompetitionInfo>
+          
+          <RewardTable>
+            {[...Array(5)].map((_, i) => (
+              <Particle 
                 key={i}
-                $size={`${4 + Math.random() * 8}px`}
-                $color={`rgba(255, 215, ${Math.floor(Math.random() * 100)}, ${0.4 + Math.random() * 0.5})`}
-                $top={`${Math.random() * 100}%`}
-                $left={`${Math.random() * 100}%`}
-                $duration={`${3 + Math.random() * 5}s`}
-                $delay={`${Math.random() * 3}s`}
+                $duration={`${3 + i * 0.5}s`}
+                $delay={`${i * 0.7}s`}
+                $top={`${20 + i * 15}%`}
+                $left={`${10 + i * 20}%`}
               />
             ))}
-          </div>
-          <p><FaCoins /> Top 100 users who deposit the highest amount of $OSCAR</p>
-        </CompetitionInfo>
+            <h3><FaCalendarAlt /> Competition Schedule</h3>
+            <div className="table">
+              <div className="row">
+                <div className="cell"><FaClock /> Competition Period</div>
+                <div className="cell">
+                  {Math.ceil((new Date(selectedCompetition.endDate) - new Date(selectedCompetition.startDate)) / (1000 * 60 * 60 * 24))} days
+                </div>
+              </div>
+              <div className="row">
+                <div className="cell"><FaClock /> Start Date</div>
+                <div className="cell">{formatDate(selectedCompetition.startDate)}</div>
+              </div>
+              <div className="row">
+                <div className="cell"><FaClock /> End Date</div>
+                <div className="cell">{formatDate(selectedCompetition.endDate)}</div>
+              </div>
+              <div className="row">
+                <div className="cell"><FaClock /> Rewards Distribution</div>
+                <div className="cell">{formatDate(selectedCompetition.rewardsDistributionDate)}</div>
+              </div>
+            </div>
+          </RewardTable>
+        </CompetitionHeader>
         
-        <RewardTable>
+        {/* Additional Reward Breakdown */}
+        <RewardTable style={{ marginBottom: '3rem' }}>
           {[...Array(5)].map((_, i) => (
             <Particle 
               key={i}
               $duration={`${3 + i * 0.5}s`}
               $delay={`${i * 0.7}s`}
-              $top={`${20 + i * 15}%`}
-              $left={`${10 + i * 20}%`}
+              $top={`${10 + i * 15}%`}
+              $left={`${5 + i * 20}%`}
             />
           ))}
-          <h3><FaCalendarAlt /> Competition Schedule</h3>
+          <h3><BiDollar /> Reward Breakdown</h3>
           <div className="table">
-            <div className="row">
-              <div className="cell"><FaClock /> Competition Period</div>
-              <div className="cell">6 days</div>
-            </div>
-            <div className="row">
-              <div className="cell"><FaClock /> Start Date</div>
-              <div className="cell">16th April 4pm UTC</div>
-            </div>
-            <div className="row">
-              <div className="cell"><FaClock /> End Date</div>
-              <div className="cell">22nd April 4pm UTC</div>
-            </div>
-            <div className="row">
-              <div className="cell"><FaClock /> Rewards Distribution</div>
-              <div className="cell">23rd April 4pm UTC</div>
-            </div>
+            {selectedCompetition.rewards.map((reward, index) => (
+              <div className="row" key={reward.id || index}>
+                <div className="cell">
+                  {index === 0 ? <GiLaurelCrown /> : index === 1 ? <FaTrophy /> : index === 2 ? <FaMedal /> : null} {reward.description || `${reward.rank} Place`}
+                </div>
+                <div className="cell">{reward.amount} USDT</div>
+              </div>
+            ))}
           </div>
         </RewardTable>
-      </CompetitionHeader>
-      
-      {/* Additional Reward Breakdown */}
-      <RewardTable style={{ marginBottom: '3rem' }}>
-        {[...Array(5)].map((_, i) => (
-          <Particle 
-            key={i}
-            $duration={`${3 + i * 0.5}s`}
-            $delay={`${i * 0.7}s`}
-            $top={`${10 + i * 15}%`}
-            $left={`${5 + i * 20}%`}
-          />
-        ))}
-        <h3><BiDollar /> Reward Breakdown</h3>
-        <div className="table">
-          <div className="row">
-            <div className="cell"><GiLaurelCrown /> 1st Place</div>
-            <div className="cell">2,000 USDT</div>
-          </div>
-          <div className="row">
-            <div className="cell"><FaTrophy /> 2nd Place</div>
-            <div className="cell">1,000 USDT</div>
-          </div>
-          <div className="row">
-            <div className="cell"><FaMedal /> 3rd Place</div>
-            <div className="cell">800 USDT</div>
-          </div>
-          <div className="row">
-            <div className="cell">4th Place</div>
-            <div className="cell">700 USDT</div>
-          </div>
-          <div className="row">
-            <div className="cell">5th Place</div>
-            <div className="cell">500 USDT</div>
-          </div>
-          <div className="row">
-            <div className="cell">6th - 10th Places</div>
-            <div className="cell">400 USDT/each</div>
-          </div>
-          <div className="row">
-            <div className="cell">11th - 50th Places</div>
-            <div className="cell">200 USDT/each</div>
-          </div>
-          <div className="row">
-            <div className="cell">51st - 100th Places</div>
-            <div className="cell">100 USDT/each</div>
-          </div>
-        </div>
-      </RewardTable>
-      
-      {loading ? (
-        <LoadingContainer>
-          <div className="loader"></div>
-        </LoadingContainer>
-      ) : (
-        <>
-          {topUsers.length > 0 ? (
-            <PodiumContainer>
-              {/* Order podium as 2nd, 1st, 3rd */}
-              {[1, 0, 2].map((index) => {
-                const position = index;
-                const actualRank = position + 1;
-                const user = topUsers[position];
-                
-                if (!user) return null;
-                
-                return (
-                  <PodiumPosition key={position} $position={position}>
-                    <TrophyIcon $position={position}>
-                      {getTrophyIcon(actualRank)}
-                    </TrophyIcon>
-                    
-                    <PodiumBox $position={position}>
-                      <h3>{position === 0 ? 'Skulldugger' : position === 1 ? 'Klaxxon' : 'Ultralex'}</h3>
-                      <Avatar $rank={actualRank}>
-                        {user.photoURL ? (
-                          <img src={user.photoURL} alt={user.name} />
-                        ) : (
-                          <div className="initials">{getInitials(user.name)}</div>
-                        )}
-                      </Avatar>
-                      <UserDetails>
-                        <div className="name">{user.name}</div>
-                        <div className="amount">
-                          <FaCoins /> {user.balance.toLocaleString()} OSCAR
-                        </div>
-                      </UserDetails>
-                    </PodiumBox>
-                    
-                    <Podium $position={position}>
-                      {actualRank}
-                    </Podium>
-                  </PodiumPosition>
-                );
-              })}
-            </PodiumContainer>
-          ) : null}
-          
-          {currentUser && userRank && (
-            <UserStatsContainer>
-              <h3>Your Ranking</h3>
-              <p>
-                You are ranked <span className="highlight">#{userRank}</span> out of <span className="highlight">{totalUsers}</span> competitors
-              </p>
-            </UserStatsContainer>
-          )}
-          
-          <LeaderboardContainer>
-            <h2><GiPodium /> Leaderboard</h2>
-            
-            <LeaderboardHeader>
-              <span>Rank</span>
-              <span>User</span>
-              <span style={{ textAlign: 'right' }}>Amount</span>
-            </LeaderboardHeader>
-            
-            {users.length > 0 ? (
-              <>
-                {users.map((user, index) => {
-                  const rank = index + 1;
-                  const isCurrentUser = currentUser && user.id === currentUser.uid;
-                  const isTop3 = rank <= 3;
+        
+        {loading ? (
+          <LoadingContainer>
+            <div className="loader"></div>
+          </LoadingContainer>
+        ) : (
+          <>
+            {topUsers.length > 0 ? (
+              <PodiumContainer>
+                {/* Order podium as 2nd, 1st, 3rd */}
+                {[1, 0, 2].map((index) => {
+                  const position = index;
+                  const actualRank = position + 1;
+                  const user = topUsers[position];
+                  
+                  if (!user) return null;
                   
                   return (
-                    <LeaderboardRow 
-                      key={user.id}
-                      $isCurrentUser={isCurrentUser}
-                      $index={index}
-                    >
-                      <RankCell $isTop3={isTop3} $rank={rank}>
-                        {isTop3 && <div className="rank-icon">{getTrophyIcon(rank)}</div>}
-                        {rank}
-                      </RankCell>
-                      <UserCell $rank={rank}>
-                        <div className="avatar">
+                    <PodiumPosition key={position} $position={position}>
+                      <TrophyIcon $position={position}>
+                        {getTrophyIcon(actualRank)}
+                      </TrophyIcon>
+                      
+                      <PodiumBox $position={position}>
+                        <h3>{position === 0 ? 'Skulldugger' : position === 1 ? 'Klaxxon' : 'Ultralex'}</h3>
+                        <Avatar $rank={actualRank}>
                           {user.photoURL ? (
                             <img src={user.photoURL} alt={user.name} />
                           ) : (
                             <div className="initials">{getInitials(user.name)}</div>
                           )}
-                        </div>
-                        <div className="name">{user.name}</div>
-                      </UserCell>
-                      <AmountCell>
-                        <FaCoins /> {user.balance.toLocaleString()} OSCAR
-                      </AmountCell>
-                    </LeaderboardRow>
+                        </Avatar>
+                        <UserDetails>
+                          <div className="name">{user.name}</div>
+                          <div className="amount">
+                            <FaCoins /> {user.balance.toLocaleString()} {selectedCompetition.coinSymbol}
+                          </div>
+                        </UserDetails>
+                      </PodiumBox>
+                      
+                      <Podium $position={position}>
+                        {actualRank}
+                      </Podium>
+                    </PodiumPosition>
                   );
                 })}
-              </>
-            ) : (
-              <EmptyState>
-                <FaCoins />
-                <p>No users found with OSCAR tokens.</p>
-              </EmptyState>
+              </PodiumContainer>
+            ) : null}
+            
+            {currentUser && userRank && (
+              <UserStatsContainer>
+                <h3>Your Ranking</h3>
+                <p>
+                  You are ranked <span className="highlight">#{userRank}</span> out of <span className="highlight">{totalUsers}</span> competitors
+                </p>
+              </UserStatsContainer>
             )}
-          </LeaderboardContainer>
-        </>
-      )}
-    </Container>
-  );
+            
+            <LeaderboardContainer>
+              <h2><GiPodium /> Leaderboard</h2>
+              
+              <LeaderboardHeader>
+                <span>Rank</span>
+                <span>User</span>
+                <span style={{ textAlign: 'right' }}>Amount</span>
+              </LeaderboardHeader>
+              
+              {users.length > 0 ? (
+                <>
+                  {users.map((user, index) => {
+                    const rank = index + 1;
+                    const isCurrentUser = currentUser && user.id === currentUser.uid;
+                    const isTop3 = rank <= 3;
+                    
+                    return (
+                      <LeaderboardRow 
+                        key={user.id}
+                        $isCurrentUser={isCurrentUser}
+                        $index={index}
+                      >
+                        <RankCell $isTop3={isTop3} $rank={rank}>
+                          {isTop3 && <div className="rank-icon">{getTrophyIcon(rank)}</div>}
+                          {rank}
+                        </RankCell>
+                        <UserCell $rank={rank}>
+                          <div className="avatar">
+                            {user.photoURL ? (
+                              <img src={user.photoURL} alt={user.name} />
+                            ) : (
+                              <div className="initials">{getInitials(user.name)}</div>
+                            )}
+                          </div>
+                          <div className="name">{user.name}</div>
+                        </UserCell>
+                        <AmountCell>
+                          <FaCoins /> {user.balance.toLocaleString()} {selectedCompetition.coinSymbol}
+                        </AmountCell>
+                      </LeaderboardRow>
+                    );
+                  })}
+                </>
+              ) : (
+                <EmptyState>
+                  <FaCoins />
+                  <p>No users found with {selectedCompetition.coinSymbol} tokens.</p>
+                </EmptyState>
+              )}
+            </LeaderboardContainer>
+          </>
+        )}
+      </Container>
+    );
+  };
+  
+  // Main render
+  return selectedCompetition ? renderCompetitionDetails() : renderCompetitionSelection();
 };
 
 export default Competition; 

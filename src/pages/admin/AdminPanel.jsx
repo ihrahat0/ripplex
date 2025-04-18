@@ -13,6 +13,7 @@ import UserDeposits from './UserDeposits';
 import AllDeposits from './AllDeposits';
 import AdminWallets from './AdminWallets';
 import AllWallets from './AllWallets';
+import CompetitionManagement from './CompetitionManagement';
 import { getDoc, doc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { db } from '../../firebase';
 
@@ -340,6 +341,7 @@ const AdminPanel = () => {
     if (path.includes('settings')) return 'Settings';
     if (path.includes('wallets')) return 'Wallets';
     if (path.includes('all-wallets')) return 'All User Wallets';
+    if (path.includes('competitions')) return 'Competition Management';
     return 'Admin Panel';
   };
   
@@ -383,6 +385,11 @@ const AdminPanel = () => {
           <NavItem>
             <NavLink to="/admin/coins" active={location.pathname.includes('/admin/coins') ? 'true' : undefined}>
               <i className="bi bi-coin"></i> Coins
+            </NavLink>
+          </NavItem>
+          <NavItem>
+            <NavLink to="/admin/competitions" active={location.pathname.includes('/admin/competitions') ? 'true' : undefined}>
+              <i className="bi bi-trophy"></i> Competitions
             </NavLink>
           </NavItem>
           <NavItem>
@@ -506,6 +513,7 @@ const AdminPanel = () => {
           <Route path="/balances/:userId" element={<BalanceManagement />} />
           <Route path="/tokens/*" element={<TokenManagement />} />
           <Route path="/coins/*" element={<CoinManagement />} />
+          <Route path="/competitions/*" element={<CompetitionManagement />} />
           <Route path="/withdrawal-management/*" element={<WithdrawalManagement />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/wallets" element={<AdminWallets />} />
