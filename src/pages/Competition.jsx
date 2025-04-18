@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import defaultAvatar from '../assets/images/avatar.png';
+import oscarLogo from '../assets/images/coin/oscar.png';
 import { FaTrophy, FaMedal, FaCoins, FaCalendarAlt, FaClock } from 'react-icons/fa';
 import { GiLaurelCrown, GiPodium } from 'react-icons/gi';
 import { BiDollar } from 'react-icons/bi';
@@ -50,6 +51,17 @@ const slideInRight = keyframes`
   }
 `;
 
+const gradientMove = keyframes`
+  0% { background-position: 0% 50% }
+  50% { background-position: 100% 50% }
+  100% { background-position: 0% 50% }
+`;
+
+const rotate = keyframes`
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+`;
+
 const Container = styled.div`
   max-width: 1200px;
   margin: 0 auto;
@@ -59,6 +71,94 @@ const Container = styled.div`
   @media (max-width: 768px) {
     padding: 1rem;
   }
+`;
+
+const LogoContainer = styled.div`
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+  position: relative;
+  z-index: 2;
+`;
+
+const LogoBox = styled.div`
+  display: flex;
+  align-items: center;
+  padding: 0.8rem 1.2rem;
+  background: linear-gradient(270deg, #13141C, #242738, #13141C);
+  background-size: 200% 200%;
+  animation: ${gradientMove} 5s ease infinite;
+  border-radius: 30px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(240, 185, 11, 0.3);
+  position: relative;
+  overflow: hidden;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(circle at center, rgba(240, 185, 11, 0.2) 0%, rgba(240, 185, 11, 0) 70%);
+    opacity: 0.6;
+    z-index: 0;
+    animation: ${pulse} 3s infinite ease-in-out;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    right: -50%;
+    bottom: -50%;
+    background: linear-gradient(to right, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.1) 50%, rgba(255, 255, 255, 0) 100%);
+    transform: rotate(45deg);
+    animation: ${shine} 3s infinite;
+    z-index: 1;
+  }
+`;
+
+const LogoImage = styled.div`
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  overflow: hidden;
+  margin-right: 1rem;
+  position: relative;
+  z-index: 2;
+  animation: ${pulse} 3s infinite ease-in-out;
+  box-shadow: 0 0 20px rgba(240, 185, 11, 0.3);
+  border: 2px solid #f0b90b;
+  
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  
+  &::before {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, rgba(240, 185, 11, 0.2), transparent);
+    animation: ${pulse} 2s infinite;
+  }
+`;
+
+const LogoText = styled.div`
+  font-size: 1.8rem;
+  font-weight: bold;
+  background: linear-gradient(to right, #f0b90b, #ffee58);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  position: relative;
+  z-index: 2;
+  letter-spacing: 1px;
+  text-transform: uppercase;
 `;
 
 const PageHeader = styled.div`
@@ -715,6 +815,16 @@ const Competition = () => {
   
   return (
     <Container>
+      {/* Add Oscar Logo Box */}
+      <LogoContainer>
+        <LogoBox>
+          <LogoImage>
+            <img src={oscarLogo} alt="OSCAR" />
+          </LogoImage>
+          <LogoText>OSCAR</LogoText>
+        </LogoBox>
+      </LogoContainer>
+      
       <PageHeader>
         <Label>COMPETITION</Label>
       </PageHeader>
