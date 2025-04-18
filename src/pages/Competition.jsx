@@ -62,6 +62,18 @@ const rotate = keyframes`
   to { transform: rotate(360deg); }
 `;
 
+const glow = keyframes`
+  0% { box-shadow: 0 0 5px rgba(240, 185, 11, 0.3), 0 0 10px rgba(240, 185, 11, 0.2); }
+  50% { box-shadow: 0 0 20px rgba(240, 185, 11, 0.5), 0 0 30px rgba(240, 185, 11, 0.3); }
+  100% { box-shadow: 0 0 5px rgba(240, 185, 11, 0.3), 0 0 10px rgba(240, 185, 11, 0.2); }
+`;
+
+const particleFloat = keyframes`
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  50% { opacity: 0.8; }
+  100% { transform: translateY(-20px) translateX(10px); opacity: 0; }
+`;
+
 const Container = styled.div`
   max-width: 1200px;
   margin: 0 auto;
@@ -268,11 +280,47 @@ const CompetitionInfo = styled.div`
 `;
 
 const RewardTable = styled.div`
-  background: rgba(26, 28, 42, 0.7);
+  background: linear-gradient(135deg, rgba(26, 28, 42, 0.7), rgba(31, 33, 53, 0.7));
+  background-size: 200% 200%;
+  animation: ${gradientMove} 15s ease infinite;
   border-radius: 12px;
   padding: 1.5rem;
   border: 1px solid rgba(240, 185, 11, 0.2);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2), 0 0 15px rgba(240, 185, 11, 0.2);
+    transform: translateY(-3px);
+  }
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #f0b90b, #ffee58, #f0b90b);
+    background-size: 200% auto;
+    animation: ${shine} 3s linear infinite;
+    opacity: 0.8;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    right: -50%;
+    bottom: -50%;
+    background: linear-gradient(to right, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0) 100%);
+    transform: rotate(45deg);
+    animation: ${shine} 6s infinite;
+    z-index: 1;
+  }
   
   h3 {
     margin-top: 0;
@@ -282,11 +330,19 @@ const RewardTable = styled.div`
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    position: relative;
+    z-index: 2;
+    
+    svg {
+      animation: ${pulse} 3s infinite ease-in-out;
+    }
   }
   
   .table {
     width: 100%;
     border-collapse: collapse;
+    position: relative;
+    z-index: 2;
   }
   
   .row {
@@ -294,10 +350,28 @@ const RewardTable = styled.div`
     grid-template-columns: 1fr 1fr;
     padding: 0.8rem 0;
     border-bottom: 1px solid rgba(40, 43, 62, 0.5);
-    transition: background-color 0.2s;
+    transition: all 0.3s;
+    position: relative;
     
     &:hover {
-      background: rgba(240, 185, 11, 0.05);
+      background: rgba(240, 185, 11, 0.08);
+      padding-left: 0.5rem;
+    }
+    
+    &:after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(240, 185, 11, 0.5), transparent);
+      transition: width 0.3s ease-in-out;
+    }
+    
+    &:hover:after {
+      width: 100%;
     }
   }
   
@@ -311,6 +385,15 @@ const RewardTable = styled.div`
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    transition: all 0.3s;
+    
+    svg {
+      transition: transform 0.3s ease;
+    }
+    
+    &:hover svg {
+      transform: scale(1.2);
+    }
   }
   
   .cell:last-child {
@@ -318,6 +401,11 @@ const RewardTable = styled.div`
     color: #f0b90b;
     justify-content: flex-end;
     font-weight: 500;
+    text-shadow: 0 0 10px rgba(240, 185, 11, 0.2);
+    
+    &:hover {
+      text-shadow: 0 0 15px rgba(240, 185, 11, 0.4);
+    }
   }
   
   svg {
@@ -556,12 +644,42 @@ const UserStatsContainer = styled.div`
 `;
 
 const LeaderboardContainer = styled.div`
-  background: linear-gradient(135deg, #13141C, #1e2033);
+  background: linear-gradient(135deg, #13141C, #1e2033, #13141C);
+  background-size: 200% 200%;
+  animation: ${gradientMove} 15s ease infinite;
   border-radius: 16px;
   padding: 2rem;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
   border: 1px solid #282B3E;
   animation: ${fadeIn} 1s ease-out;
+  position: relative;
+  overflow: hidden;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #f0b90b, #ffee58, #f0b90b);
+    background-size: 200% auto;
+    animation: ${shine} 3s linear infinite;
+    opacity: 0.8;
+  }
+  
+  &::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    right: -50%;
+    bottom: -50%;
+    background: linear-gradient(to right, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0) 100%);
+    transform: rotate(45deg);
+    animation: ${shine} 7s infinite;
+    z-index: 1;
+  }
   
   h2 {
     margin-top: 0;
@@ -571,10 +689,14 @@ const LeaderboardContainer = styled.div`
     align-items: center;
     gap: 0.5rem;
     font-size: 1.5rem;
+    position: relative;
+    z-index: 2;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
   }
   
   svg {
     color: #f0b90b;
+    animation: ${pulse} 3s infinite ease-in-out;
   }
 `;
 
@@ -582,18 +704,28 @@ const LeaderboardHeader = styled.div`
   display: grid;
   grid-template-columns: 80px 1fr 1fr;
   padding: 0.8rem 1.2rem;
-  background: rgba(26, 28, 42, 0.8);
+  background: linear-gradient(135deg, rgba(26, 28, 42, 0.8), rgba(31, 33, 53, 0.8));
+  background-size: 200% 200%;
+  animation: ${gradientMove} 10s ease infinite;
   border-radius: 10px;
   margin-bottom: 0.8rem;
   font-weight: bold;
   color: #B7BDC6;
   border: 1px solid rgba(40, 43, 62, 0.8);
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   
   span {
     font-size: 0.95rem;
     display: flex;
     align-items: center;
     gap: 0.4rem;
+    transition: all 0.3s;
+    
+    &:hover {
+      color: #f0b90b;
+    }
   }
 `;
 
@@ -601,18 +733,43 @@ const LeaderboardRow = styled.div`
   display: grid;
   grid-template-columns: 80px 1fr 1fr;
   padding: 1rem 1.2rem;
-  background: ${props => props.$isCurrentUser ? 'rgba(240, 185, 11, 0.1)' : 'rgba(26, 28, 42, 0.6)'};
+  background: ${props => props.$isCurrentUser ? 
+    'linear-gradient(90deg, rgba(240, 185, 11, 0.1), rgba(240, 185, 11, 0.05))' : 
+    'linear-gradient(90deg, rgba(26, 28, 42, 0.6), rgba(36, 39, 56, 0.6))'};
+  background-size: 200% 200%;
+  animation: ${props => props.$isCurrentUser ? 
+    css`${gradientMove} 8s ease infinite, ${fadeIn} 0.3s ease-in-out ${props => props.$index * 0.03}s both` : 
+    css`${fadeIn} 0.3s ease-in-out ${props => props.$index * 0.03}s both`};
   border-radius: 10px;
   margin-bottom: 0.6rem;
   align-items: center;
-  animation: ${fadeIn} 0.3s ease-in-out ${props => props.$index * 0.03}s both;
   border: 1px solid ${props => props.$isCurrentUser ? 'rgba(240, 185, 11, 0.3)' : 'transparent'};
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform 0.3s, box-shadow 0.3s, background 0.3s;
+  position: relative;
+  z-index: 2;
   
   &:hover {
-    background: ${props => props.$isCurrentUser ? 'rgba(240, 185, 11, 0.15)' : 'rgba(36, 39, 56, 0.8)'};
-    transform: translateX(5px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    background: ${props => props.$isCurrentUser ? 
+      'linear-gradient(90deg, rgba(240, 185, 11, 0.15), rgba(240, 185, 11, 0.1))' : 
+      'linear-gradient(90deg, rgba(36, 39, 56, 0.8), rgba(46, 49, 66, 0.8))'};
+    transform: translateX(5px) scale(1.01);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    z-index: 3;
+  }
+  
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: ${props => props.$isCurrentUser ? '100%' : '0'};
+    height: 1px;
+    background: linear-gradient(90deg, #f0b90b, transparent);
+    transition: width 0.4s ease-in-out;
+  }
+  
+  &:hover::after {
+    width: 100%;
   }
 `;
 
@@ -632,6 +789,23 @@ const RankCell = styled.div`
     align-items: center;
     justify-content: center;
     animation: ${shimmer} 2s infinite ease-in-out;
+    position: relative;
+    
+    &::after {
+      content: '';
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: radial-gradient(circle, 
+        ${props => props.$rank === 1 ? 'rgba(240, 185, 11, 0.4)' : 
+          props.$rank === 2 ? 'rgba(163, 163, 163, 0.4)' : 
+          'rgba(205, 127, 50, 0.4)'}, 
+        transparent 70%);
+      filter: blur(5px);
+      animation: ${pulse} 2s infinite;
+      opacity: ${props => props.$isTop3 ? '1' : '0'};
+    }
   }
 `;
 
@@ -684,9 +858,29 @@ const AmountCell = styled.div`
   align-items: center;
   justify-content: flex-end;
   gap: 0.4rem;
+  position: relative;
+  
+  &::after {
+    content: '';
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(240, 185, 11, 0.4), transparent 70%);
+    filter: blur(5px);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  
+  &:hover::after {
+    opacity: 1;
+  }
   
   svg {
     color: #f0b90b;
+    animation: ${pulse} 3s infinite ease-in-out;
   }
 `;
 
@@ -731,6 +925,21 @@ const EmptyState = styled.div`
     opacity: 0.5;
     margin-bottom: 1rem;
   }
+`;
+
+const Particle = styled.div`
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: rgba(240, 185, 11, 0.5);
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 1;
+  animation: ${particleFloat} ${props => props.$duration || '3s'} ease-in-out infinite;
+  animation-delay: ${props => props.$delay || '0s'};
+  top: ${props => props.$top || '50%'};
+  left: ${props => props.$left || '50%'};
 `;
 
 const Competition = () => {
@@ -839,6 +1048,15 @@ const Competition = () => {
         </CompetitionInfo>
         
         <RewardTable>
+          {[...Array(5)].map((_, i) => (
+            <Particle 
+              key={i}
+              $duration={`${3 + i * 0.5}s`}
+              $delay={`${i * 0.7}s`}
+              $top={`${20 + i * 15}%`}
+              $left={`${10 + i * 20}%`}
+            />
+          ))}
           <h3><FaCalendarAlt /> Competition Schedule</h3>
           <div className="table">
             <div className="row">
@@ -863,6 +1081,15 @@ const Competition = () => {
       
       {/* Additional Reward Breakdown */}
       <RewardTable style={{ marginBottom: '3rem' }}>
+        {[...Array(5)].map((_, i) => (
+          <Particle 
+            key={i}
+            $duration={`${3 + i * 0.5}s`}
+            $delay={`${i * 0.7}s`}
+            $top={`${10 + i * 15}%`}
+            $left={`${5 + i * 20}%`}
+          />
+        ))}
         <h3><BiDollar /> Reward Breakdown</h3>
         <div className="table">
           <div className="row">
