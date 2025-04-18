@@ -1082,7 +1082,7 @@ const Competition = () => {
             <RewardAmount>
               <span style={{ '--i': 1 }}>2</span>
               <span style={{ '--i': 2 }}>0</span>
-              <span style={{ '--i': 3 }}>.</span>
+              <span style={{ '--i': 3 }}>,</span>
               <span style={{ '--i': 4 }}>0</span>
               <span style={{ '--i': 5 }}>0</span>
               <span style={{ '--i': 6 }}>0</span>
