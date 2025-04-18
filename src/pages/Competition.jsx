@@ -74,6 +74,40 @@ const particleFloat = keyframes`
   100% { transform: translateY(-20px) translateX(10px); opacity: 0; }
 `;
 
+// Adding additional animations
+const shimmerAnimation = keyframes`
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+`;
+
+const floatAnimation = keyframes`
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+`;
+
+const pulseGlow = keyframes`
+  0% {
+    box-shadow: 0 0 5px rgba(255, 165, 0, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(255, 165, 0, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 5px rgba(255, 165, 0, 0.5);
+  }
+`;
+
 const Container = styled.div`
   max-width: 1200px;
   margin: 0 auto;
@@ -280,235 +314,206 @@ const CompetitionInfo = styled.div`
 `;
 
 const RewardTable = styled.div`
-  background: linear-gradient(135deg, rgba(26, 28, 42, 0.7), rgba(31, 33, 53, 0.7));
-  background-size: 200% 200%;
-  animation: ${gradientMove} 15s ease infinite;
-  border-radius: 12px;
-  padding: 1.5rem;
-  border: 1px solid rgba(240, 185, 11, 0.2);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
   position: relative;
   overflow: hidden;
+  background: rgba(22, 22, 26, 0.9);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-top: 1.5rem;
+  border: 1px solid rgba(255, 165, 0, 0.2);
   transition: all 0.3s ease;
-  
-  &:hover {
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2), 0 0 15px rgba(240, 185, 11, 0.2);
-    transform: translateY(-3px);
-  }
-  
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, #f0b90b, #ffee58, #f0b90b);
-    background-size: 200% auto;
-    animation: ${shine} 3s linear infinite;
-    opacity: 0.8;
-  }
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
 
-  &::after {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    right: -50%;
-    bottom: -50%;
-    background: linear-gradient(to right, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0) 100%);
-    transform: rotate(45deg);
-    animation: ${shine} 6s infinite;
-    z-index: 1;
+  &:hover {
+    border: 1px solid rgba(255, 165, 0, 0.5);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
   }
   
   h3 {
-    margin-top: 0;
-    margin-bottom: 1rem;
-    color: #fff;
-    font-size: 1.3rem;
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    position: relative;
-    z-index: 2;
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: #f8f8f8;
     
     svg {
-      animation: ${pulse} 3s infinite ease-in-out;
+      color: #ffa500;
     }
   }
   
   .table {
+    display: flex;
+    flex-direction: column;
     width: 100%;
-    border-collapse: collapse;
-    position: relative;
-    z-index: 2;
   }
   
   .row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    padding: 0.8rem 0;
-    border-bottom: 1px solid rgba(40, 43, 62, 0.5);
-    transition: all 0.3s;
-    position: relative;
+    display: flex;
+    justify-content: space-between;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s ease;
     
     &:hover {
-      background: rgba(240, 185, 11, 0.08);
-      padding-left: 0.5rem;
+      background: rgba(255, 165, 0, 0.05);
+      transform: translateX(5px);
     }
     
-    &:after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(240, 185, 11, 0.5), transparent);
-      transition: width 0.3s ease-in-out;
+    &:last-child {
+      border-bottom: none;
     }
-    
-    &:hover:after {
-      width: 100%;
-    }
-  }
-  
-  .row:last-child {
-    border-bottom: none;
   }
   
   .cell {
-    font-size: 0.95rem;
-    color: #B7BDC6;
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    transition: all 0.3s;
     
-    svg {
-      transition: transform 0.3s ease;
+    &:first-child {
+      color: #e0e0e0;
+      font-weight: 500;
+      
+      svg {
+        color: #ffa500;
+      }
     }
     
-    &:hover svg {
-      transform: scale(1.2);
+    &:last-child {
+      color: #ffa500;
+      font-weight: 600;
+      text-align: right;
+      
+      /* Add shimmer effect to reward amounts */
+      background: linear-gradient(
+        90deg, 
+        rgba(255, 165, 0, 0.5) 0%, 
+        rgba(255, 215, 0, 0.8) 25%, 
+        rgba(255, 165, 0, 0.5) 50%, 
+        rgba(255, 215, 0, 0.8) 75%, 
+        rgba(255, 165, 0, 0.5) 100%
+      );
+      background-size: 200% auto;
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+      animation: ${shimmerAnimation} 4s linear infinite;
     }
-  }
-  
-  .cell:last-child {
-    text-align: right;
-    color: #f0b90b;
-    justify-content: flex-end;
-    font-weight: 500;
-    text-shadow: 0 0 10px rgba(240, 185, 11, 0.2);
-    
-    &:hover {
-      text-shadow: 0 0 15px rgba(240, 185, 11, 0.4);
-    }
-  }
-  
-  svg {
-    color: #f0b90b;
   }
 `;
 
 const PodiumContainer = styled.div`
   display: flex;
-  justify-content: space-around;
+  justify-content: center;
   align-items: flex-end;
-  margin: 4rem 0;
+  gap: 1rem;
+  margin: 2rem 0;
   perspective: 1000px;
+  transform-style: preserve-3d;
   
   @media (max-width: 768px) {
-    flex-direction: column;
-    align-items: center;
-    gap: 2rem;
+    gap: 0.5rem;
   }
 `;
 
 const PodiumPosition = styled.div`
-  position: relative;
-  width: 220px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  transform: translateY(${props => props.$position === 0 ? '-25px' : '0'}) 
-             rotateY(${props => props.$position === 0 ? '0deg' : props.$position === 1 ? '-10deg' : '10deg'});
-  animation: ${fadeIn} 0.5s ease-out ${props => props.$position * 0.3}s both;
+  transform-style: preserve-3d;
+  transform: ${props => props.$position === 0 
+    ? 'translateY(-10px) scale(1.05)' 
+    : 'translateY(0) scale(1)'
+  };
+  animation: ${floatAnimation} ${props => 3 + props.$position}s ease-in-out infinite;
+  transition: all 0.3s ease;
+  z-index: ${props => props.$position === 0 ? 3 : props.$position === 1 ? 2 : 1};
   
-  @media (max-width: 768px) {
-    transform: none;
-    order: ${props => props.$position === 0 ? '0' : props.$position === 1 ? '1' : '2'};
+  &:hover {
+    transform: ${props => props.$position === 0 
+      ? 'translateY(-15px) scale(1.08)' 
+      : 'translateY(-5px) scale(1.03)'
+    };
   }
 `;
 
+const TrophyIcon = styled.div`
+  position: absolute;
+  top: -25px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: ${props => 
+    props.$position === 0 ? '#FFD700' : // Gold
+    props.$position === 1 ? '#C0C0C0' : // Silver
+    '#CD7F32' // Bronze
+  };
+  filter: drop-shadow(0 0 8px ${props => 
+    props.$position === 0 ? 'rgba(255, 215, 0, 0.8)' : 
+    props.$position === 1 ? 'rgba(192, 192, 192, 0.8)' : 
+    'rgba(205, 127, 50, 0.8)'
+  });
+  animation: ${pulseGlow} 2s ease-in-out infinite;
+  z-index: 5;
+`;
+
 const PodiumBox = styled.div`
-  background: linear-gradient(135deg, #1A1C2A, #242738);
-  border-radius: 16px;
-  width: 100%;
-  padding: 1.8rem 1rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-  border: 1px solid ${props => props.$position === 0 ? '#f0b90b' : props.$position === 1 ? '#A3A3A3' : '#CD7F32'};
-  transform: scale(${props => props.$position === 0 ? '1.1' : '1'});
   position: relative;
-  overflow: hidden;
-  transition: transform 0.3s, box-shadow 0.3s;
-  
-  &:hover {
-    transform: scale(${props => props.$position === 0 ? '1.15' : '1.05'});
-    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
-  }
-  
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: ${props => props.$position === 0 ? '6px' : '4px'};
-    background: ${props => 
-      props.$position === 0 
-        ? 'linear-gradient(90deg, #f0b90b, #ffee58, #f0b90b)' 
-        : props.$position === 1 
-          ? 'linear-gradient(90deg, #A3A3A3, #FFFFFF, #A3A3A3)' 
-          : 'linear-gradient(90deg, #CD7F32, #FFA07A, #CD7F32)'};
-    background-size: 200% auto;
-    animation: ${shine} 3s linear infinite;
-  }
-  
-  &::after {
-    content: '${props => props.$position === 0 ? '1st' : props.$position === 1 ? '2nd' : '3rd'}';
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background: ${props => 
-      props.$position === 0 ? '#f0b90b' : 
-      props.$position === 1 ? '#A3A3A3' : 
-      '#CD7F32'};
-    color: #000;
-    font-size: 0.7rem;
-    font-weight: bold;
-    padding: 0.2rem 0.5rem;
-    border-radius: 10px;
-    opacity: 0.9;
-  }
+  width: ${props => props.$position === 0 ? '130px' : '110px'};
+  background: rgba(30, 30, 35, 0.9);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid ${props => 
+    props.$position === 0 ? 'rgba(255, 215, 0, 0.3)' : 
+    props.$position === 1 ? 'rgba(192, 192, 192, 0.3)' : 
+    'rgba(205, 127, 50, 0.3)'
+  };
+  text-align: center;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
   
   h3 {
-    margin: 0 0 0.8rem;
-    color: ${props => props.$position === 0 ? '#f0b90b' : props.$position === 1 ? '#A3A3A3' : '#CD7F32'};
-    font-size: 1.3rem;
+    font-size: 0.85rem;
+    color: ${props => 
+      props.$position === 0 ? '#FFD700' : 
+      props.$position === 1 ? '#C0C0C0' : 
+      '#CD7F32'
+    };
+    margin-bottom: 0.5rem;
     text-transform: uppercase;
     letter-spacing: 1px;
+    background: linear-gradient(
+      90deg, 
+      ${props => props.$position === 0 
+        ? 'rgba(255, 215, 0, 0.7) 0%, rgba(255, 236, 115, 1) 50%, rgba(255, 215, 0, 0.7) 100%' 
+        : props.$position === 1 
+          ? 'rgba(192, 192, 192, 0.7) 0%, rgba(220, 220, 220, 1) 50%, rgba(192, 192, 192, 0.7) 100%' 
+          : 'rgba(205, 127, 50, 0.7) 0%, rgba(215, 155, 100, 1) 50%, rgba(205, 127, 50, 0.7) 100%'
+      }
+    );
+    background-size: 200% auto;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    animation: ${shimmerAnimation} 3s linear infinite;
+  }
+  
+  &:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+    border: 1px solid ${props => 
+      props.$position === 0 ? 'rgba(255, 215, 0, 0.6)' : 
+      props.$position === 1 ? 'rgba(192, 192, 192, 0.6)' : 
+      'rgba(205, 127, 50, 0.6)'
+    };
   }
   
   @media (max-width: 768px) {
-    transform: none;
-    width: 240px;
+    width: ${props => props.$position === 0 ? '100px' : '90px'};
+    padding: 0.75rem;
   }
 `;
 
@@ -542,27 +547,6 @@ const Avatar = styled.div`
     font-size: 2rem;
     font-weight: bold;
   }
-`;
-
-const TrophyIcon = styled.div`
-  position: absolute;
-  top: -35px;
-  z-index: 2;
-  color: ${props => props.$position === 0 ? '#f0b90b' : props.$position === 1 ? '#A3A3A3' : '#CD7F32'};
-  font-size: ${props => props.$position === 0 ? '2.5rem' : '2.2rem'};
-  animation: ${float} 4s infinite ease-in-out;
-  background: radial-gradient(circle, rgba(26, 28, 42, 0.95), rgba(19, 20, 31, 0.9));
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3), 
-              0 0 10px ${props => 
-                props.$position === 0 ? 'rgba(240, 185, 11, 0.5)' : 
-                props.$position === 1 ? 'rgba(163, 163, 163, 0.5)' : 
-                'rgba(205, 127, 50, 0.5)'};
 `;
 
 const UserDetails = styled.div`
@@ -609,167 +593,123 @@ const Podium = styled.div`
 `;
 
 const UserStatsContainer = styled.div`
-  background: linear-gradient(135deg, #1A1C2A, #242738);
-  border-radius: 16px;
-  padding: 1.8rem;
-  margin-bottom: 2.5rem;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-  border: 1px solid #282B3E;
+  background: linear-gradient(135deg, rgba(30, 30, 35, 0.9), rgba(40, 40, 45, 0.9));
+  background-size: 200% 200%;
+  animation: ${gradientMove} 10s ease infinite;
+  border-radius: 12px;
+  padding: 1.2rem;
+  margin: 1.5rem 0;
   text-align: center;
-  animation: ${fadeIn} 0.8s ease-out;
+  border: 1px solid rgba(255, 165, 0, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  
+  &:hover {
+    border: 1px solid rgba(255, 165, 0, 0.5);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
+  }
   
   h3 {
-    margin-top: 0;
-    color: #fff;
-    font-size: 1.3rem;
-    margin-bottom: 1rem;
+    font-size: 1.25rem;
+    margin-bottom: 0.75rem;
+    color: #ffa500;
   }
   
   p {
-    margin: 0.8rem 0;
-    color: #B7BDC6;
     font-size: 1.1rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-  }
-  
-  .highlight {
-    color: #f0b90b;
-    font-weight: bold;
-    font-size: 1.4rem;
-    text-shadow: 0 0 10px rgba(240, 185, 11, 0.3);
+    color: #e0e0e0;
+    
+    .highlight {
+      color: #ffa500;
+      font-weight: 700;
+      animation: ${pulseGlow} 2s ease-in-out infinite;
+    }
   }
 `;
 
 const LeaderboardContainer = styled.div`
-  background: linear-gradient(135deg, #13141C, #1e2033, #13141C);
-  background-size: 200% 200%;
-  animation: ${gradientMove} 15s ease infinite;
-  border-radius: 16px;
-  padding: 2rem;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-  border: 1px solid #282B3E;
-  animation: ${fadeIn} 1s ease-out;
-  position: relative;
-  overflow: hidden;
+  background: rgba(22, 22, 26, 0.9);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 2rem 0;
+  border: 1px solid rgba(255, 165, 0, 0.2);
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
   
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, #f0b90b, #ffee58, #f0b90b);
-    background-size: 200% auto;
-    animation: ${shine} 3s linear infinite;
-    opacity: 0.8;
-  }
-  
-  &::after {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    right: -50%;
-    bottom: -50%;
-    background: linear-gradient(to right, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0) 100%);
-    transform: rotate(45deg);
-    animation: ${shine} 7s infinite;
-    z-index: 1;
+  &:hover {
+    border: 1px solid rgba(255, 165, 0, 0.4);
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
   }
   
   h2 {
-    margin-top: 0;
-    color: #fff;
-    margin-bottom: 1.5rem;
     display: flex;
     align-items: center;
     gap: 0.5rem;
     font-size: 1.5rem;
-    position: relative;
-    z-index: 2;
-    text-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
-  }
-  
-  svg {
-    color: #f0b90b;
-    animation: ${pulse} 3s infinite ease-in-out;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: #f8f8f8;
+    
+    svg {
+      color: #ffa500;
+    }
   }
 `;
 
 const LeaderboardHeader = styled.div`
   display: grid;
-  grid-template-columns: 80px 1fr 1fr;
-  padding: 0.8rem 1.2rem;
-  background: linear-gradient(135deg, rgba(26, 28, 42, 0.8), rgba(31, 33, 53, 0.8));
-  background-size: 200% 200%;
-  animation: ${gradientMove} 10s ease infinite;
-  border-radius: 10px;
-  margin-bottom: 0.8rem;
-  font-weight: bold;
-  color: #B7BDC6;
-  border: 1px solid rgba(40, 43, 62, 0.8);
-  position: relative;
-  z-index: 2;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  grid-template-columns: 0.8fr 2fr 1fr;
+  padding: 0.75rem 1rem;
+  background: rgba(30, 30, 35, 0.7);
+  border-radius: 8px 8px 0 0;
+  font-weight: 600;
+  color: #e0e0e0;
+  border-bottom: 2px solid rgba(255, 165, 0, 0.3);
   
   span {
-    font-size: 0.95rem;
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    transition: all 0.3s;
-    
-    &:hover {
-      color: #f0b90b;
+    &:last-child {
+      text-align: right;
     }
   }
 `;
 
 const LeaderboardRow = styled.div`
   display: grid;
-  grid-template-columns: 80px 1fr 1fr;
-  padding: 1rem 1.2rem;
-  background: ${props => props.$isCurrentUser ? 
-    'linear-gradient(90deg, rgba(240, 185, 11, 0.1), rgba(240, 185, 11, 0.05))' : 
-    'linear-gradient(90deg, rgba(26, 28, 42, 0.6), rgba(36, 39, 56, 0.6))'};
-  background-size: 200% 200%;
-  animation: ${props => props.$isCurrentUser ? 
-    css`${gradientMove} 8s ease infinite, ${fadeIn} 0.3s ease-in-out ${props => props.$index * 0.03}s both` : 
-    css`${fadeIn} 0.3s ease-in-out ${props => props.$index * 0.03}s both`};
-  border-radius: 10px;
-  margin-bottom: 0.6rem;
-  align-items: center;
-  border: 1px solid ${props => props.$isCurrentUser ? 'rgba(240, 185, 11, 0.3)' : 'transparent'};
-  transition: transform 0.3s, box-shadow 0.3s, background 0.3s;
-  position: relative;
-  z-index: 2;
+  grid-template-columns: 0.8fr 2fr 1fr;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: ${props => props.$isCurrentUser ? 'rgba(255, 165, 0, 0.1)' : 'transparent'};
+  transition: all 0.2s ease;
+  
+  /* Add animation for row appearance */
+  opacity: 0;
+  transform: translateY(10px);
+  animation: fadeInUp 0.3s forwards;
+  animation-delay: ${props => props.$index * 0.05}s;
+  
+  @keyframes fadeInUp {
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
   
   &:hover {
-    background: ${props => props.$isCurrentUser ? 
-      'linear-gradient(90deg, rgba(240, 185, 11, 0.15), rgba(240, 185, 11, 0.1))' : 
-      'linear-gradient(90deg, rgba(36, 39, 56, 0.8), rgba(46, 49, 66, 0.8))'};
-    transform: translateX(5px) scale(1.01);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    z-index: 3;
+    background: rgba(255, 165, 0, 0.05);
+    transform: translateX(5px);
   }
   
-  &::after {
-    content: '';
-    position: absolute;
-    bottom: -1px;
-    left: 0;
-    width: ${props => props.$isCurrentUser ? '100%' : '0'};
-    height: 1px;
-    background: linear-gradient(90deg, #f0b90b, transparent);
-    transition: width 0.4s ease-in-out;
-  }
-  
-  &:hover::after {
-    width: 100%;
+  &:nth-child(even) {
+    background: ${props => props.$isCurrentUser 
+      ? 'rgba(255, 165, 0, 0.1)' 
+      : 'rgba(30, 30, 35, 0.3)'
+    };
+    
+    &:hover {
+      background: rgba(255, 165, 0, 0.05);
+    }
   }
 `;
 
