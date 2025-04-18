@@ -811,7 +811,7 @@ const Header = () => {
 
     // Update handleNavLinkClick function to use navigate instead of window.location
     const handleNavLinkClick = (url) => {
-        navigate(url);
+        window.location.href = url; // Use direct browser navigation for full page reload
         setMobileMenuOpen(false);
     };
 
