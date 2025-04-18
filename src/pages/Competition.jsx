@@ -961,18 +961,22 @@ const EmptyState = styled.div`
   }
 `;
 
-const CompetitionGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, 1fr); /* Display 2 competitions side by side */
-  gap: 20px;
-  width: 100%;
-  
-  @media (max-width: 992px) {
-    grid-template-columns: 1fr; /* Stack on mobile */
-  }
+const Particle = styled.div`
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: rgba(240, 185, 11, 0.5);
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 1;
+  animation: ${particleFloat} ${props => props.$duration || '3s'} ease-in-out infinite;
+  animation-delay: ${props => props.$delay || '0s'};
+  top: ${props => props.$top || '50%'};
+  left: ${props => props.$left || '50%'};
 `;
 
-// Add back missing styled components
+// Add new styled components for competition selection
 const CompetitionSelectContainer = styled.div`
   max-width: 1200px;
   margin: 0 auto;
@@ -984,33 +988,30 @@ const CompetitionSelectContainer = styled.div`
   }
 `;
 
-const CompetitionBox = styled.div`
-  display: flex;
-  flex-direction: column;
-  background: rgba(30, 32, 51, 0.5);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+const CompetitionGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2rem;
+  
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const CompetitionCard = styled.div`
+  background: linear-gradient(135deg, #13141C, #1e2033);
+  border-radius: 12px;
   overflow: hidden;
-  transition: all 0.3s;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-  margin-bottom: 0; /* Remove bottom margin since we're using grid gap */
+  transition: all 0.3s ease;
+  border: 1px solid #282B3E;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
   cursor: pointer;
-  position: relative;
   
   &:hover {
     transform: translateY(-5px);
-    box-shadow: 0 12px 25px rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(240, 185, 11, 0.3);
-  }
-  
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, rgba(240, 185, 11, 0), rgba(240, 185, 11, 0.5), rgba(240, 185, 11, 0));
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+    border-color: rgba(240, 185, 11, 0.5);
   }
 `;
 
@@ -1120,24 +1121,6 @@ const CompetitionCardFooter = styled.div`
   }
 `;
 
-const NoCompetitionsMessage = styled.div`
-  text-align: center;
-  padding: 3rem;
-  background: rgba(26, 28, 42, 0.6);
-  border-radius: 12px;
-  border: 1px solid #282B3E;
-  margin-top: 2rem;
-  
-  h3 {
-    color: #e6edf3;
-    margin-bottom: 1rem;
-  }
-  
-  p {
-    color: #B7BDC6;
-  }
-`;
-
 const BackButtonContainer = styled.div`
   margin-bottom: 1.5rem;
 `;
@@ -1164,29 +1147,22 @@ const BackButton = styled.button`
   }
 `;
 
-// Create a new styled component for the coin section
-const CoinSection = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, 1fr); /* Make coin sections side by side */
-  gap: 20px;
-  margin-bottom: 2rem;
-  
-  @media (max-width: 992px) {
-    grid-template-columns: 1fr; /* Stack on mobile */
-  }
-`;
-
-// Create a styled component for the coin header that doesn't take full width
-const CoinHeader = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  margin-bottom: 1rem;
-  background: rgba(20, 22, 36, 0.6);
-  padding: 0.8rem 1.2rem;
+const NoCompetitionsMessage = styled.div`
+  text-align: center;
+  padding: 3rem;
+  background: rgba(26, 28, 42, 0.6);
   border-radius: 12px;
   border: 1px solid #282B3E;
-  grid-column: 1 / -1; /* Make header span all columns */
+  margin-top: 2rem;
+  
+  h3 {
+    color: #e6edf3;
+    margin-bottom: 1rem;
+  }
+  
+  p {
+    color: #B7BDC6;
+  }
 `;
 
 const Competition = () => {
@@ -1389,8 +1365,8 @@ const Competition = () => {
           <Label>COMPETITIONS</Label>
         </PageHeader>
         
-        <Title style={{ textAlign: 'center', marginBottom: '1rem' }}>CHOOSE A COIN TO VIEW ITS COMPETITIONS</Title>
-        <Subtitle style={{ textAlign: 'center', marginBottom: '2rem' }}>Select from available competitions below</Subtitle>
+        <Title style={{ textAlign: 'center', marginBottom: '1rem' }}>Select a Competition</Title>
+        <Subtitle style={{ textAlign: 'center', marginBottom: '2rem' }}>Choose a coin to view its competitions</Subtitle>
         
         {Object.entries(coinGroups).map(([coinSymbol, coinCompetitions]) => {
           // Use the first competition to get the coin info
@@ -1402,8 +1378,17 @@ const Competition = () => {
           );
           
           return (
-            <div key={coinSymbol}>
-              <CoinHeader>
+            <div key={coinSymbol} style={{ marginBottom: '2rem' }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.8rem', 
+                marginBottom: '1rem',
+                background: 'rgba(20, 22, 36, 0.6)',
+                padding: '0.8rem 1.2rem',
+                borderRadius: '12px',
+                border: '1px solid #282B3E'
+              }}>
                 <img 
                   src={coinInfo.coinLogoUrl} 
                   alt={coinSymbol} 
@@ -1433,7 +1418,7 @@ const Competition = () => {
                     {hasActive ? 'Active competitions available' : 'No active competitions'}
                   </div>
                 </div>
-              </CoinHeader>
+              </div>
               
               <CompetitionGrid>
                 {coinCompetitions.map(competition => {
@@ -1441,7 +1426,7 @@ const Competition = () => {
                   const totalReward = getTotalRewardAmount(competition.rewards);
                   
                   return (
-                    <CompetitionBox 
+                    <CompetitionCard 
                       key={competition.id} 
                       onClick={() => handleSelectCompetition(competition)}
                     >
@@ -1474,7 +1459,7 @@ const Competition = () => {
                           View Details <FaChevronRight />
                         </div>
                       </CompetitionCardFooter>
-                    </CompetitionBox>
+                    </CompetitionCard>
                   );
                 })}
               </CompetitionGrid>
