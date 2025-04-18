@@ -1,13 +1,14 @@
 // Competition component - Shows the leaderboard for OSCAR token holders
 // Updated with improved visuals and trophy icons
 import React, { useState, useEffect } from 'react';
-import styled, { keyframes } from 'styled-components';
+import styled, { keyframes, css } from 'styled-components';
 import { useAuth } from '../contexts/AuthContext';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import defaultAvatar from '../assets/images/avatar.png';
-import { FaTrophy, FaMedal } from 'react-icons/fa';
-import { GiLaurelCrown } from 'react-icons/gi';
+import { FaTrophy, FaMedal, FaCoins, FaCalendarAlt, FaClock } from 'react-icons/fa';
+import { GiLaurelCrown, GiPodium } from 'react-icons/gi';
+import { BiDollar } from 'react-icons/bi';
 
 // Animations
 const fadeIn = keyframes`
@@ -26,6 +27,29 @@ const shine = keyframes`
   100% { background-position: -200% center; }
 `;
 
+const float = keyframes`
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+`;
+
+const shimmer = keyframes`
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+`;
+
+const slideInRight = keyframes`
+  from { 
+    transform: translateX(50px);
+    opacity: 0;
+  }
+  to { 
+    transform: translateX(0);
+    opacity: 1;
+  }
+`;
+
 const Container = styled.div`
   max-width: 1200px;
   margin: 0 auto;
@@ -37,71 +61,127 @@ const Container = styled.div`
   }
 `;
 
-const CompetitionHeader = styled.div`
-  background: #13141C;
-  border-radius: 12px;
-  padding: 1.5rem;
+const PageHeader = styled.div`
+  text-align: center;
   margin-bottom: 2rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: ${fadeIn} 1s ease-out;
+`;
+
+const Label = styled.div`
+  display: inline-block;
+  background: linear-gradient(135deg, #f0b90b, #ffdd2d);
+  color: #000;
+  font-weight: bold;
+  font-size: 0.85rem;
+  padding: 0.3rem 1rem;
+  border-radius: 20px;
+  margin-bottom: 0.5rem;
+  box-shadow: 0 2px 8px rgba(240, 185, 11, 0.3);
+`;
+
+const CompetitionHeader = styled.div`
+  background: linear-gradient(135deg, #13141C, #1e2033);
+  border-radius: 16px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
   border: 1px solid #282B3E;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2rem;
+  position: relative;
+  overflow: hidden;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #f0b90b, #ffee58, #f0b90b);
+    background-size: 200% auto;
+    animation: ${shine} 3s linear infinite;
+  }
   
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
-    gap: 1rem;
+    gap: 1.5rem;
+    padding: 1.5rem;
   }
 `;
 
 const Title = styled.h1`
-  font-size: 2.2rem;
+  font-size: 2.4rem;
   margin-bottom: 1rem;
-  color: #f0b90b;
+  background: linear-gradient(90deg, #f0b90b, #ffee58);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   grid-column: 1 / -1;
   text-align: center;
   letter-spacing: 0.5px;
+  text-transform: uppercase;
   
   @media (max-width: 768px) {
-    font-size: 1.8rem;
+    font-size: 2rem;
   }
 `;
 
 const CompetitionInfo = styled.div`
-  background: #1A1C2A;
-  border-radius: 8px;
-  padding: 1.2rem;
+  background: rgba(26, 28, 42, 0.7);
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 1px solid rgba(240, 185, 11, 0.2);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
   
   h3 {
     margin-top: 0;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.8rem;
     color: #fff;
-    font-size: 1.2rem;
+    font-size: 1.3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
   
   p {
-    margin: 0.5rem 0;
-    font-size: 0.9rem;
+    margin: 0.7rem 0;
+    font-size: 1rem;
     color: #B7BDC6;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
   
   .highlight {
     color: #f0b90b;
     font-weight: bold;
-    font-size: 1.5rem;
+    font-size: 2rem;
+    margin: 0.8rem 0;
+    text-shadow: 0 2px 10px rgba(240, 185, 11, 0.3);
+  }
+  
+  svg {
+    color: #f0b90b;
   }
 `;
 
 const RewardTable = styled.div`
-  background: #1A1C2A;
-  border-radius: 8px;
-  padding: 1.2rem;
+  background: rgba(26, 28, 42, 0.7);
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 1px solid rgba(240, 185, 11, 0.2);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
   
   h3 {
     margin-top: 0;
     margin-bottom: 1rem;
     color: #fff;
-    font-size: 1.2rem;
+    font-size: 1.3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
   
   .table {
@@ -112,8 +192,13 @@ const RewardTable = styled.div`
   .row {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    padding: 0.6rem 0;
-    border-bottom: 1px solid #282B3E;
+    padding: 0.8rem 0;
+    border-bottom: 1px solid rgba(40, 43, 62, 0.5);
+    transition: background-color 0.2s;
+    
+    &:hover {
+      background: rgba(240, 185, 11, 0.05);
+    }
   }
   
   .row:last-child {
@@ -121,12 +206,21 @@ const RewardTable = styled.div`
   }
   
   .cell {
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     color: #B7BDC6;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
   
   .cell:last-child {
     text-align: right;
+    color: #f0b90b;
+    justify-content: flex-end;
+    font-weight: 500;
+  }
+  
+  svg {
     color: #f0b90b;
   }
 `;
@@ -135,12 +229,13 @@ const PodiumContainer = styled.div`
   display: flex;
   justify-content: space-around;
   align-items: flex-end;
-  margin: 3rem 0;
+  margin: 4rem 0;
+  perspective: 1000px;
   
   @media (max-width: 768px) {
     flex-direction: column;
     align-items: center;
-    gap: 1rem;
+    gap: 2rem;
   }
 `;
 
@@ -151,7 +246,9 @@ const PodiumPosition = styled.div`
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  transform: translateY(${props => props.$position === 0 ? '-15px' : '0'});
+  transform: translateY(${props => props.$position === 0 ? '-25px' : '0'}) 
+             rotateY(${props => props.$position === 0 ? '0deg' : props.$position === 1 ? '-10deg' : '10deg'});
+  animation: ${fadeIn} 0.5s ease-out ${props => props.$position * 0.3}s both;
   
   @media (max-width: 768px) {
     transform: none;
@@ -160,18 +257,24 @@ const PodiumPosition = styled.div`
 `;
 
 const PodiumBox = styled.div`
-  background: #1A1C2A;
-  border-radius: 12px;
+  background: linear-gradient(135deg, #1A1C2A, #242738);
+  border-radius: 16px;
   width: 100%;
-  padding: 1.5rem 1rem;
+  padding: 1.8rem 1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
   border: 1px solid ${props => props.$position === 0 ? '#f0b90b' : props.$position === 1 ? '#A3A3A3' : '#CD7F32'};
   transform: scale(${props => props.$position === 0 ? '1.1' : '1'});
   position: relative;
   overflow: hidden;
+  transition: transform 0.3s, box-shadow 0.3s;
+  
+  &:hover {
+    transform: scale(${props => props.$position === 0 ? '1.15' : '1.05'});
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+  }
   
   &::before {
     content: '';
@@ -179,7 +282,7 @@ const PodiumBox = styled.div`
     top: 0;
     left: 0;
     right: 0;
-    height: ${props => props.$position === 0 ? '4px' : '2px'};
+    height: ${props => props.$position === 0 ? '6px' : '4px'};
     background: ${props => 
       props.$position === 0 
         ? 'linear-gradient(90deg, #f0b90b, #ffee58, #f0b90b)' 
@@ -190,30 +293,49 @@ const PodiumBox = styled.div`
     animation: ${shine} 3s linear infinite;
   }
   
+  &::after {
+    content: '${props => props.$position === 0 ? '1st' : props.$position === 1 ? '2nd' : '3rd'}';
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: ${props => 
+      props.$position === 0 ? '#f0b90b' : 
+      props.$position === 1 ? '#A3A3A3' : 
+      '#CD7F32'};
+    color: #000;
+    font-size: 0.7rem;
+    font-weight: bold;
+    padding: 0.2rem 0.5rem;
+    border-radius: 10px;
+    opacity: 0.9;
+  }
+  
   h3 {
-    margin: 0;
+    margin: 0 0 0.8rem;
     color: ${props => props.$position === 0 ? '#f0b90b' : props.$position === 1 ? '#A3A3A3' : '#CD7F32'};
-    font-size: 1.2rem;
+    font-size: 1.3rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
   }
   
   @media (max-width: 768px) {
     transform: none;
-    width: 220px;
+    width: 240px;
   }
 `;
 
 const Avatar = styled.div`
-  width: 70px;
-  height: 70px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
   overflow: hidden;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.8rem;
   background: #282B3E;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-  border: 2px solid ${props => 
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  border: 3px solid ${props => 
     props.$rank === 1 ? '#f0b90b' : 
     props.$rank === 2 ? '#A3A3A3' : 
     props.$rank === 3 ? '#CD7F32' : 'transparent'};
@@ -229,26 +351,30 @@ const Avatar = styled.div`
       props.$rank === 1 ? '#f0b90b' : 
       props.$rank === 2 ? '#A3A3A3' : 
       props.$rank === 3 ? '#CD7F32' : '#ffffff'};
-    font-size: 1.5rem;
+    font-size: 2rem;
     font-weight: bold;
   }
 `;
 
-const Trophy = styled.div`
+const TrophyIcon = styled.div`
   position: absolute;
-  top: -30px;
+  top: -35px;
   z-index: 2;
   color: ${props => props.$position === 0 ? '#f0b90b' : props.$position === 1 ? '#A3A3A3' : '#CD7F32'};
-  font-size: 2.2rem;
-  animation: ${pulse} 2s infinite ease-in-out;
-  background: rgba(26, 28, 42, 0.8);
-  width: 50px;
-  height: 50px;
+  font-size: ${props => props.$position === 0 ? '2.5rem' : '2.2rem'};
+  animation: ${float} 4s infinite ease-in-out;
+  background: radial-gradient(circle, rgba(26, 28, 42, 0.95), rgba(19, 20, 31, 0.9));
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3), 
+              0 0 10px ${props => 
+                props.$position === 0 ? 'rgba(240, 185, 11, 0.5)' : 
+                props.$position === 1 ? 'rgba(163, 163, 163, 0.5)' : 
+                'rgba(205, 127, 50, 0.5)'};
 `;
 
 const UserDetails = styled.div`
@@ -258,99 +384,135 @@ const UserDetails = styled.div`
   .name {
     font-weight: bold;
     color: #fff;
-    margin-bottom: 0.2rem;
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
   }
   
   .amount {
     color: #f0b90b;
-    font-size: 1.1rem;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
   }
 `;
 
 const Podium = styled.div`
   width: 100%;
-  height: ${props => props.$position === 0 ? '80px' : props.$position === 1 ? '60px' : '40px'};
-  background: ${props => props.$position === 0 ? '#f0b90b' : props.$position === 1 ? '#A3A3A3' : '#CD7F32'};
-  border-radius: 8px 8px 0 0;
+  height: ${props => props.$position === 0 ? '100px' : props.$position === 1 ? '75px' : '50px'};
+  background: ${props => props.$position === 0 ? 
+    'linear-gradient(135deg, #f0b90b, #ffd700)' : 
+    props.$position === 1 ? 
+    'linear-gradient(135deg, #A3A3A3, #d9d9d9)' : 
+    'linear-gradient(135deg, #CD7F32, #e9967a)'};
+  border-radius: 10px 10px 0 0;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #000;
   font-weight: bold;
-  font-size: 1.2rem;
+  font-size: 1.6rem;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
   
   @media (max-width: 768px) {
-    height: 40px;
+    height: 50px;
   }
 `;
 
 const UserStatsContainer = styled.div`
-  background: #1A1C2A;
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-bottom: 2rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: linear-gradient(135deg, #1A1C2A, #242738);
+  border-radius: 16px;
+  padding: 1.8rem;
+  margin-bottom: 2.5rem;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
   border: 1px solid #282B3E;
   text-align: center;
+  animation: ${fadeIn} 0.8s ease-out;
   
   h3 {
     margin-top: 0;
     color: #fff;
+    font-size: 1.3rem;
+    margin-bottom: 1rem;
   }
   
   p {
-    margin: 0.5rem 0;
+    margin: 0.8rem 0;
     color: #B7BDC6;
-    font-size: 1rem;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
   }
   
   .highlight {
     color: #f0b90b;
     font-weight: bold;
+    font-size: 1.4rem;
+    text-shadow: 0 0 10px rgba(240, 185, 11, 0.3);
   }
 `;
 
 const LeaderboardContainer = styled.div`
-  background: #13141C;
-  border-radius: 12px;
-  padding: 1.5rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: linear-gradient(135deg, #13141C, #1e2033);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
   border: 1px solid #282B3E;
+  animation: ${fadeIn} 1s ease-out;
   
   h2 {
     margin-top: 0;
     color: #fff;
     margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.5rem;
+  }
+  
+  svg {
+    color: #f0b90b;
   }
 `;
 
 const LeaderboardHeader = styled.div`
   display: grid;
   grid-template-columns: 80px 1fr 1fr;
-  padding: 0.5rem 1rem;
-  background: #1A1C2A;
-  border-radius: 8px;
-  margin-bottom: 0.5rem;
+  padding: 0.8rem 1.2rem;
+  background: rgba(26, 28, 42, 0.8);
+  border-radius: 10px;
+  margin-bottom: 0.8rem;
   font-weight: bold;
   color: #B7BDC6;
+  border: 1px solid rgba(40, 43, 62, 0.8);
   
   span {
-    font-size: 0.9rem;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
   }
 `;
 
 const LeaderboardRow = styled.div`
   display: grid;
   grid-template-columns: 80px 1fr 1fr;
-  padding: 0.8rem 1rem;
-  background: ${props => props.$isCurrentUser ? 'rgba(240, 185, 11, 0.08)' : '#1A1C2A'};
-  border-radius: 8px;
-  margin-bottom: 0.5rem;
+  padding: 1rem 1.2rem;
+  background: ${props => props.$isCurrentUser ? 'rgba(240, 185, 11, 0.1)' : 'rgba(26, 28, 42, 0.6)'};
+  border-radius: 10px;
+  margin-bottom: 0.6rem;
   align-items: center;
-  animation: ${fadeIn} 0.3s ease-in-out;
+  animation: ${fadeIn} 0.3s ease-in-out ${props => props.$index * 0.03}s both;
+  border: 1px solid ${props => props.$isCurrentUser ? 'rgba(240, 185, 11, 0.3)' : 'transparent'};
+  transition: transform 0.2s, box-shadow 0.2s;
   
   &:hover {
-    background: ${props => props.$isCurrentUser ? 'rgba(240, 185, 11, 0.12)' : '#242738'};
+    background: ${props => props.$isCurrentUser ? 'rgba(240, 185, 11, 0.15)' : 'rgba(36, 39, 56, 0.8)'};
+    transform: translateX(5px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
 `;
 
@@ -369,6 +531,7 @@ const RankCell = styled.div`
     display: flex;
     align-items: center;
     justify-content: center;
+    animation: ${shimmer} 2s infinite ease-in-out;
   }
 `;
 
@@ -378,18 +541,19 @@ const UserCell = styled.div`
   gap: 0.8rem;
   
   .avatar {
-    width: 36px;
-    height: 36px;
+    width: 38px;
+    height: 38px;
     border-radius: 50%;
     overflow: hidden;
     background: #282B3E;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid ${props => 
+    border: 2px solid ${props => 
       props.$rank === 1 ? '#f0b90b' : 
       props.$rank === 2 ? '#A3A3A3' : 
       props.$rank === 3 ? '#CD7F32' : 'transparent'};
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     
     img {
       width: 100%;
@@ -416,21 +580,30 @@ const AmountCell = styled.div`
   color: #f0b90b;
   text-align: right;
   font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  
+  svg {
+    color: #f0b90b;
+  }
 `;
 
 const LoadingContainer = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 200px;
+  min-height: 300px;
   
   .loader {
-    width: 40px;
-    height: 40px;
+    width: 50px;
+    height: 50px;
     border: 4px solid #282B3E;
     border-radius: 50%;
     border-top: 4px solid #f0b90b;
     animation: spin 1s linear infinite;
+    box-shadow: 0 0 20px rgba(240, 185, 11, 0.2);
   }
   
   @keyframes spin {
@@ -441,10 +614,21 @@ const LoadingContainer = styled.div`
 
 const EmptyState = styled.div`
   text-align: center;
-  padding: 2rem;
+  padding: 3rem;
   color: #B7BDC6;
+  background: rgba(26, 28, 42, 0.6);
+  border-radius: 12px;
+  border: 1px solid #282B3E;
   
   p {
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+  }
+  
+  svg {
+    font-size: 3rem;
+    color: #f0b90b;
+    opacity: 0.5;
     margin-bottom: 1rem;
   }
 `;
@@ -516,11 +700,11 @@ const Competition = () => {
   const getTrophyIcon = (rank) => {
     switch(rank) {
       case 1:
-        return <GiLaurelCrown size={28} />;
+        return <GiLaurelCrown size={30} />;
       case 2:
-        return <FaTrophy size={24} />;
+        return <FaTrophy size={26} />;
       case 3:
-        return <FaMedal size={24} />;
+        return <FaMedal size={26} />;
       default:
         return null;
     }
@@ -531,32 +715,36 @@ const Competition = () => {
   
   return (
     <Container>
+      <PageHeader>
+        <Label>COMPETITION</Label>
+      </PageHeader>
+    
       <CompetitionHeader>
         <Title>$OSCAR Deposit Competition</Title>
         
         <CompetitionInfo>
-          <h3>Reward Pool</h3>
+          <h3><BiDollar /> Reward Pool</h3>
           <p className="highlight">20,000 USDT</p>
-          <p>Top 100 users who deposit the highest amount of $OSCAR</p>
+          <p><FaCoins /> Top 100 users who deposit the highest amount of $OSCAR</p>
         </CompetitionInfo>
         
         <RewardTable>
-          <h3>Reward Distribution</h3>
+          <h3><FaCalendarAlt /> Competition Schedule</h3>
           <div className="table">
             <div className="row">
-              <div className="cell">Competition Period</div>
+              <div className="cell"><FaClock /> Competition Period</div>
               <div className="cell">6 days</div>
             </div>
             <div className="row">
-              <div className="cell">Start Date</div>
+              <div className="cell"><FaClock /> Start Date</div>
               <div className="cell">16th April 4pm UTC</div>
             </div>
             <div className="row">
-              <div className="cell">End Date</div>
+              <div className="cell"><FaClock /> End Date</div>
               <div className="cell">22nd April 4pm UTC</div>
             </div>
             <div className="row">
-              <div className="cell">Rewards Distribution</div>
+              <div className="cell"><FaClock /> Rewards Distribution</div>
               <div className="cell">23rd April 4pm UTC</div>
             </div>
           </div>
@@ -564,19 +752,19 @@ const Competition = () => {
       </CompetitionHeader>
       
       {/* Additional Reward Breakdown */}
-      <RewardTable style={{ marginBottom: '2rem' }}>
-        <h3>Reward Breakdown</h3>
+      <RewardTable style={{ marginBottom: '3rem' }}>
+        <h3><BiDollar /> Reward Breakdown</h3>
         <div className="table">
           <div className="row">
-            <div className="cell">1st Place</div>
+            <div className="cell"><GiLaurelCrown /> 1st Place</div>
             <div className="cell">2,000 USDT</div>
           </div>
           <div className="row">
-            <div className="cell">2nd Place</div>
+            <div className="cell"><FaTrophy /> 2nd Place</div>
             <div className="cell">1,000 USDT</div>
           </div>
           <div className="row">
-            <div className="cell">3rd Place</div>
+            <div className="cell"><FaMedal /> 3rd Place</div>
             <div className="cell">800 USDT</div>
           </div>
           <div className="row">
@@ -620,9 +808,9 @@ const Competition = () => {
                 
                 return (
                   <PodiumPosition key={position} $position={position}>
-                    <Trophy $position={position}>
+                    <TrophyIcon $position={position}>
                       {getTrophyIcon(actualRank)}
-                    </Trophy>
+                    </TrophyIcon>
                     
                     <PodiumBox $position={position}>
                       <h3>{position === 0 ? 'Skulldugger' : position === 1 ? 'Klaxxon' : 'Ultralex'}</h3>
@@ -635,7 +823,9 @@ const Competition = () => {
                       </Avatar>
                       <UserDetails>
                         <div className="name">{user.name}</div>
-                        <div className="amount">{user.balance.toLocaleString()} OSCAR</div>
+                        <div className="amount">
+                          <FaCoins /> {user.balance.toLocaleString()} OSCAR
+                        </div>
                       </UserDetails>
                     </PodiumBox>
                     
@@ -652,13 +842,13 @@ const Competition = () => {
             <UserStatsContainer>
               <h3>Your Ranking</h3>
               <p>
-                You are ranked <span className="highlight">#{userRank}</span> out of {totalUsers} competitors
+                You are ranked <span className="highlight">#{userRank}</span> out of <span className="highlight">{totalUsers}</span> competitors
               </p>
             </UserStatsContainer>
           )}
           
           <LeaderboardContainer>
-            <h2>Leaderboard</h2>
+            <h2><GiPodium /> Leaderboard</h2>
             
             <LeaderboardHeader>
               <span>Rank</span>
@@ -677,6 +867,7 @@ const Competition = () => {
                     <LeaderboardRow 
                       key={user.id}
                       $isCurrentUser={isCurrentUser}
+                      $index={index}
                     >
                       <RankCell $isTop3={isTop3} $rank={rank}>
                         {isTop3 && <div className="rank-icon">{getTrophyIcon(rank)}</div>}
@@ -693,7 +884,7 @@ const Competition = () => {
                         <div className="name">{user.name}</div>
                       </UserCell>
                       <AmountCell>
-                        {user.balance.toLocaleString()} OSCAR
+                        <FaCoins /> {user.balance.toLocaleString()} OSCAR
                       </AmountCell>
                     </LeaderboardRow>
                   );
@@ -701,6 +892,7 @@ const Competition = () => {
               </>
             ) : (
               <EmptyState>
+                <FaCoins />
                 <p>No users found with OSCAR tokens.</p>
               </EmptyState>
             )}
