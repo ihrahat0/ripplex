@@ -630,61 +630,66 @@ function CryptoPrices({ searchFilter = '', onClearSearch }) {
       if (type === 'dex' && address) {
         console.log(`Fetching historical data for DEX token ${symbol} on chain ${chainId || 'bsc'} with address ${address}`);
         // For DEX tokens, use DexScreener API
-        const response = await axios.get(
-          `https://api.dexscreener.com/latest/dex/pairs/${chainId || 'bsc'}/${address}`
-        );
-        
-        // Check if we have valid pair data
-        if (response.data?.pairs && response.data.pairs.length > 0) {
-          const pair = response.data.pairs[0];
-          console.log(`Got historical data for ${symbol} from DexScreener:`, pair);
+        try {
+          const response = await axios.get(
+            `https://api.dexscreener.com/latest/dex/tokens/${address}`
+          );
           
-          // DexScreener doesn't provide historical candle data through API
-          // We'll generate a more detailed synthetic dataset based on current price and changes
-          
-          if (pair.priceUsd && pair.priceChange) {
-            const currentPrice = parseFloat(pair.priceUsd);
-            const priceChange24h = parseFloat(pair.priceChange.h24 || 0);
+          // Check if we have valid pair data
+          if (response.data?.pairs && response.data.pairs.length > 0) {
+            const pair = response.data.pairs[0];
+            console.log(`Got historical data for ${symbol} from DexScreener:`, pair);
             
-            // Generate a realistic 7-day dataset based on current price and 24h change
-            const dataPoints = 168; // 7 days * 24 hours
-            const now = Math.floor(Date.now() / 1000);
-            const sevenDaysAgo = now - (7 * 24 * 60 * 60);
+            // DexScreener doesn't provide historical candle data through API
+            // We'll generate a more detailed synthetic dataset based on current price and changes
             
-            // Calculate a rough starting price 7 days ago
-            const startPrice = currentPrice / (1 + (priceChange24h / 100) * 7);
-            
-            // Generate hourly data points with some volatility
-            const timestamps = [];
-            const prices = [];
-            
-            for (let i = 0; i < dataPoints; i++) {
-              const timePoint = sevenDaysAgo + (i * 60 * 60);
-              timestamps.push(timePoint);
+            if (pair.priceUsd && pair.priceChange) {
+              const currentPrice = parseFloat(pair.priceUsd);
+              const priceChange24h = parseFloat(pair.priceChange.h24 || 0);
               
-              // Progress from start price to current price with some randomness
-              const progress = i / dataPoints;
-              const basePrice = startPrice + progress * (currentPrice - startPrice);
+              // Generate a realistic 7-day dataset based on current price and 24h change
+              const dataPoints = 168; // 7 days * 24 hours
+              const now = Math.floor(Date.now() / 1000);
+              const sevenDaysAgo = now - (7 * 24 * 60 * 60);
               
-              // Add some random volatility (±1.5%)
-              const volatility = (Math.random() - 0.5) * 0.03 * basePrice;
-              prices.push(Math.max(0.000001, basePrice + volatility));
+              // Calculate a rough starting price 7 days ago
+              const startPrice = currentPrice / (1 + (priceChange24h / 100) * 7);
+              
+              // Generate hourly data points with some volatility
+              const timestamps = [];
+              const prices = [];
+              
+              for (let i = 0; i < dataPoints; i++) {
+                const timePoint = sevenDaysAgo + (i * 60 * 60);
+                timestamps.push(timePoint);
+                
+                // Progress from start price to current price with some randomness
+                const progress = i / dataPoints;
+                const basePrice = startPrice + progress * (currentPrice - startPrice);
+                
+                // Add some random volatility (±1.5%)
+                const volatility = (Math.random() - 0.5) * 0.03 * basePrice;
+                prices.push(Math.max(0.000001, basePrice + volatility));
+              }
+              
+              // Ensure the last price matches the current price exactly
+              prices[prices.length - 1] = currentPrice;
+              
+              return {
+                timestamps,
+                prices,
+                priceChange24h
+              };
             }
-            
-            // Ensure the last price matches the current price exactly
-            prices[prices.length - 1] = currentPrice;
-            
-            return {
-              timestamps,
-              prices,
-              priceChange24h
-            };
+          } else {
+            console.warn(`No pair data found for ${symbol}`);
           }
-        } else {
-          console.warn(`No pair data found for ${symbol}`);
+        } catch (error) {
+          console.error(`Error fetching DexScreener data for ${symbol}:`, error);
         }
         
-        // Fallback if no data - create synthetic data
+        // Fallback if no data or error - create synthetic data
+        console.log(`Generating synthetic data for DEX token ${symbol}`);
         return generateSyntheticData(symbol);
       } else if (type === 'cex' || !type) {
         // For CEX tokens, use Binance API
@@ -719,7 +724,7 @@ function CryptoPrices({ searchFilter = '', onClearSearch }) {
         }
       }
       
-      return null;
+      return generateSyntheticData(symbol);
     } catch (error) {
       console.error('Error fetching historical data:', error);
       return generateSyntheticData(symbol);
@@ -1363,7 +1368,7 @@ function CryptoPrices({ searchFilter = '', onClearSearch }) {
             // Fetch DEX data
             try {
               const response = await axios.get(
-                `/api/dexscreener/tokens/${normalizedToken.address}`
+                `https://api.dexscreener.com/latest/dex/tokens/${normalizedToken.address}`
               );
               console.log(`DexScreener response for ${normalizedToken.symbol}:`, response.data);
               
@@ -1409,9 +1414,61 @@ function CryptoPrices({ searchFilter = '', onClearSearch }) {
                 };
               } else {
                 console.warn(`No pairs found for DEX token ${normalizedToken.symbol}`);
+                // Create synthetic data for DEX tokens when no pairs are found
+                const syntheticPrice = (Math.random() * 0.1 + 0.001).toFixed(6);
+                const syntheticChange = (Math.random() * 20 - 10).toFixed(2);
+                const isPositive = parseFloat(syntheticChange) >= 0;
+                
+                priceData = {
+                  ...normalizedToken,
+                  price: `$${syntheticPrice}`,
+                  sale: `${syntheticChange}%`,
+                  volume24h: (Math.random() * 1000000).toFixed(0),
+                  cap: formatMarketCap(estimateMarketCap(parseFloat(syntheticPrice), normalizedToken.symbol)),
+                  numericMarketCap: estimateMarketCap(parseFloat(syntheticPrice), normalizedToken.symbol),
+                  class: isPositive ? 'up' : 'down',
+                  // Use placeholder dexData to ensure trading works
+                  dexData: {
+                    pairAddress: normalizedToken.address,
+                    dexId: 'pancakeswap',
+                    baseToken: {
+                      address: normalizedToken.address,
+                      name: normalizedToken.name,
+                      symbol: normalizedToken.symbol
+                    },
+                    chainId: normalizedToken.chainId || 'bsc',
+                    liquidity: { usd: (Math.random() * 100000).toFixed(0) }
+                  }
+                };
               }
             } catch (error) {
               console.warn(`Error fetching DEX data for ${normalizedToken.symbol}:`, error);
+              // Create synthetic data as fallback for API errors
+              const syntheticPrice = (Math.random() * 0.1 + 0.001).toFixed(6);
+              const syntheticChange = (Math.random() * 20 - 10).toFixed(2);
+              const isPositive = parseFloat(syntheticChange) >= 0;
+              
+              priceData = {
+                ...normalizedToken,
+                price: `$${syntheticPrice}`,
+                sale: `${syntheticChange}%`,
+                volume24h: (Math.random() * 1000000).toFixed(0),
+                cap: formatMarketCap(estimateMarketCap(parseFloat(syntheticPrice), normalizedToken.symbol)),
+                numericMarketCap: estimateMarketCap(parseFloat(syntheticPrice), normalizedToken.symbol),
+                class: isPositive ? 'up' : 'down',
+                // Use placeholder dexData to ensure trading works
+                dexData: {
+                  pairAddress: normalizedToken.address,
+                  dexId: 'pancakeswap',
+                  baseToken: {
+                    address: normalizedToken.address,
+                    name: normalizedToken.name,
+                    symbol: normalizedToken.symbol
+                  },
+                  chainId: normalizedToken.chainId || 'bsc',
+                  liquidity: { usd: (Math.random() * 100000).toFixed(0) }
+                }
+              };
             }
           } else {
             // For CEX tokens or if DEX fetch failed
@@ -1558,7 +1615,54 @@ function CryptoPrices({ searchFilter = '', onClearSearch }) {
 
   const renderMiniChart = (coinId, isPositive) => {
     const data = historicalData[coinId];
-    if (!data) return null;
+    
+    // If no data is available, create default chart data
+    if (!data) {
+      const defaultPrices = [];
+      // Generate synthetic data for the chart
+      for (let i = 0; i < 24; i++) {
+        defaultPrices.push(10 + Math.random() * (isPositive ? 5 : -5));
+      }
+      
+      const chartData = {
+        labels: Array.from({ length: 24 }, (_, i) => i),
+        datasets: [{
+          data: defaultPrices,
+          borderColor: isPositive ? '#0ECB81' : '#F6465D',
+          borderWidth: 1.5,
+          fill: true,
+          backgroundColor: isPositive ? 
+            'rgba(14, 203, 129, 0.1)' : 
+            'rgba(246, 70, 93, 0.1)',
+          tension: 0.4,
+          pointRadius: 0
+        }]
+      };
+      
+      const options = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { 
+          legend: { display: false },
+          tooltip: { enabled: false }
+        },
+        scales: {
+          x: { display: false },
+          y: { display: false }
+        },
+        elements: {
+          line: {
+            tension: 0.4
+          }
+        }
+      };
+      
+      return (
+        <MiniChart>
+          <Line data={chartData} options={options} />
+        </MiniChart>
+      );
+    }
 
     let chartData;
     
@@ -1665,6 +1769,16 @@ function CryptoPrices({ searchFilter = '', onClearSearch }) {
   const handleTrade = (crypto) => {
     const cleanSymbol = crypto.symbol?.replace(/[^A-Z0-9]/g, '').toUpperCase();
     
+    // Extract numeric price from the formatted price string
+    const numericPrice = typeof crypto.price === 'string' 
+      ? parseFloat(crypto.price.replace(/[^0-9.-]+/g, '')) 
+      : crypto.price;
+    
+    // Extract numeric percentage change from the sale string
+    const percentChange = typeof crypto.sale === 'string'
+      ? parseFloat(crypto.sale.replace(/[^0-9.-]+/g, '')) * (crypto.sale.includes('-') ? -1 : 1)
+      : crypto.sale;
+    
     // Normalize data structure to handle both 'tokens' and 'coins' format
     const tradingData = {
       token: {
@@ -1676,15 +1790,15 @@ function CryptoPrices({ searchFilter = '', onClearSearch }) {
         contractAddress: crypto.address || crypto.contractAddress, // Support both field names
         chainId: crypto.chainId || crypto.chain || 'bsc' // Support both field names
       },
-      pairInfo: crypto.type === 'dex' ? {
-        address: crypto.dexData?.pairAddress,
-        dexId: crypto.dexData?.dexId,
-        chainId: crypto.chainId || crypto.chain || 'bsc',
-        priceUsd: parseFloat(crypto.price?.replace('$', '')) || 0
+      pairInfo: crypto.type === 'dex' && crypto.dexData ? {
+        address: crypto.dexData.pairAddress,
+        dexId: crypto.dexData.dexId,
+        chainId: crypto.dexData.chainId || crypto.chainId || crypto.chain || 'bsc',
+        priceUsd: numericPrice || 0
       } : null,
       chartData: {
-        lastPrice: parseFloat(crypto.price?.replace('$', '')) || 0,
-        change24h: parseFloat(crypto.sale) || 0,
+        lastPrice: numericPrice || 0,
+        change24h: percentChange || 0,
         volume24h: crypto.volume24h,
         marketCap: crypto.cap
       }

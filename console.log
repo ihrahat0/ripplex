@@ -1,0 +1,109 @@
+
+﻿
+Trading.jsx:3920 Chart decision info: 
+{tokenSymbol: 'ASS', tokenName: 'WE LOVE ASS', tokenType: 'dex', isCustomToken: false, shouldShowTradingViewChart: false}
+Trading.jsx:1655 Skipping Binance WebSocket for dex token: ASS
+Trading.jsx:4776 Checking 2 positions for liquidation with SAFE price $0.000068
+Trading.jsx:4102 The component styled.div with the id of "sc-iHRWRv" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:4165 The component styled.div with the id of "sc-ejCCJD" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:4174 The component styled.div with the id of "sc-dkrexS" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:4828 The component styled.div with the id of "sc-koIOxp" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5423 The component styled.div with the id of "sc-jpxqlE" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5430 The component styled.div with the id of "sc-hVrfqT" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5439 The component styled.input with the id of "sc-gWfHfi" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5470 The component styled.div with the id of "sc-cLbHFJ" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5476 The component styled.div with the id of "sc-bLQjtY" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5496 The component styled.div with the id of "sc-hqvKhf" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5514 The component styled.div with the id of "sc-grklVu" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5520 The component styled.button with the id of "sc-grEeAY" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5549 The component styled.div with the id of "sc-dKzEjN" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5559 The component styled.span with the id of "sc-hJqbgW" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5565 The component styled.span with the id of "sc-fclAPL" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5571 The component styled.div with the id of "sc-kdsHio" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5585 The component styled.div with the id of "sc-hwogRd" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:3920 Chart decision info: 
+{tokenSymbol: 'ASS', tokenName: 'WE LOVE ASS', tokenType: 'dex', isCustomToken: false, shouldShowTradingViewChart: false}
+Trading.jsx:1655 Skipping Binance WebSocket for dex token: ASS
+Trading.jsx:4776 Checking 2 positions for liquidation with SAFE price $0.000068
+Trading.jsx:4102 The component styled.div with the id of "sc-fIUpq" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:4165 The component styled.div with the id of "sc-iOa-dxb" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:4174 The component styled.div with the id of "sc-jyxlYA" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:4828 The component styled.div with the id of "sc-gRsLHp" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5423 The component styled.div with the id of "sc-kNwdbx" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5430 The component styled.div with the id of "sc-jOkEPM" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5439 The component styled.input with the id of "sc-PMqiz" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5470 The component styled.div with the id of "sc-lfWBvK" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5476 The component styled.div with the id of "sc-djOWjR" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5496 The component styled.div with the id of "sc-ckDxYg" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5514 The component styled.div with the id of "sc-eBASPP" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5520 The component styled.button with the id of "sc-dCpuEe" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5549 The component styled.div with the id of "sc-cETBa-d" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5559 The component styled.span with the id of "sc-bFIcOs" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5565 The component styled.span with the id of "sc-klKkpi" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
+Trading.jsx:5571 The component styled.div with the id of "sc-eJCMbb" has been created dynamically.
+You may see this warning because you've called styled inside another component.
+To resolve this only create new StyledComponents outside of any render method and function component.
