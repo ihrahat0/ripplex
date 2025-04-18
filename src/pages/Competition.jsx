@@ -989,31 +989,32 @@ const Competition = () => {
       try {
         setLoading(true);
         
-        // Get all users and filter for those with OSCAR balance
+        // Get all users and include those with zero OSCAR balance
         const usersRef = collection(db, "users");
         const querySnapshot = await getDocs(usersRef);
         
         const userData = [];
         querySnapshot.forEach(doc => {
           const user = doc.data();
-          // Check if user has OSCAR balance
+          // Include all users, even with zero balance
           const oscarBalance = user.balances?.OSCAR || 0;
           
-          if (oscarBalance > 0) {
-            userData.push({
-              id: doc.id,
-              name: user.displayName || 'Anonymous',
-              email: user.email || '',
-              photoURL: user.photoURL || '',
-              balance: oscarBalance
-            });
-          }
+          userData.push({
+            id: doc.id,
+            name: user.displayName || 'Anonymous',
+            email: user.email || '',
+            photoURL: user.photoURL || '',
+            balance: oscarBalance
+          });
         });
         
         // Sort by OSCAR balance descending
         const sortedUsers = userData.sort((a, b) => b.balance - a.balance);
         
-        setUsers(sortedUsers);
+        // Get top 100 users
+        const top100Users = sortedUsers.slice(0, 100);
+        
+        setUsers(top100Users);
         setTotalUsers(sortedUsers.length);
         
         // Find current user's rank if logged in
