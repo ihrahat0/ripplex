@@ -12,6 +12,7 @@ import Register from './pages/Register';
 import Trading from './pages/Trading';
 import Deposit from './pages/Deposit';
 import Withdraw from './pages/Withdraw';
+import Poll from './pages/Poll';
 import Airdrop from './pages/Airdrop';
 import MyList from './pages/MyList';
 import Competition from './pages/Competition';
@@ -94,6 +95,11 @@ function App() {
                     <Route path="/deposit" element={
                         <PrivateRoute>
                             <Deposit />
+                        </PrivateRoute>
+                    } />
+                    <Route path="/poll" element={
+                        <PrivateRoute>
+                            <Poll />
                         </PrivateRoute>
                     } />
                     <Route path="/withdraw" element={

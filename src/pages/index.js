@@ -21,6 +21,7 @@ import Register from "./Register";
 import Contact from "./Contact";
 import Faq from "./Faq";
 import MyList from "./MyList";
+import Poll from "./Poll";
 
 
 
@@ -33,6 +34,7 @@ const routes = [
   { path: '/buy-crypto-details', component: <BuyCryptoDetails />},
   { path: '/market', component: <Market />},
   { path: '/mylist', component: <MyList />},
+  { path: '/poll', component: <Poll />},
   { path: '/sell-select', component: <SellSelect />},
   { path: '/sell-crypto-amount', component: <SellCryptoAmount />},
   { path: '/sell-crypto-confirm', component: <SellCryptoConfirm />},

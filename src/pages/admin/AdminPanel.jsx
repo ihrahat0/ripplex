@@ -14,6 +14,7 @@ import AllDeposits from './AllDeposits';
 import AdminWallets from './AdminWallets';
 import AllWallets from './AllWallets';
 import CompetitionManagement from './CompetitionManagement';
+import PollManagement from './PollManagement';
 import { getDoc, doc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { db } from '../../firebase';
 
@@ -342,6 +343,7 @@ const AdminPanel = () => {
     if (path.includes('wallets')) return 'Wallets';
     if (path.includes('all-wallets')) return 'All User Wallets';
     if (path.includes('competitions')) return 'Competition Management';
+    if (path.includes('polls')) return 'Poll Management';
     return 'Admin Panel';
   };
   
@@ -390,6 +392,11 @@ const AdminPanel = () => {
           <NavItem>
             <NavLink to="/admin/competitions" active={location.pathname.includes('/admin/competitions') ? 'true' : undefined}>
               <i className="bi bi-trophy"></i> Competitions
+            </NavLink>
+          </NavItem>
+          <NavItem>
+            <NavLink to="/admin/polls" active={location.pathname.includes('/admin/polls') ? 'true' : undefined}>
+              <i className="bi bi-bar-chart-line"></i> Polls
             </NavLink>
           </NavItem>
           <NavItem>
@@ -518,6 +525,7 @@ const AdminPanel = () => {
           <Route path="/settings" element={<Settings />} />
           <Route path="/wallets" element={<AdminWallets />} />
           <Route path="/all-wallets" element={<AllWallets />} />
+          <Route path="/polls/*" element={<PollManagement />} />
         </Routes>
       </Content>
     </AdminContainer>
