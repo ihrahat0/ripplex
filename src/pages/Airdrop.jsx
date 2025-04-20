@@ -500,7 +500,7 @@ const Airdrop = () => {
         
         // Add 100 Ripplex tokens to the user's balance
         await updateDoc(userRef, {
-          'balances.RIPPLEX': (balances.RIPPLEX || 0) + 100
+          'balances.RIPPLEX': (balances.RIPPLEX.upd || 0) + 1000
         });
         
         // Generate confetti elements
@@ -662,7 +662,7 @@ const Airdrop = () => {
         <CongratsTitle>Congratulations! 🎉</CongratsTitle>
         <TokenGlow />
         <CongratsText>
-          You've successfully claimed 100 Ripplex tokens worth $100! The tokens have been added to your wallet.
+          You've successfully claimed 1000 Ripplex tokens worth $1000! The tokens have been added to your wallet.
         </CongratsText>
         <ClaimButton onClick={() => navigate('/user-profile')}>
           Go to My Wallet
@@ -679,7 +679,7 @@ const Airdrop = () => {
             <TokenImage src={ripplexLogo} alt="Ripplex Token" />
             <AirdropTitle>Ripplex Social Airdrop</AirdropTitle>
             <AirdropSubtitle>
-              Follow our social media channels and earn 100 Ripplex tokens worth $100! Complete simple tasks to claim your reward.
+              Follow our social media channels and earn 1000 Ripplex tokens worth $1000! Complete simple tasks to claim your reward.
             </AirdropSubtitle>
             
             {!hasStarted ? (

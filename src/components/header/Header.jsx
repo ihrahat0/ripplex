@@ -870,26 +870,20 @@ const Header = () => {
                             Deposit
                         </NavLink>
                         <NavLink 
-                            onClick={() => handleNavLinkClick('/withdraw')}
-                            className={location.pathname === '/withdraw' ? 'active' : ''}
+                            onClick={() => handleNavLinkClick('/poll')}
+                            className={location.pathname === '/poll' ? 'active' : ''}
                         >
-                            Withdraw
-                            {hasWithdrawalNotifications() && (
-                                <span style={{
-                                    position: 'relative',
-                                    top: '-8px',
-                                    right: '-2px',
-                                    display: 'inline-block',
-                                    width: '8px',
-                                    height: '8px',
-                                    borderRadius: '50%',
-                                    backgroundColor: getWithdrawalNotificationStatus() === 'pending' ? '#F7931A' : 
-                                                    getWithdrawalNotificationStatus() === 'approved' ? '#03A9F4' : 
-                                                    getWithdrawalNotificationStatus() === 'rejected' ? '#F6465D' : 
-                                                    '#0ECB81',
-                                    animation: 'pulse 2s infinite'
-                                }}></span>
-                            )}
+                            Poll
+                            <span style={{
+                                background: '#ff725a',
+                                color: 'white',
+                                fontSize: '10px',
+                                padding: '2px 5px',
+                                borderRadius: '3px',
+                                marginLeft: '5px',
+                                fontWeight: 'bold',
+                                textTransform: 'uppercase'
+                            }}>earn</span>
                         </NavLink>
                         <NavLink 
                             onClick={() => handleNavLinkClick('/competition')}
@@ -1049,28 +1043,22 @@ const Header = () => {
                         </MobileNavLink>
                         <MobileNavLink
                             onClick={() => {
-                                handleNavLinkClick('/withdraw');
+                                handleNavLinkClick('/poll');
                                 toggleMobileMenu();
                             }}
-                            className={location.pathname === '/withdraw' ? 'active' : ''}
+                            className={location.pathname === '/poll' ? 'active' : ''}
                         >
-                            Withdraw
-                            {hasWithdrawalNotifications() && (
-                                <span style={{
-                                    position: 'relative',
-                                    top: '-8px',
-                                    right: '-2px',
-                                    display: 'inline-block',
-                                    width: '8px',
-                                    height: '8px',
-                                    borderRadius: '50%',
-                                    backgroundColor: getWithdrawalNotificationStatus() === 'pending' ? '#F7931A' : 
-                                                    getWithdrawalNotificationStatus() === 'approved' ? '#03A9F4' : 
-                                                    getWithdrawalNotificationStatus() === 'rejected' ? '#F6465D' : 
-                                                    '#0ECB81',
-                                    animation: 'pulse 2s infinite'
-                                }}></span>
-                            )}
+                            Poll
+                            <span style={{ 
+                                backgroundColor: '#FF9100', 
+                                color: 'black', 
+                                borderRadius: '4px', 
+                                padding: '2px 5px', 
+                                fontSize: '10px', 
+                                marginLeft: '5px', 
+                                fontWeight: 'bold',
+                                textTransform: 'uppercase'
+                            }}>earn</span>
                         </MobileNavLink>
                         <MobileNavLink
                             onClick={() => {

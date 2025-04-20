@@ -49,6 +49,42 @@ service cloud.firestore {
         request.writeFields.size() == 1;
     }
     
+    // Poll collection rules
+    match /polls/{pollId} {
+      // Anyone can read polls
+      allow read: if true;
+      
+      // Only admins can create, update, or delete polls
+      allow create, delete: if isAdmin();
+      
+      // Allow users to update only the responses field for poll participation
+      allow update: if isAdmin() || 
+        (isAuthenticated() && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['responses']));
+    }
+    
+    // Poll responses collection rules
+    match /pollResponses/{responseId} {
+      // Users can create their own responses
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      
+      // Users can read their own responses
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // Users can read responses for poll results (aggregate data)
+      // This allows users to see poll results without seeing personal data
+      allow list: if isAuthenticated();
+      
+      // Admins can read all responses
+      allow read: if isAdmin();
+      
+      // Users can update their own responses
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // Only admins can delete responses
+      allow delete: if isAdmin();
+    }
+    
     // Allow users to read notification counts
     match /notificationCounts/{userId} {
       allow read, write: if isAuthenticated() && (isOwner(userId) || isAdmin());
