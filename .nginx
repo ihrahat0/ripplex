@@ -1,4 +1,4 @@
-# /etc/nginx/sites-available/rippleexchange
+#/etc/nginx/sites-available/rippleexchange
 # Redirect HTTP to HTTPS
 server {
     listen 80;
@@ -14,7 +14,6 @@ server {
         return 301 https://$host$request_uri;
     }
 }
-
 # HTTPS server
 server {
     listen 443 ssl;
@@ -68,7 +67,8 @@ server {
         add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization';
     }
     
-    # Direct endpoint for verification code
+
+ # Direct endpoint for verification code
     location = /send-verification-code {
         if ($request_method = 'OPTIONS') {
             add_header 'Access-Control-Allow-Origin' '*';
@@ -90,7 +90,8 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
     }
-    
+
+
     # Email files access
     location /emails {
         alias /var/www/ripple-exchange/emails;
