@@ -9,7 +9,7 @@ import PageTitle from '../components/pagetitle';
 BuyCrypto.propTypes = {
     
 };
-
+// 
 function BuyCrypto(props) {
 
     const [dataCryptoTab] = useState([
