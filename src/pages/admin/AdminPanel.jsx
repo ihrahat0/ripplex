@@ -29,12 +29,32 @@ const fadeIn = keyframes`
   }
 `;
 
-const AdminContainer = styled.div`
+const AdminContainer = styled.div.attrs({ className: 'AdminContainer' })`
   display: grid;
   grid-template-columns: 270px 1fr;
   min-height: 100vh;
   background: #0d1117;
   color: #e6edf3;
+  
+  /* Hide the competition header shown from Header component */
+  & > div:first-child > h2,
+  & > div:first-child > div:first-child,
+  header, 
+  footer,
+  nav.mainmenu-nav,
+  .screen-overlay,
+  .header,
+  .tf-page-title,
+  #page {
+    display: none !important;
+  }
+  
+  /* Target any element containing POSEIDON text */
+  *:not(div[style*="display: none"]) {
+    &:contains("POSEIDON") {
+      display: none !important;
+    }
+  }
 `;
 
 const Sidebar = styled.div`
@@ -248,10 +268,53 @@ const AdminPanel = () => {
         setUserData(userData);
         setIsAdmin(userDoc.exists() && userData.role === 'admin');
         
-        // Fetch basic stats
-        fetchDashboardStats();
+        // Add custom CSS to hide POSEIDON headers
+        const style = document.createElement('style');
+        style.textContent = `
+          /* Hide all global elements that might cause duplicate UI */
+          body .tf-page-title,
+          body header.style-2,
+          body .navigation,
+          body footer,
+          body .mainmenu-nav,
+          body .screen-overlay,
+          body #page > h2,
+          body #page > div:first-child,
+          body #tf-sticky-header,
+          body div[class*='header'],
+          body #page .container > h1,
+          body #page .container > h2,
+          body #page .container > div > h1,
+          body #page .container > div > h2,
+          body nav[class*='menu'],
+          body div[class*='page-title'] {
+            display: none !important;
+          }
+          
+          /* Aggressively hide anything that might contain POSEIDON */
+          body h1, body h2, body h3, body div.tf-center, body .tf-heading {
+            display: none !important;
+          }
+          
+          /* For any element that might appear after our DOM changes */
+          body #page > div:not(.AdminContainer):first-child {
+            display: none !important;
+          }
+          
+          /* Fix page padding and margin */
+          body #page {
+            padding-top: 0 !important;
+            margin-top: 0 !important;
+          }
+          
+          /* Ensure admin pages have proper styling */
+          body {
+            background: #0d1117 !important;
+          }
+        `;
+        document.head.appendChild(style);
       } catch (error) {
-        console.error("Error checking admin status:", error);
+        console.error('Error checking admin status:', error);
         setIsAdmin(false);
       } finally {
         setLoading(false);
@@ -259,6 +322,7 @@ const AdminPanel = () => {
     };
 
     checkAdminStatus();
+    fetchDashboardStats();
   }, [currentUser]);
   
   const fetchDashboardStats = async () => {

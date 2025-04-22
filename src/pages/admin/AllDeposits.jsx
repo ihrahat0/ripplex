@@ -1006,8 +1006,8 @@ const AllDeposits = () => {
         // Update stats
         updateStatsWithNewDeposit(newDeposit);
         
-        // Show notification for admins
-        toast.success(`New deposit: ${newDeposit.amount} ${newDeposit.token} for user ${newDeposit.userId}`);
+        // Don't show a notification here - AdminLayout will handle notifications
+        // This prevents duplicate notifications
       });
     });
     
@@ -1025,7 +1025,7 @@ const AllDeposits = () => {
         lastUpdated: new Date()
       });
       
-      toast.success(`Wallet deposit detected: ${depositInfo.amount} ${depositInfo.token} to ${depositInfo.userId}`);
+      // Don't show a notification here - AdminLayout will handle notifications
       
       // Deposits will be added automatically through the deposits monitor
     }, 

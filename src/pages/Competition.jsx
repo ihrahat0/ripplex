@@ -281,6 +281,7 @@ const Title = styled.h1`
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  color: transparent;
   grid-column: 1 / -1;
   text-align: center;
   letter-spacing: 0.5px;
@@ -298,6 +299,7 @@ const Subtitle = styled.h2`
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  color: transparent;
   grid-column: 1 / -1;
   text-align: center;
   letter-spacing: 0.5px;
@@ -365,6 +367,9 @@ const RewardAmount = styled.div`
   background-size: 200% auto;
   background-clip: text;
   -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
   animation: ${shimmerAnimation} 4s linear infinite;
   
   /* Sharper text shadow with minimal blur */
@@ -1054,6 +1059,74 @@ const CompetitionCardHeader = styled.div`
     color: #B7BDC6;
     font-size: 0.9rem;
   }
+  
+  .feature-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 15px;
+    padding: 3px;
+  }
+  
+  .feature-tag {
+    background: linear-gradient(135deg, rgba(48, 209, 88, 0.08), rgba(48, 209, 88, 0.2));
+    border: 1px solid rgba(48, 209, 88, 0.3);
+    color: #44d7b6;
+    padding: 6px 12px;
+    border-radius: 15px;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    letter-spacing: 0.3px;
+    position: relative;
+    overflow: hidden;
+    
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.1) 50%,
+        rgba(255, 255, 255, 0) 100%
+      );
+      transform: translateX(-100%);
+      transition: transform 0.6s;
+    }
+    
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+      filter: brightness(1.1);
+      
+      &::before {
+        transform: translateX(100%);
+      }
+    }
+    
+    &:nth-child(2n) {
+      background: linear-gradient(135deg, rgba(90, 122, 255, 0.08), rgba(90, 122, 255, 0.2));
+      border: 1px solid rgba(90, 122, 255, 0.3);
+      color: #5a7aff;
+    }
+    
+    &:nth-child(3n) {
+      background: linear-gradient(135deg, rgba(255, 149, 0, 0.08), rgba(255, 149, 0, 0.2));
+      border: 1px solid rgba(255, 149, 0, 0.3);
+      color: #ff9500;
+    }
+    
+    &:nth-child(4n) {
+      background: linear-gradient(135deg, rgba(255, 45, 85, 0.08), rgba(255, 45, 85, 0.2));
+      border: 1px solid rgba(255, 45, 85, 0.3);
+      color: #ff2d55;
+    }
+  }
 `;
 
 const CompetitionCardBody = styled.div`
@@ -1165,6 +1238,75 @@ const NoCompetitionsMessage = styled.div`
   }
 `;
 
+const FeatureTagsContainer = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin: 0 0 20px 0;
+  padding: 5px;
+`;
+
+const FeatureTag = styled.div`
+  background: linear-gradient(135deg, rgba(48, 209, 88, 0.08), rgba(48, 209, 88, 0.2));
+  border: 1px solid rgba(48, 209, 88, 0.3);
+  color: #44d7b6;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+  letter-spacing: 0.3px;
+  position: relative;
+  overflow: hidden;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.1) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    transform: translateX(-100%);
+    transition: transform 0.6s;
+  }
+  
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    filter: brightness(1.15);
+    
+    &::before {
+      transform: translateX(100%);
+    }
+  }
+  
+  &:nth-child(2n) {
+    background: linear-gradient(135deg, rgba(90, 122, 255, 0.08), rgba(90, 122, 255, 0.2));
+    border: 1px solid rgba(90, 122, 255, 0.3);
+    color: #5a7aff;
+  }
+  
+  &:nth-child(3n) {
+    background: linear-gradient(135deg, rgba(255, 149, 0, 0.08), rgba(255, 149, 0, 0.2));
+    border: 1px solid rgba(255, 149, 0, 0.3);
+    color: #ff9500;
+  }
+  
+  &:nth-child(4n) {
+    background: linear-gradient(135deg, rgba(255, 45, 85, 0.08), rgba(255, 45, 85, 0.2));
+    border: 1px solid rgba(255, 45, 85, 0.3);
+    color: #ff2d55;
+  }
+`;
+
 const Competition = () => {
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -1184,10 +1326,21 @@ const Competition = () => {
         const competitionsSnapshot = await getDocs(competitionsRef);
         
         if (!competitionsSnapshot.empty) {
-          const competitionsData = competitionsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
+          const competitionsData = competitionsSnapshot.docs.map(doc => {
+            const data = doc.data();
+            console.log(`Competition ${doc.id} data:`, data);
+            console.log(`Features for ${doc.id}:`, data.features);
+            
+            // Ensure features is always an array
+            if (!data.features) {
+              data.features = [];
+            }
+            
+            return {
+              id: doc.id,
+              ...data
+            };
+          });
           
           // Sort by created date, newest first
           const sortedCompetitions = competitionsData.sort((a, b) => {
@@ -1195,9 +1348,6 @@ const Competition = () => {
           });
           
           setCompetitions(sortedCompetitions);
-          
-          // Don't automatically select a competition
-          // Let the user choose instead
         }
       } catch (error) {
         console.error("Error fetching competitions:", error);
@@ -1317,6 +1467,8 @@ const Competition = () => {
   
   // Handle competition selection
   const handleSelectCompetition = (competition) => {
+    console.log("Selected competition:", competition);
+    console.log("Selected competition features:", competition.features);
     setSelectedCompetition(competition);
   };
   
@@ -1365,8 +1517,32 @@ const Competition = () => {
           <Label>COMPETITIONS</Label>
         </PageHeader>
         
-        <Title style={{ textAlign: 'center', marginBottom: '1rem' }}>Select a Competition</Title>
-        <Subtitle style={{ textAlign: 'center', marginBottom: '2rem' }}>Choose a coin to view its competitions</Subtitle>
+        <Title 
+          style={{ 
+            textAlign: 'center', 
+            marginBottom: '1rem',
+            display: 'block',
+            WebkitBackgroundClip: 'text', 
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            color: 'transparent'
+          }}
+        >
+          Select a Competition
+        </Title>
+        <Subtitle 
+          style={{ 
+            textAlign: 'center', 
+            marginBottom: '2rem',
+            display: 'block',
+            WebkitBackgroundClip: 'text', 
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            color: 'transparent'
+          }}
+        >
+          Choose a coin to view its competitions
+        </Subtitle>
         
         {Object.entries(coinGroups).map(([coinSymbol, coinCompetitions]) => {
           // Use the first competition to get the coin info
@@ -1436,6 +1612,15 @@ const Competition = () => {
                         </div>
                         <h3 className="title">{competition.title}</h3>
                         <p className="subtitle">{competition.subtitle}</p>
+                        
+                        {/* Display features */}
+                        {competition.features && competition.features.length > 0 && (
+                          <div className="feature-tags">
+                            {competition.features.map((feature, index) => (
+                              <div key={index} className="feature-tag">{feature}</div>
+                            ))}
+                          </div>
+                        )}
                       </CompetitionCardHeader>
                       <CompetitionCardBody status={statusInfo.status}>
                         <div className="date-row">
@@ -1532,6 +1717,38 @@ const Competition = () => {
             </div>
             <p><FaCoins /> {selectedCompetition.subtitle}</p>
           </CompetitionInfo>
+          
+          {/* Add dedicated features section in CompetitionInfo style */}
+          {selectedCompetition.features && selectedCompetition.features.length > 0 && (
+            <CompetitionInfo style={{ 
+              background: 'rgba(30, 32, 40, 0.7)', 
+              borderRadius: '12px',
+              border: '1px solid rgba(55, 60, 80, 0.8)',
+              padding: '20px',
+              margin: '20px 0'
+            }}>
+              <h3 style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px',
+                color: '#f0f0f0',
+                marginBottom: '15px',
+                fontSize: '1.2rem'
+              }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                </svg>
+                Key Features
+              </h3>
+              <div style={{ marginTop: '10px' }}>
+                <FeatureTagsContainer>
+                  {selectedCompetition.features.map((feature, index) => (
+                    <FeatureTag key={index}>{feature}</FeatureTag>
+                  ))}
+                </FeatureTagsContainer>
+              </div>
+            </CompetitionInfo>
+          )}
           
           <RewardTable>
             {[...Array(5)].map((_, i) => (
