@@ -727,28 +727,25 @@ const UserStatsContainer = styled.div`
   }
 `;
 
-// Define the RewardBadge styled component with enhanced styling
 // Define the RewardBadge styled component
 const RewardBadge = styled.span`
-  background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(255, 165, 0, 0.3));
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 165, 0, 0.25));
   color: #f0b90b;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 0.75rem;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   font-weight: 600;
-  border: 1px solid rgba(255, 215, 0, 0.4);
+  border: 1px solid rgba(255, 215, 0, 0.3);
   animation: ${pulseGlow} 2s infinite;
   white-space: nowrap;
-  box-shadow: 0 2px 10px rgba(255, 215, 0, 0.25);
-  letter-spacing: 0.3px;
+  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.15);
   
   svg {
     color: gold;
-    font-size: 0.9rem;
-    margin-right: 2px;
+    font-size: 0.8rem;
   }
 `;
 
@@ -835,7 +832,7 @@ const LeaderboardHeader = styled.div`
 
 const LeaderboardRow = styled.div`
   display: grid;
-  grid-template-columns: 70px minmax(0, 1fr) 150px;
+  grid-template-columns: 70px 1fr 150px;
   align-items: center;
   padding: 0.8rem 1rem;
   background: ${props => props.$isCurrentUser ? 'rgba(240, 185, 11, 0.1)' : props.$index % 2 === 0 ? 'rgba(20, 22, 36, 0.6)' : 'transparent'};
@@ -851,7 +848,7 @@ const LeaderboardRow = styled.div`
   }
   
   @media (max-width: 768px) {
-    grid-template-columns: 50px minmax(0, 1fr) 100px;
+    grid-template-columns: 50px 1fr 100px;
     padding: 0.6rem;
   }
 `;
@@ -933,18 +930,17 @@ const UserCell = styled.div`
   
   .name {
     font-weight: 500;
-    font-size: 0.9rem;
+    flex: 1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 120px;
+    max-width: 150px;
   }
   
   .reward {
-    margin-left: auto;
+    margin-left: 8px;
     display: flex;
     align-items: center;
-    margin-right: 8px;
   }
 `;
 
@@ -1044,7 +1040,7 @@ const Particle = styled.div`
 const CompetitionSelectContainer = styled.div`
   max-width: 1200px;
   margin: 0 auto;
-  padding: 1.5rem;
+  padding: 2rem;
   animation: ${fadeIn} 0.5s ease-in-out;
   
   @media (max-width: 768px) {
@@ -1052,33 +1048,13 @@ const CompetitionSelectContainer = styled.div`
   }
 `;
 
-// Add a styled component for the competition coin group
-const CoinGroupContainer = styled.div`
-  margin-bottom: 2.5rem;
-  width: 100%;
-`;
-
-// Add a styled component for coin header
-const CoinHeader = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  margin-bottom: 1rem;
-  background: rgba(20, 22, 36, 0.6);
-  padding: 0.8rem 1.2rem;
-  border-radius: 12px;
-  border: 1px solid #282B3E;
-`;
-
-// Update the CompetitionGrid styling to ensure 3 cards per row
 const CompetitionGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 1.5rem;
-  margin-top: 1rem;
-  width: 100%;
+  margin-top: 2rem;
   
-  @media (max-width: 1100px) {
+  @media (max-width: 1200px) {
     grid-template-columns: repeat(2, 1fr);
   }
   
@@ -1087,10 +1063,25 @@ const CompetitionGrid = styled.div`
   }
 `;
 
-// Update the CompetitionCard to have fixed aspect ratio
+// Find the original CompetitionCard declaration
 const CompetitionCard = styled.div`
-  display: flex;
-  flex-direction: column;
+  background: linear-gradient(135deg, #13141C, #1e2033);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  border: 1px solid #282B3E;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  
+  &:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+    border-color: rgba(240, 185, 11, 0.5);
+  }
+`;
+
+// Replace with this code with flex layout
+const CompetitionCard = styled.div`
   background: linear-gradient(135deg, #13141C, #1e2033);
   border-radius: 12px;
   overflow: hidden;
@@ -1099,7 +1090,8 @@ const CompetitionCard = styled.div`
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
   cursor: pointer;
   height: 100%;
-  width: 100%;
+  display: flex;
+  flex-direction: column;
   
   &:hover {
     transform: translateY(-5px);
@@ -1217,8 +1209,12 @@ const CompetitionCardHeader = styled.div`
   }
 `;
 
+// Also update CompetitionCardBody to grow and fill space
 const CompetitionCardBody = styled.div`
   padding: 1.5rem;
+  flex: 1; /* Make it grow to fill available space */
+  display: flex;
+  flex-direction: column;
   
   .date-row {
     display: flex;
@@ -1236,7 +1232,7 @@ const CompetitionCardBody = styled.div`
   }
   
   .status {
-    margin-top: 1rem;
+    margin-top: auto; /* Push to bottom */
     padding: 0.5rem 0;
     text-align: center;
     border-radius: 6px;
@@ -1452,37 +1448,6 @@ const FilterButton = styled.button`
     color: #f0b90b;
     transform: translateY(-2px);
   }
-`;
-
-// Add a styled component for section title with better styling
-const SectionTitle = styled.h2`
-  font-size: 2rem;
-  text-align: center;
-  margin-bottom: 1.5rem;
-  background: linear-gradient(90deg, #f0b90b, #ffee58);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
-  font-weight: 700;
-  letter-spacing: 1px;
-`;
-
-const CompetitionsLabel = styled.div`
-  display: inline-block;
-  background: #f0b90b;
-  color: #000;
-  font-weight: bold;
-  font-size: 0.85rem;
-  padding: 0.3rem 1.2rem;
-  border-radius: 20px;
-  margin-bottom: 1rem;
-  box-shadow: 0 2px 8px rgba(240, 185, 11, 0.3);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  position: relative;
-  left: 50%;
-  transform: translateX(-50%);
 `;
 
 const Competition = () => {
@@ -1812,9 +1777,23 @@ const Competition = () => {
     
     return (
       <CompetitionSelectContainer>
-        <CompetitionsLabel>COMPETITIONS</CompetitionsLabel>
+        <PageHeader>
+          <Label>COMPETITIONS</Label>
+        </PageHeader>
         
-        <SectionTitle>SELECT A COMPETITION</SectionTitle>
+        <Title 
+          style={{ 
+            textAlign: 'center', 
+            marginBottom: '1rem',
+            display: 'block',
+            WebkitBackgroundClip: 'text', 
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            color: 'transparent'
+          }}
+        >
+          Select a Competition
+        </Title>
         
         <FilterContainer>
           <FilterButton 
@@ -1853,8 +1832,17 @@ const Competition = () => {
             );
             
             return (
-              <CoinGroupContainer key={coinSymbol}>
-                <CoinHeader>
+              <div key={coinSymbol} style={{ marginBottom: '2rem' }}>
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.8rem', 
+                  marginBottom: '1rem',
+                  background: 'rgba(20, 22, 36, 0.6)',
+                  padding: '0.8rem 1.2rem',
+                  borderRadius: '12px',
+                  border: '1px solid #282B3E'
+                }}>
                   <img 
                     src={coinInfo.coinLogoUrl} 
                     alt={coinSymbol} 
@@ -1884,7 +1872,7 @@ const Competition = () => {
                       {hasActive ? 'Active competitions available' : 'No active competitions'}
                     </div>
                   </div>
-                </CoinHeader>
+                </div>
                 
                 <CompetitionGrid>
                   {coinCompetitions.map(competition => {
@@ -1938,7 +1926,7 @@ const Competition = () => {
                     );
                   })}
                 </CompetitionGrid>
-              </CoinGroupContainer>
+              </div>
             );
           })
         )}
@@ -2203,7 +2191,6 @@ const Competition = () => {
                     // Get user's reward based on rank
                     const reward = getRewardForRank(rank, selectedCompetition.rewards);
                     const hasReward = reward && reward.amount > 0;
-                    const isTopFive = rank <= 5; // Only show rewards for top 5
                     
                     return (
                       <LeaderboardRow 
@@ -2224,10 +2211,10 @@ const Competition = () => {
                             )}
                           </div>
                           <div className="name">{user.name}</div>
-                          {hasReward && user.balance > 0 && isTopFive && (
+                          {hasReward && user.balance > 0 && (
                             <div className="reward">
                               <RewardBadge>
-                                <BiDollar /> Paid {reward.amount} USDT
+                                <BiDollar /> {reward.amount} USDT
                               </RewardBadge>
                             </div>
                           )}

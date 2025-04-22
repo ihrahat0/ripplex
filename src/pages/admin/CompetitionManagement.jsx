@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { format } from 'date-fns';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { Container, Row, Col, Spinner, Button, Form } from 'react-bootstrap';
 import { Tabs, Tab } from 'react-bootstrap';
-import { PlusCircle, Trash, Trophy } from 'react-bootstrap-icons';
+import { PlusCircle, Trash, Trophy, Pencil } from 'react-bootstrap-icons';
 
 const PageContainer = styled.div`
   animation: fadeIn 0.5s ease;
@@ -441,6 +441,35 @@ const DeleteButton = styled.button`
   }
 `;
 
+const EditButton = styled.button`
+  background-color: transparent;
+  border: 1px solid #007aff;
+  border-radius: 6px;
+  color: #007aff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  transition: all 0.2s;
+  cursor: pointer;
+  margin-right: 10px;
+  
+  &:hover {
+    background-color: rgba(0, 122, 255, 0.1);
+    transform: translateY(-2px);
+  }
+  
+  &:active {
+    transform: translateY(0);
+  }
+  
+  svg {
+    font-size: 14px;
+  }
+`;
+
 const TabNav = styled.div`
   display: flex;
   border-bottom: 1px solid #30363d;
@@ -537,6 +566,8 @@ const CompetitionManagement = () => {
   const [activeTab, setActiveTab] = useState('list');
   const [competitions, setCompetitions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [currentCompetitionId, setCurrentCompetitionId] = useState(null);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -609,7 +640,7 @@ const CompetitionManagement = () => {
     }
     
     const newReward = {
-      id: Date.now().toString(),
+      id: Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15), // Simple unique ID
       rank: rewardForm.rank,
       amount: rewardForm.amount
     };
@@ -646,16 +677,38 @@ const CompetitionManagement = () => {
     
     try {
       setLoading(true);
+      
+      // Create a clean object with only the fields we want to update
       const competitionData = {
-        ...formData,
-        createdAt: serverTimestamp(),
+        title: formData.title,
+        description: formData.description,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        coinSymbol: formData.coinSymbol,
+        coinLogoUrl: formData.coinLogoUrl,
+        totalPrize: formData.totalPrize,
+        participants: formData.participants || 0,
+        features: Array.isArray(formData.features) ? formData.features : [],
+        updatedAt: serverTimestamp(),
         status: 'active',
         rewards: rewards
       };
       
       console.log("Saving competition data:", competitionData);
       
-      await addDoc(collection(db, 'competitions'), competitionData);
+      if (isEditing && currentCompetitionId) {
+        // Update existing competition
+        const competitionRef = doc(db, 'competitions', currentCompetitionId);
+        await updateDoc(competitionRef, competitionData);
+        console.log("Competition updated successfully");
+      } else {
+        // Create new competition - only add createdAt for new competitions
+        await addDoc(collection(db, 'competitions'), {
+          ...competitionData,
+          createdAt: serverTimestamp()
+        });
+        console.log("New competition created successfully");
+      }
       
       // Reset form & fetch updated list
       setFormData({
@@ -671,13 +724,15 @@ const CompetitionManagement = () => {
       });
       
       setRewards([]);
+      setIsEditing(false);
+      setCurrentCompetitionId(null);
       
       fetchCompetitions();
       setActiveTab('list');
       
     } catch (error) {
-      console.error("Error creating competition:", error);
-      setFormErrors({ submit: 'Error creating competition. Please try again.' });
+      console.error("Error saving competition:", error);
+      setFormErrors({ submit: 'Error saving competition. Please try again.' });
     } finally {
       setLoading(false);
     }
@@ -712,6 +767,55 @@ const CompetitionManagement = () => {
     } catch (error) {
       console.error('Error deleting competition:', error);
       alert('Failed to delete competition. Please try again.');
+    }
+  };
+  
+  const handleEdit = async (competitionId) => {
+    try {
+      setLoading(true);
+      const competitionRef = doc(db, 'competitions', competitionId);
+      const competitionSnapshot = await getDoc(competitionRef);
+      
+      if (competitionSnapshot.exists()) {
+        const competitionData = competitionSnapshot.data();
+        
+        // Format dates for datetime-local input
+        const formatDateForInput = (timestamp) => {
+          if (!timestamp) return '';
+          
+          const date = new Date(timestamp);
+          return new Date(date.getTime() - (date.getTimezoneOffset() * 60000))
+            .toISOString()
+            .slice(0, 16);
+        };
+        
+        setFormData({
+          title: competitionData.title || '',
+          description: competitionData.description || '',
+          startDate: formatDateForInput(competitionData.startDate),
+          endDate: formatDateForInput(competitionData.endDate),
+          coinSymbol: competitionData.coinSymbol || '',
+          coinLogoUrl: competitionData.coinLogoUrl || '',
+          totalPrize: competitionData.totalPrize || '',
+          participants: competitionData.participants || 0,
+          features: competitionData.features || []
+        });
+        
+        // Set rewards
+        setRewards(competitionData.rewards || []);
+        
+        // Set editing state
+        setIsEditing(true);
+        setCurrentCompetitionId(competitionId);
+        setActiveTab('add');
+      } else {
+        alert('Competition not found');
+      }
+    } catch (error) {
+      console.error('Error fetching competition for edit:', error);
+      alert('Failed to load competition data. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
   
@@ -809,7 +913,7 @@ const CompetitionManagement = () => {
                               <div className="features-title">Key Features</div>
                               <div className="feature-list">
                                 {competition.features.map((feature, index) => (
-                                  <div className="feature-tag" key={index}>{feature}</div>
+                                  <div className="feature-tag" key={`feature-${competition.id}-${index}`}>{feature}</div>
                                 ))}
                               </div>
                             </div>
@@ -834,7 +938,7 @@ const CompetitionManagement = () => {
                             <h4 className="section-title">Reward Distribution</h4>
                             {competition.rewards && competition.rewards.length > 0 ? (
                               competition.rewards.map((reward, index) => (
-                                <div className="reward-item" key={index}>
+                                <div className="reward-item" key={`reward-${competition.id}-${index}`}>
                                   <span className="rank">{reward.rank}</span>
                                   <span className="amount">{reward.amount} USDT</span>
                                 </div>
@@ -851,9 +955,14 @@ const CompetitionManagement = () => {
                         {/* Competition Footer */}
                         <div className="competition-footer">
                           <StatusBadge status={status}>{status}</StatusBadge>
-                          <DeleteButton onClick={() => deleteCompetition(competition.id)}>
-                            <Trash size={14} /> Delete
-                          </DeleteButton>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <EditButton onClick={() => handleEdit(competition.id)}>
+                              <Pencil size={14} /> Edit
+                            </EditButton>
+                            <DeleteButton onClick={() => deleteCompetition(competition.id)}>
+                              <Trash size={14} /> Delete
+                            </DeleteButton>
+                          </div>
                         </div>
                       </CompetitionCard>
                     );
@@ -869,7 +978,7 @@ const CompetitionManagement = () => {
         
         {activeTab === 'add' && (
           <Card>
-            <h3 className="mb-4">Create New Competition</h3>
+            <h3 className="mb-4">{isEditing ? 'Edit Competition' : 'Create New Competition'}</h3>
             
             <Form>
               <Row>
@@ -983,10 +1092,15 @@ const CompetitionManagement = () => {
                       }}>
                         {feature}
                         <button 
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.preventDefault(); // Prevent form submission
+                            e.stopPropagation(); // Stop event propagation
+                            const updatedFeatures = formData.features.filter((_, i) => i !== index);
+                            console.log("Removing feature:", feature);
+                            console.log("Updated features:", updatedFeatures);
                             setFormData({
                               ...formData,
-                              features: formData.features.filter((_, i) => i !== index)
+                              features: updatedFeatures
                             });
                           }}
                           style={{ 
@@ -1096,7 +1210,7 @@ const CompetitionManagement = () => {
                   <div className="mt-3">
                     <h5>Rewards</h5>
                     {rewards.map((reward, index) => (
-                      <RewardItem key={index}>
+                      <RewardItem key={reward.id || index}>
                         <div className="reward-details">
                           <span className="rank">{reward.rank}</span>: 
                           <span className="amount"> {reward.amount} USDT</span>
@@ -1111,7 +1225,26 @@ const CompetitionManagement = () => {
               </Card>
               
               <ButtonContainer className="mt-4">
-                <Button variant="secondary" onClick={() => setActiveTab('list')}>
+                <Button 
+                  variant="secondary" 
+                  onClick={() => {
+                    setActiveTab('list');
+                    setIsEditing(false);
+                    setCurrentCompetitionId(null);
+                    setFormData({
+                      title: '',
+                      description: '',
+                      startDate: '',
+                      endDate: '',
+                      coinSymbol: '',
+                      coinLogoUrl: '',
+                      totalPrize: '',
+                      participants: 0,
+                      features: []
+                    });
+                    setRewards([]);
+                  }}
+                >
                   Cancel
                 </Button>
                 
@@ -1119,9 +1252,9 @@ const CompetitionManagement = () => {
                   {loading ? (
                     <>
                       <Spinner size="sm" className="me-2" />
-                      Saving...
+                      {isEditing ? 'Updating...' : 'Saving...'}
                     </>
-                  ) : 'Create Competition'}
+                  ) : isEditing ? 'Update Competition' : 'Create Competition'}
                 </ActionButton>
               </ButtonContainer>
             </Form>
