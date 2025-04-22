@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { Routes, Route, useNavigate, Navigate, BrowserRouter } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Routes, Route, useNavigate, Navigate, BrowserRouter, useLocation } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import Header from './components/header/Header';
 import Footer from './components/footer';
@@ -49,6 +49,88 @@ function EmailLinkHandler() {
     return null;
 }
 
+// Component to conditionally render Header and Footer
+function AppLayout() {
+    const location = useLocation();
+    const isAdminPath = location.pathname.startsWith('/admin');
+    
+    return (
+        <>
+            {!isAdminPath && <Header />}
+            <Routes>
+                {/* Public routes */}
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/home-v1" element={routes.find(r => r.path === '/home-v1')?.component} />
+                
+                {/* Protected routes */}
+                <Route path="/user-profile" element={
+                    <PrivateRoute>
+                        <UserProfile />
+                    </PrivateRoute>
+                } />
+                <Route path="/trading/:cryptoId" element={
+                    <PrivateRoute>
+                        <Trading />
+                    </PrivateRoute>
+                } />
+                <Route path="/deposit" element={
+                    <PrivateRoute>
+                        <Deposit />
+                    </PrivateRoute>
+                } />
+                <Route path="/poll" element={
+                    <PrivateRoute>
+                        <Poll />
+                    </PrivateRoute>
+                } />
+                <Route path="/withdraw" element={
+                    <PrivateRoute>
+                        <Withdraw />
+                    </PrivateRoute>
+                } />
+                <Route path="/competition" element={
+                    <PrivateRoute>
+                        <Competition />
+                    </PrivateRoute>
+                } />
+                <Route path="/airdrop" element={
+                    <PrivateRoute>
+                        <Airdrop />
+                    </PrivateRoute>
+                } />
+                <Route path="/mylist" element={
+                    <PrivateRoute>
+                        <MyList />
+                    </PrivateRoute>
+                } />
+                <Route path="/admin/*" element={
+                    <PrivateRoute>
+                        <AdminPanel />
+                    </PrivateRoute>
+                } />
+
+                {/* Dynamic routes from pages/index.js */}
+                {routes.map((route, index) => (
+                    <Route 
+                        key={index}
+                        path={route.path}
+                        element={route.component}
+                    />
+                ))}
+
+                {/* Root redirect */}
+                <Route path="/" element={<Navigate to="/home-v1" replace />} />
+                
+                {/* 404 catch-all route */}
+                <Route path="*" element={<Page404 />} />
+            </Routes>
+            <EmailLinkHandler />
+            {!isAdminPath && <Footer />}
+        </>
+    );
+}
+
 function App() {
     useEffect(() => {
         // Initialize AOS
@@ -74,77 +156,7 @@ function App() {
     return (
         <AuthProvider>
             <div className="App is_dark">
-                <Header />
-                <Routes>
-                    {/* Public routes */}
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/register" element={<Register />} />
-                    <Route path="/home-v1" element={routes.find(r => r.path === '/home-v1')?.component} />
-                    
-                    {/* Protected routes */}
-                    <Route path="/user-profile" element={
-                        <PrivateRoute>
-                            <UserProfile />
-                        </PrivateRoute>
-                    } />
-                    <Route path="/trading/:cryptoId" element={
-                        <PrivateRoute>
-                            <Trading />
-                        </PrivateRoute>
-                    } />
-                    <Route path="/deposit" element={
-                        <PrivateRoute>
-                            <Deposit />
-                        </PrivateRoute>
-                    } />
-                    <Route path="/poll" element={
-                        <PrivateRoute>
-                            <Poll />
-                        </PrivateRoute>
-                    } />
-                    <Route path="/withdraw" element={
-                        <PrivateRoute>
-                            <Withdraw />
-                        </PrivateRoute>
-                    } />
-                    <Route path="/competition" element={
-                        <PrivateRoute>
-                            <Competition />
-                        </PrivateRoute>
-                    } />
-                    <Route path="/airdrop" element={
-                        <PrivateRoute>
-                            <Airdrop />
-                        </PrivateRoute>
-                    } />
-                    <Route path="/mylist" element={
-                        <PrivateRoute>
-                            <MyList />
-                        </PrivateRoute>
-                    } />
-                    <Route path="/admin/*" element={
-                        <PrivateRoute>
-                            <AdminPanel />
-                        </PrivateRoute>
-                    } />
-
-                    {/* Dynamic routes from pages/index.js */}
-                    {routes.map((route, index) => (
-                        <Route 
-                            key={index}
-                            path={route.path}
-                            element={route.component}
-                        />
-                    ))}
-
-                    {/* Root redirect */}
-                    <Route path="/" element={<Navigate to="/home-v1" replace />} />
-                    
-                    {/* 404 catch-all route */}
-                    <Route path="*" element={<Page404 />} />
-                </Routes>
-                <EmailLinkHandler />
-                <Footer />
+                <AppLayout />
             </div>
         </AuthProvider>
     );

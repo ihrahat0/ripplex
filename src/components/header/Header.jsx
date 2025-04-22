@@ -874,7 +874,7 @@ const Header = () => {
                             className={location.pathname === '/poll' ? 'active' : ''}
                         >
                             Poll
-                            <span style={{
+                                <span style={{
                                 background: '#ff725a',
                                 color: 'white',
                                 fontSize: '10px',
@@ -1049,7 +1049,7 @@ const Header = () => {
                             className={location.pathname === '/poll' ? 'active' : ''}
                         >
                             Poll
-                            <span style={{ 
+                                <span style={{
                                 backgroundColor: '#FF9100', 
                                 color: 'black', 
                                 borderRadius: '4px', 
